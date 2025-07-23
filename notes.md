@@ -1,0 +1,100 @@
+Likely to work with 5% D2O 95% H2O instead of 100% D2O. It's just cheaper. 
+
+https://pillbuys.com/research/Magnesium%20citrate/17.pdf
+
+
+[citrate-table](pillbuys-citrate-table.csv)
+
+Initial concentration (mmol dm-3) of:
+CM: Metal
+CL: Ligand (citrate)
+CH: mineral acid
+
+[citrate-formation-table](pillbuys-formation.csv)
+
+$M_qL_PH_R$
+S=sum square residuals
+R = R factor defined in ref. 54 (A. Sabatini, A. Vacca and P. Gans, Talanta, 21, 53 (1974))
+log beta = logarithm of the stability constant for metal-ligand complex. Higher B = more stable product.
+
+
+
+https://journals.iucr.org/e/issues/2020/10/00/hb7927/index.html
+Evidence for magnesium citrate, not trimagnesium dicitrate, and how to prepare
+10mmol citric acid, 10ml water, add 10mmol MgCO3 (actually Mg5(CO3)4(OH)2). Slow fizzing, clear colourless solution, dry at 333K.
+
+Most common magnesium citrates are:
+Mg:citrate
+1:1
+3:2
+2:1
+
+https://pubchem.ncbi.nlm.nih.gov/compound/13136
+Only calcium citrate I can find is tricalcium dicitrate. Very soluble though.
+
+https://pubs.acs.org/doi/pdf/10.1021/acs.jpcb.0c06377?ref=article_openPDF
+
+
+---
+
+We have sodium citrate (pH around 8) and citric acid (pH around 0.1) (pubchem)
+
+We can make most solutions we need, therefore, using mixtures of these two
+
+We need to figure out where the maximum of each is (between the pKas, probably, see henderson hasselbatch equation?)
+
+pH = pKa + log ([base]/[acid])
+
+The henderson hassebalch equation does not align with the book's table?
+
+https://www.researchgate.net/figure/Fractions-of-various-citric-acid-H4Cit-species-as-functions-of-pH_fig1_375733298
+- Good, nice graph. Was calculated with iron... maybe a problem? Also, at concentrations >2M
+
+
+You will never get to the same fraction of intermediates as you will with citric acid/trisodium citrate.
+
+So, pHs:
+H4Cit = 0.1 (close to 0 as gets, obviously can't reduce further than pure citric acid)
+H3Cit- = 3.5
+H2Cit2- = 4.5
+HCit-3 = 7.6 (final pH of 100% trisodium citrate is roughly 8)
+
+So, distribute 24 samples across that range.
+
+https://www.researchgate.net/figure/a-Speciation-of-citric-acid-as-function-of-pH-b-Speciation-of-lead-in-citrate-water_fig3_354577826
+- Similar graph, calculated with lead, 0.1M though, which is better
+
+pHs:
+H4Cit = 0.5
+H3Cit- = 3.9
+H2Cit2- = 5.5
+HCit-3 = 8
+
+https://www.researchgate.net/figure/Raman-spectra-of-citric-acid-at-different-pH-from-1800-to-1000-cm-1_fig4_270958347
+Very similar to second 
+
+
+So, since 2/3 agree with them, these are our final options:
+
+pHs:
+H4Cit = 0.5
+H3Cit- = 3.9
+H2Cit2- = 5.5
+HCit-3 = 8
+
+We then need to mix the ratios together to make a decent spread.
+8-0.5=7.5
+7.5/20=0.35
+Step by 0.35 for linear, but it's not linear
+
+From the book (data for biochemical research), a step of -4.5/5ml acid, + equal base gives a 0.2 change in pH. 
+
+https://scrippslabs.com/ph-of-common-reagents-at-room-temperature/
+- pH of 0.1M citric acid is 2.1
+
+600ul/sample
+14,400ul/total
+Just how much of this is going to be citrate vs citric acid?
+1mM
+- [ ] Calculate moles
+- [ ] Calculate grams
