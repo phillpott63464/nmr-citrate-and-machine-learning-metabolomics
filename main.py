@@ -1,12 +1,15 @@
 import pandas
+import math
+from decimal import Decimal, ROUND_CEILING
 
 
 def main():
     sample_vol = 0.0006   # l
     sample_conc = 0.1   # M
-    acid_mass = 21.01   # g/l
-    base_mass = 29.41   # g/1
+    acid_mass = 21.01   # g/l, 0.1M
+    base_mass = 29.41   # g/1, 0.1M
     rounding = 3
+    balance = '0.01'   # In quotations because reasons?
 
     experiments = pandas.read_csv(
         filepath_or_buffer='experiments.csv',
@@ -39,29 +42,41 @@ def main():
             }
         )
 
-    print(len(out))
+    acid_weight = acid_mass * acid_vol
+    base_weight = base_mass * base_vol
 
-    # acid_vol = 0.01
-    # base_vol = 0.01
-
-    acid_weight = acid_mass * acid_vol * sample_conc
-    base_weight = base_mass * base_vol * sample_conc
-
-    acid_weight = acid_weight * 100   # Convert g to mg
-    base_weight = base_weight * 100
-
-    acid_vol = acid_vol * 1000   # Convert l to ml
-    base_vol = base_vol * 1000
-
-    print(f'Acid weight: {round(acid_weight, rounding)}mg')
-    print(f'Acid volume: {round(acid_vol, rounding)}ml')
+    print(f'Actual requirements:')
+    print(f'Acid weight: {round(acid_weight * 100, rounding)}mg')
+    print(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
     print('\n')
-    print(f'Base weight: {round(base_weight, rounding)}mg')
-    print(f'Base volume: {round(base_vol, rounding)}ml')
+    print(f'Base weight: {round(base_weight * 100, rounding)}mg')
+    print(f'Base volume: {round(base_vol * 1000, rounding)}ml')
+    print('\n')
+
+    print('Requirements based upon the validity of a balance:')
+
+    acid_weight = Decimal(acid_weight)
+    acid_weight = acid_weight.quantize(
+        Decimal(balance), rounding=ROUND_CEILING
+    )
+
+    base_weight = Decimal(base_weight)
+    base_weight = base_weight.quantize(
+        Decimal(balance), rounding=ROUND_CEILING
+    )
+
+    print(f'Acid weight: {round(float(acid_weight) * 100, rounding)}mg')
+    print(
+        f'Acid volume: {round(float(acid_weight)/acid_mass * 1000, rounding)}ml'
+    )
+    print('\n')
+    print(f'Base weight: {round(float(base_weight) * 100, rounding)}mg')
+    print(
+        f'Base volume: {round(float(base_weight)/base_mass * 1000, rounding)}ml'
+    )
     print('\n')
 
     out = pandas.DataFrame.from_dict(out)
-
     out.to_csv(path_or_buf='out.csv', index=False)
 
 

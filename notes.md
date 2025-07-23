@@ -96,5 +96,22 @@ https://scrippslabs.com/ph-of-common-reagents-at-room-temperature/
 14,400ul/total
 Just how much of this is going to be citrate vs citric acid?
 1mM
-- [ ] Calculate moles
-- [ ] Calculate grams
+- [/] Calculate moles
+- [/] Calculate grams
+
+[Experiments](experiments.csv) for ratios, [python script](main.py) for calculations (includes stocks), [out.csv](out.csv) for final volumes.
+ 
+Actual requirements:
+Acid weight: 13.249mg
+Acid volume: 6.306ml
+Base weight: 23.804mg
+Base volume: 8.094ml
+
+Requirements based upon the validity of a balance:
+Acid weight: 14.0mg
+Acid volume: 6.663ml
+Base weight: 24.0mg
+Base volume: 8.16ml
+
+
+
