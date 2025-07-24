@@ -64,10 +64,17 @@ def main():
 
     pkas = []
 
-    for pka1 in range(200, 350, 10):
-        for pka2 in range(400, 550, 10):
-            for pka3 in range(550, 650, 10):
-                pkas.append([pka1 / 100, pka2 / 100, pka3 / 100])
+    # for pka1 in range(200, 350):
+    #     for pka2 in range(400, 550):
+    #         for pka3 in range(550, 650):
+    #             pkas.append([pka1 / 100, pka2 / 100, pka3 / 100])
+
+    pkas = [
+        [pka1 / 100, pka2 / 100, pka3 / 100]
+        for pka1 in range(200, 350)
+        for pka2 in range(400, 550)
+        for pka3 in range(550, 650)
+    ]
 
     print(f'This many trials: {len(pkas)}')
 
@@ -102,7 +109,7 @@ def main():
                 current_count = counter.value
                 pbar.n = current_count
                 pbar.refresh()
-                time.sleep(0.1)
+                time.sleep(10)
 
             # Get final results
             batch_results = result.get()
