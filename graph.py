@@ -17,8 +17,8 @@ def process_pka_batch(args):
         ratios = []
         error = 0.0
         
-        for i in range(0, 101):
-            na_molarity = citrate_molarity * 3 * (i / 100)
+        for i in range(0, 101*2):
+            na_molarity = citrate_molarity * 3 * (i / 100 / 2)
             na = phfork.IonAq(charge=1, conc=na_molarity)
             system = phfork.System(citricacid, na)
             system.pHsolve()
@@ -110,6 +110,9 @@ def main():
         out.extend(batch_result)
 
     pka = min(out, key=lambda x: x['error'])
+
+    with open('pka.txt', 'w') as f:
+        f.write(pka)
 
     print(pka)
 
