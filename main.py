@@ -11,10 +11,24 @@ def main():
     rounding = 3
     balance = '0.01'   # In quotations because reasons?
 
-    experiments = pandas.read_csv(
-        filepath_or_buffer='experiments.csv',
+    ratios = pandas.read_csv(
+        filepath_or_buffer='ratios.csv',
         names=['ph', 'acid ratio', 'base ratio'],
     )
+
+    print(ratios.loc[ratios['ph'] - 4.abs().idxmin()])
+
+    options = [4, 3, 2]
+
+    print(min(ratios, key=lambda d: abs(d['pH'] - 4.0)))
+
+    experiments = []
+    for option in options:
+        experiments.append(
+            {
+                'ph': min(ratios, key=lambda d: abs(d['pH'] - option))
+            }
+        )
 
     acid_vol = 0
     base_vol = 0
