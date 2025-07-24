@@ -2,62 +2,40 @@ import phfork
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import threading
 
 
 def main():
     citrate_molarity = 0.1
-    pkas = [3.13, 4.76, 6.40]
-    citricacid = phfork.AcidAq(pKa=pkas, charge=0, conc=citrate_molarity)
 
-    phs = np.linspace(1, 9, 1000)
+    imported = pd.read_csv('bufferdata.csv')
+    imported = imported.to_dict(orient='split', index=False)
 
-    fracs = citricacid.alpha(phs)
+    known_values = []
 
-    plt.plot(phs, fracs)
+    for data in imported['data']:
+        known_values.append(
+            {'ph': data[0], 'acid ratio': data[1], 'base ratio': data[2]}
+        )
 
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+    pkas = []
 
-    # plt.show()
-
-    plt.savefig('graph.png')
-
-    pkas1 = [
-        3.13,  # Common Organic Chemistry
-        3.02,  # Paper
-        2.96,  # Pubchem
-        2.63,  # Pubchem
-        2.87,  # Pubchem
-        3.44,  # Pubchem
-    ]
-
-    pkas2 = [
-        4.76,  # Common Organic Chemistry
-        4.78,  # Paper
-        4.38,  # Pubchem
-        4.11,  # Pubchem
-        4.35,  # Pubchem
-        5.02,  # Pubchem
-    ]
-
-    pkas3 = [
-        6.40,  # Common Organic Chemistry
-        6.02,  # Paper
-        5.68,  # Pubchem
-        5.34,  # Pubchem
-        5.68,  # Pubchem
-        6.55,  # Pubchem
-    ]
-
-    for pka1 in pkas1:
-        for pka2 in pkas2:
-            for pka3 in pkas3:
-                pkas.append([pka1, pka2, pka3])
+    for pka1 in range(200, 350, 10):
+        for pka2 in range(400, 550, 10):
+            for pka3 in range(550, 650, 10):
+                pkas.append([pka1 / 100, pka2 / 100, pka3 / 100])
 
     out = []
 
+    print(f'This many trials: {len(pkas)}')
+
+    trial = 0
     for pka in pkas:
+        trial += 1
+        print(f'Trial: {trial}/{len(pkas)}')
         citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=citrate_molarity)
         ratios = []
+        error = 0.0
         for i in range(0, 101):
             na_molarity = citrate_molarity * 3 * (i / 100)
             na = phfork.IonAq(charge=1, conc=na_molarity)
@@ -67,24 +45,29 @@ def main():
             ratios.append(
                 {
                     'pH': round(system.pH, 2),
-                    'citric acid ratio': 100 - i,
-                    'citrate ratio': i,
+                    'acid ratio': 100 - i,
+                    'base ratio': i,
                 }
             )
 
+        for ph in known_values:
+            closest_ph = min(ratios, key=lambda d: abs(d['pH'] - ph['ph']))
+            error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
+
         out.append(
             {
-                'ph4': min(ratios, key=lambda d: abs(d['pH'] - 4)),
+                'error': error,
                 'pkas': pka,
             }
-        )
+        )   # The pH values closest to these values
 
-    closest = min(out, key=lambda d: abs(d['ph4']['citric acid ratio'] - 59))
 
-    pka = closest['pkas']
+    pka = min(out, key=lambda x: x['error'])
+
+    print(pka)
 
     ratios = []
-    citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=citrate_molarity)
+    citricacid = phfork.AcidAq(pKa=pka['pkas'], charge=0, conc=citrate_molarity)
     for i in range(0, 101):
         na_molarity = citrate_molarity * 3 * (i / 100)
         na = phfork.IonAq(charge=1, conc=na_molarity)
@@ -94,13 +77,23 @@ def main():
         ratios.append(
             {
                 'pH': round(system.pH, 2),
-                'citric acid ratio': 100 - i,
-                'citrate ratio': i,
+                'acid ratio': 100 - i,
+                'base ratio': i,
             }
         )
 
     out = pd.DataFrame.from_dict(ratios)
     out.to_csv('ratios.csv', index=False)
+
+    phs = np.linspace(1, 9, 1000)
+
+    fracs = citricacid.alpha(phs)
+
+    plt.plot(phs, fracs)
+
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.savefig('graph.png')
 
 
 if __name__ == '__main__':
