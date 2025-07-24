@@ -27,10 +27,10 @@ def main():
         [5.5, 6.5],  # pKa3 range
     ]
 
-    print('Starting 3D binary search for optimal pKa values...')
+    print('Starting 3D adaptive grid refinement for optimal pKa values...')
 
-    # Perform 3D binary search
-    result = binary_search_3d(bounds, known_values, search_molarity)
+    # Perform 3D adaptive grid refinement
+    result = adaptive_grid_refinement_3d(bounds, known_values, search_molarity)
 
     pka = result
 
@@ -97,14 +97,14 @@ def evaluate_pka_error(pka_values, known_values, search_molarity):
     return error
 
 
-def binary_search_3d(
+def adaptive_grid_refinement_3d(
     bounds,
     known_values,
     search_molarity,
     depth=0,
     previous_best_error=float('inf'),
 ):
-    """3D binary search for optimal pKa values"""
+    """3D adaptive grid refinement for optimal pKa values"""
 
     # Generate a 3x3x3 grid of points within current bounds for more thorough search
     points = []
@@ -141,13 +141,13 @@ def binary_search_3d(
     # Check if search space is too small to continue (primary stopping condition)
     ranges = [bounds[i][1] - bounds[i][0] for i in range(3)]
     if all(r < 0.01 for r in ranges):
-        print(f'Search space too small at depth {depth}. Stopping search.')
+        print(f'Search space too small at depth {depth}. Stopping refinement.')
         return best
 
     # Only stop if we haven't improved AND the search space is getting very small
     if best['error'] >= previous_best_error and all(r < 0.05 for r in ranges):
         print(
-            f'No improvement and small search space at depth {depth}. Stopping search.'
+            f'No improvement and small search space at depth {depth}. Stopping refinement.'
         )
         return best
 
@@ -167,14 +167,10 @@ def binary_search_3d(
     )
     print(f'New bounds: {new_bounds}')
 
-    # Recursively search in the refined space
-    return binary_search_3d(
+    # Recursively refine the grid in the refined space
+    return adaptive_grid_refinement_3d(
         new_bounds, known_values, search_molarity, depth + 1, best['error']
     )
-
-
-
-
 
 if __name__ == '__main__':
     main()
