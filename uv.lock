@@ -573,6 +573,7 @@ dependencies = [
     { name = "marimo" },
     { name = "matplotlib" },
     { name = "pandas" },
+    { name = "phcalc" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.16.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "setuptools" },
@@ -585,6 +586,7 @@ requires-dist = [
     { name = "marimo", specifier = ">=0.14.13" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "pandas", specifier = ">=2.3.1" },
+    { name = "phcalc", specifier = ">=0.2.0" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "setuptools", specifier = ">=80.9.0" },
     { name = "wheel", specifier = ">=0.45.1" },
@@ -725,6 +727,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712", size = 51043, upload-time = "2023-12-10T22:30:45Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191, upload-time = "2023-12-10T22:30:43.14Z" },
+]
+
+[[package]]
+name = "phcalc"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.16.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/f1/3dab34b5f59dae175fdeca8e7de2f15cbb0ece07109e9fbca569602d8dac/pHcalc-0.2.0.tar.gz", hash = "sha256:692aa59d92b5a3c2ce90f947be3166fd8964adb9246bd81d67b1c347f5713317", size = 12414, upload-time = "2023-03-22T21:23:06.09Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/53/15f300cfaca17634d99dc3b429d8fd28f56252fb95c4aef92b7d6e00bfde/pHcalc-0.2.0-py3-none-any.whl", hash = "sha256:403b08df0755821f3c61b4062d629332cb2feb1ac2f6f65346b016af68709beb", size = 9478, upload-time = "2023-03-22T21:23:02.435Z" },
 ]
 
 [[package]]

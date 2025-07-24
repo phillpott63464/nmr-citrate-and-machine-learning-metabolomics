@@ -28,8 +28,6 @@ def main():
         [5.5, 6.5],  # pKa3 range
     ]
 
-    print('Starting 3D adaptive grid refinement for optimal pKa values...')
-
     # Perform 3D adaptive grid refinement
     result = adaptive_grid_refinement_3d(bounds, known_values, search_molarity)
 
@@ -37,8 +35,6 @@ def main():
 
     with open('pka.txt', 'w') as f:
         f.write(str(pka))
-
-    print(pka)
 
     ratios = []
     citricacid = phfork.AcidAq(pKa=pka['pkas'], charge=0, conc=graph_molarity)
@@ -133,7 +129,6 @@ def adaptive_grid_refinement_3d(
     for point in unique_points:
         error = evaluate_pka_error(point, known_values, search_molarity)
         results.append({'error': error, 'pkas': point})
-        print(f'Depth {depth}: pKa={point}, Error={error:.2f}')
 
     # Find the best point
     best = min(results, key=lambda x: x['error'])
@@ -141,14 +136,10 @@ def adaptive_grid_refinement_3d(
     # Check if search space is too small to continue (primary stopping condition)
     ranges = [bounds[i][1] - bounds[i][0] for i in range(3)]
     if all(r < 0.01 for r in ranges):
-        print(f'Search space too small at depth {depth}. Stopping refinement.')
         return best
 
     # Only stop if we haven't improved AND the search space is getting very small
     if best['error'] >= previous_best_error and all(r < 0.05 for r in ranges):
-        print(
-            f'No improvement and small search space at depth {depth}. Stopping refinement.'
-        )
         return best
 
     # Create new bounds around the best point (smaller search area)
@@ -161,11 +152,6 @@ def adaptive_grid_refinement_3d(
         new_min = max(bounds[i][0], best_point[i] - half_range)
         new_max = min(bounds[i][1], best_point[i] + half_range)
         new_bounds.append([new_min, new_max])
-
-    print(
-        f"Best at depth {depth}: pKa={best_point}, Error={best['error']:.2f}"
-    )
-    print(f'New bounds: {new_bounds}')
 
     # Recursively refine the grid in the refined space
     return adaptive_grid_refinement_3d(

@@ -1,0 +1,14 @@
+Actual requirements:
+Acid weight: 12.638mg
+Acid volume: 6.015ml
+
+Base weight: 24.66mg
+Base volume: 8.385ml
+
+Requirements based upon the validity of a balance:
+Acid weight: 13.0mg
+Acid volume: 6.188ml
+
+Base weight: 25.0mg
+Base volume: 8.501ml
+

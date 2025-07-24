@@ -13,13 +13,31 @@ def main():
     balance = '0.01'   # In quotations because reasons?
 
     options = [
-            2.1, 3.2, 3.5, 3.7, #4
-            3.8, 4, 4.2, 4.4, #8
-            4.5, 4.6, 4.8, 5, #12
-            5.2, 5.4, 5.5, 5.7, #16
-            5.9, 6, 6.2, 6.4, #20
-            6.6, 7, 7.4, 8 #24
-        ]
+        2.1,
+        3.2,
+        3.5,
+        3.7,  # 4
+        3.8,
+        4,
+        4.2,
+        4.4,  # 8
+        4.5,
+        4.6,
+        4.8,
+        5,  # 12
+        5.2,
+        5.4,
+        5.5,
+        5.7,  # 16
+        5.9,
+        6,
+        6.2,
+        6.4,  # 20
+        6.6,
+        7,
+        7.4,
+        8,  # 24
+    ]
 
     # while len(options) < 24:
     #     options.append(5)
@@ -43,8 +61,6 @@ def main():
                 'base ratio': data[2],
             }
         )
-
-    print(min(ratios2, key=lambda d: abs(float(d['pH']) - 4.0)))
 
     experiments = []
     for option in options:
@@ -76,18 +92,24 @@ def main():
             }
         )
 
+    stock_output = []
+
     acid_weight = acid_mass * acid_vol
     base_weight = base_mass * base_vol
 
-    print(f'Actual requirements:')
-    print(f'Acid weight: {round(acid_weight * 100, rounding)}mg')
-    print(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
-    print('\n')
-    print(f'Base weight: {round(base_weight * 100, rounding)}mg')
-    print(f'Base volume: {round(base_vol * 1000, rounding)}ml')
-    print('\n')
+    stock_output.append(f'Actual requirements:\n')
+    stock_output.append(
+        f'Acid weight: {round(acid_weight * 100, rounding)}mg\n'
+    )
+    stock_output.append(f'Acid volume: {round(acid_vol * 1000, rounding)}ml\n')
+    stock_output.append('\n')
+    stock_output.append(
+        f'Base weight: {round(base_weight * 100, rounding)}mg\n'
+    )
+    stock_output.append(f'Base volume: {round(base_vol * 1000, rounding)}ml\n')
+    stock_output.append('\n')
 
-    print('Requirements based upon the validity of a balance:')
+    stock_output.append('Requirements based upon the validity of a balance:\n')
 
     acid_weight = Decimal(acid_weight)
     acid_weight = acid_weight.quantize(
@@ -99,16 +121,23 @@ def main():
         Decimal(balance), rounding=ROUND_CEILING
     )
 
-    print(f'Acid weight: {round(float(acid_weight) * 100, rounding)}mg')
-    print(
-        f'Acid volume: {round(float(acid_weight)/acid_mass * 1000, rounding)}ml'
+    stock_output.append(
+        f'Acid weight: {round(float(acid_weight) * 100, rounding)}mg\n'
     )
-    print('\n')
-    print(f'Base weight: {round(float(base_weight) * 100, rounding)}mg')
-    print(
-        f'Base volume: {round(float(base_weight)/base_mass * 1000, rounding)}ml'
+    stock_output.append(
+        f'Acid volume: {round(float(acid_weight)/acid_mass * 1000, rounding)}ml\n'
     )
-    print('\n')
+    stock_output.append('\n')
+    stock_output.append(
+        f'Base weight: {round(float(base_weight) * 100, rounding)}mg\n'
+    )
+    stock_output.append(
+        f'Base volume: {round(float(base_weight)/base_mass * 1000, rounding)}ml\n'
+    )
+    stock_output.append('\n')
+
+    with open(file='stocks.txt', mode='w') as f:
+        f.writelines(stock_output)
 
     out.sort(key=operator.itemgetter('pH'))
 
