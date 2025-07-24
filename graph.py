@@ -17,7 +17,7 @@ def process_pka_batch(args):
         ratios = []
         error = 0.0
         
-        for i in range(0, 101*2):
+        for i in range(0, 201):
             na_molarity = citrate_molarity * 3 * (i / 100 / 2)
             na = phfork.IonAq(charge=1, conc=na_molarity)
             system = phfork.System(citricacid, na)
