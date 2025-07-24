@@ -6,9 +6,10 @@ import multiprocessing as mp
 from tqdm import tqdm
 import time
 
+
 def main():
     search_molarity = 0.1
-    graph_molarity=0.001
+    graph_molarity = 0.001
 
     imported = pd.read_csv('bufferdata.csv')
     imported = imported.to_dict(orient='split', index=False)
@@ -40,9 +41,7 @@ def main():
     print(pka)
 
     ratios = []
-    citricacid = phfork.AcidAq(
-        pKa=pka['pkas'], charge=0, conc=graph_molarity
-    )
+    citricacid = phfork.AcidAq(pKa=pka['pkas'], charge=0, conc=graph_molarity)
     for i in range(0, 201):
         na_molarity = graph_molarity * 3 * (i / 200)
         na = phfork.IonAq(charge=1, conc=na_molarity)
@@ -69,6 +68,7 @@ def main():
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.savefig('graph.png')
+
 
 def evaluate_pka_error(pka_values, known_values, search_molarity):
     """Evaluate error for a single pKa combination"""
@@ -171,6 +171,7 @@ def adaptive_grid_refinement_3d(
     return adaptive_grid_refinement_3d(
         new_bounds, known_values, search_molarity, depth + 1, best['error']
     )
+
 
 if __name__ == '__main__':
     main()
