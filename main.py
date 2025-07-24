@@ -12,7 +12,17 @@ def main():
     rounding = 3
     balance = '0.01'   # In quotations because reasons?
 
-    options = [2.1, 3.5, 4, 5, 5.5, 3, 4.5, 6, 8]
+    options = [
+            2.1, 3.2, 3.5, 3.7, #4
+            3.8, 4, 4.2, 4.4, #8
+            4.5, 4.6, 4.8, 5, #12
+            5.2, 5.4, 5.5, 5.7, #16
+            5.9, 6, 6.2, 6.4, #20
+            6.6, 7, 7.4, 8 #24
+        ]
+
+    # while len(options) < 24:
+    #     options.append(5)
 
     ratios = pandas.read_csv(
         filepath_or_buffer='ratios.csv',
@@ -100,7 +110,6 @@ def main():
     )
     print('\n')
 
-    # out = sorted(out, key=lambda d: d['pH'])
     out.sort(key=operator.itemgetter('pH'))
 
     out = pandas.DataFrame.from_dict(out)
