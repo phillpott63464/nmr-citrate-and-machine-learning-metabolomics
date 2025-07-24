@@ -113,5 +113,6 @@ Acid volume: 6.663ml
 Base weight: 24.0mg
 Base volume: 8.16ml
 
-
+---
+[graph](graph.csv), taken from https://www.researchgate.net/figure/Raman-spectra-of-citric-acid-at-different-pH-from-1800-to-1000-cm-1_fig4_270958347, using (graphextractor)[https://apps.automeris.io/wpd4]
 
