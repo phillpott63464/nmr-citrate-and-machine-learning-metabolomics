@@ -7,46 +7,89 @@ from tqdm import tqdm
 import time
 
 
-def process_pka_batch(args):
-    """Worker function to process a batch of pKa values"""
-    pka_batch, known_values, citrate_molarity, counter, lock = args
-    batch_results = []
+def evaluate_pka_error(pka_values, known_values, citrate_molarity):
+    """Evaluate error for a single pKa combination"""
+    citricacid = phfork.AcidAq(pKa=pka_values, charge=0, conc=citrate_molarity)
+    ratios = []
+    
+    for i in range(0, 201):
+        na_molarity = citrate_molarity * 3 * (i / 200)
+        na = phfork.IonAq(charge=1, conc=na_molarity)
+        system = phfork.System(citricacid, na)
+        system.pHsolve()
 
-    for pka in pka_batch:
-        citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=citrate_molarity)
-        ratios = []
-        error = 0.0
-
-        for i in range(0, 201):
-            na_molarity = citrate_molarity * 3 * (i / 200)
-            na = phfork.IonAq(charge=1, conc=na_molarity)
-            system = phfork.System(citricacid, na)
-            system.pHsolve()
-
-            ratios.append(
-                {
-                    'pH': round(system.pH, 2),
-                    'acid ratio': 100 - i/2,
-                    'base ratio': i/2,
-                }
-            )
-
-        for ph in known_values:
-            closest_ph = min(ratios, key=lambda d: abs(d['pH'] - ph['ph']))
-            error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
-
-        batch_results.append(
+        ratios.append(
             {
-                'error': error,
-                'pkas': pka,
+                'pH': round(system.pH, 2),
+                'acid ratio': 100 - i/2,
+                'base ratio': i/2,
             }
         )
 
-        # Update progress counter
-        with lock:
-            counter.value += 1
+    error = 0.0
+    for ph in known_values:
+        closest_ph = min(ratios, key=lambda d: abs(d['pH'] - ph['ph']))
+        error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
 
-    return batch_results
+    return error
+
+
+def binary_search_3d(bounds, known_values, citrate_molarity, depth=0, previous_best_error=float('inf')):
+    """3D binary search for optimal pKa values"""
+    
+    # Generate a 3x3x3 grid of points within current bounds for more thorough search
+    points = []
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                pka1 = round(bounds[0][0] + (bounds[0][1] - bounds[0][0]) * i / 2, 2)
+                pka2 = round(bounds[1][0] + (bounds[1][1] - bounds[1][0]) * j / 2, 2)
+                pka3 = round(bounds[2][0] + (bounds[2][1] - bounds[2][0]) * k / 2, 2)
+                points.append([pka1, pka2, pka3])
+    
+    # Remove duplicates
+    unique_points = []
+    for point in points:
+        if point not in unique_points:
+            unique_points.append(point)
+    
+    # Evaluate all points
+    results = []
+    for point in unique_points:
+        error = evaluate_pka_error(point, known_values, citrate_molarity)
+        results.append({'error': error, 'pkas': point})
+        print(f"Depth {depth}: pKa={point}, Error={error:.2f}")
+    
+    # Find the best point
+    best = min(results, key=lambda x: x['error'])
+    
+    # Check if search space is too small to continue (primary stopping condition)
+    ranges = [bounds[i][1] - bounds[i][0] for i in range(3)]
+    if all(r < 0.01 for r in ranges):
+        print(f"Search space too small at depth {depth}. Stopping search.")
+        return best
+    
+    # Only stop if we haven't improved AND the search space is getting very small
+    if best['error'] >= previous_best_error and all(r < 0.05 for r in ranges):
+        print(f"No improvement and small search space at depth {depth}. Stopping search.")
+        return best
+    
+    # Create new bounds around the best point (smaller search area)
+    best_point = best['pkas']
+    new_bounds = []
+    
+    for i in range(3):
+        current_range = bounds[i][1] - bounds[i][0]
+        half_range = current_range / 3  # Smaller step for more precision
+        new_min = max(bounds[i][0], best_point[i] - half_range)
+        new_max = min(bounds[i][1], best_point[i] + half_range)
+        new_bounds.append([new_min, new_max])
+    
+    print(f"Best at depth {depth}: pKa={best_point}, Error={best['error']:.2f}")
+    print(f"New bounds: {new_bounds}")
+    
+    # Recursively search in the refined space
+    return binary_search_3d(new_bounds, known_values, citrate_molarity, depth + 1, best['error'])
 
 
 def main():
@@ -62,66 +105,19 @@ def main():
             {'ph': data[0], 'acid ratio': data[1], 'base ratio': data[2]}
         )
 
-    pkas = []
-
-    # for pka1 in range(200, 350):
-    #     for pka2 in range(400, 550):
-    #         for pka3 in range(550, 650):
-    #             pkas.append([pka1 / 100, pka2 / 100, pka3 / 100])
-
-    pkas = [
-        [pka1 / 100, pka2 / 100, pka3 / 100]
-        for pka1 in range(200, 350)
-        for pka2 in range(400, 550)
-        for pka3 in range(550, 650)
+    # Define search bounds for pKa values
+    bounds = [
+        [2.0, 3.5],  # pKa1 range
+        [4.0, 5.5],  # pKa2 range
+        [5.5, 6.5],  # pKa3 range
     ]
 
-    print(f'This many trials: {len(pkas)}')
-
-    # Split pkas into batches for multiprocessing
-    num_processes = mp.cpu_count()
-    batch_size = len(pkas) // num_processes
-    pka_batches = [
-        pkas[i : i + batch_size] for i in range(0, len(pkas), batch_size)
-    ]
-
-    # Create shared counter and lock for progress tracking
-    manager = mp.Manager()
-    counter = manager.Value('i', 0)
-    lock = manager.Lock()
-
-    # Prepare arguments for worker processes
-    worker_args = [
-        (batch, known_values, citrate_molarity, counter, lock)
-        for batch in pka_batches
-    ]
-
-    # Use multiprocessing to process batches in parallel with trial progress
-    print(f'Processing {len(pkas)} trials across {num_processes} processes...')
-
-    with tqdm(total=len(pkas), desc='Processing trials') as pbar:
-        with mp.Pool(processes=num_processes) as pool:
-            # Start async job
-            result = pool.map_async(process_pka_batch, worker_args)
-
-            # Monitor progress
-            while not result.ready():
-                current_count = counter.value
-                pbar.n = current_count
-                pbar.refresh()
-                time.sleep(10)
-
-            # Get final results
-            batch_results = result.get()
-            pbar.n = len(pkas)
-            pbar.refresh()
-
-    # Flatten results from all batches
-    out = []
-    for batch_result in batch_results:
-        out.extend(batch_result)
-
-    pka = min(out, key=lambda x: x['error'])
+    print('Starting 3D binary search for optimal pKa values...')
+    
+    # Perform 3D binary search
+    result = binary_search_3d(bounds, known_values, citrate_molarity)
+    
+    pka = result
 
     with open('pka.txt', 'w') as f:
         f.write(str(pka))
