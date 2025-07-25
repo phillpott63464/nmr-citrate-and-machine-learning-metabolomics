@@ -1,0 +1,173 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.14.13"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1b3ae24fb08bbbf8ae7bfdfb9fb21137",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "1081d9de55de9c25a8f7bdc08a4f035b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><ul>\n<li>Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "d17474808a0cd4f9d40eeba8c52002d8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "4b6a8f7b75aae710243359253112279c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><ul>\n<li>Create an optuna study and trial it</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "88e99a70a78878a94f82bd8410b6125e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:34,601] Using an existing study with name 'PKA_STUDY' instead of creating a new one.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:46,340] Trial 6111 finished with value: 20.5 and parameters: {'pka1': 2.98, 'pka2': 4.32, 'pka3': 5.81}. Best is trial 358 with value: 0.003999999999999953.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:49,243] Trial 6116 finished with value: 7.5 and parameters: {'pka1': 2.98, 'pka2': 4.41, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n[I 2025-07-25 14:51:49,247] Trial 6114 finished with value: 7.25 and parameters: {'pka1': 2.99, 'pka2': 4.4, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n[I 2025-07-25 14:51:49,256] Trial 6113 finished with value: 7.5 and parameters: {'pka1': 2.98, 'pka2': 4.41, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:49,268] Trial 6115 finished with value: 7.5 and parameters: {'pka1': 2.98, 'pka2': 4.41, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n[I 2025-07-25 14:51:49,277] Trial 6109 finished with value: 7.5 and parameters: {'pka1': 2.98, 'pka2': 4.41, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:49,284] Trial 6110 finished with value: 79.25 and parameters: {'pka1': 2.98, 'pka2': 4.41, 'pka3': 5.91}. Best is trial 358 with value: 0.003999999999999953.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:49,318] Trial 6112 finished with value: 6.5 and parameters: {'pka1': 2.98, 'pka2': 4.4, 'pka3': 5.75}. Best is trial 358 with value: 0.003999999999999953.\n"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "[I 2025-07-25 14:51:51,307] Trial 6117 finished with value: 20.25 and parameters: {'pka1': 3.02, 'pka2': 4.45, 'pka3': 5.7}. Best is trial 358 with value: 0.003999999999999953.\n[I 2025-07-25 14:51:51,318] Trial 6118 finished with value: 338.25 and parameters: {'pka1': 3.0300000000000002, 'pka2': 4.35, 'pka3': 6.18}. Best is trial 358 with value: 0.003999999999999953.\n"
+        }
+      ]
+    },
+    {
+      "id": "PKri",
+      "code_hash": "16277798b4d00ec0d50e89e317b6b1b9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><ul>\n<li>Import data from bufferdata.csv and convert from pandas array to dict</li>\n<li>Export shape of data and len of data</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "cf2b1e4fba4b15a5f6ff5602fdf74a07",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "{'ph': 3.0, 'acid ratio': 82.0, 'base ratio': 18.0}\n17\n"
+        }
+      ]
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "4235d7c4a37529041a7958b73f2bf5db",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><ul>\n<li>Create a speciation plot of citrate at a specified molarity</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "032463ce24b5f6b8b46e8dfcc9adbdeb",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "[2.9699999999999998, 4.39, 5.72]\n"
+        }
+      ]
+    }
+  ]
+}
