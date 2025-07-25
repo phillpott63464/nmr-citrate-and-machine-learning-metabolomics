@@ -22,6 +22,7 @@
           pkgs.python313Packages.scipy
           pkgs.python313Packages.matplotlib
           pkgs.python313Packages.tqdm
+          pkgs.python313Packages.optuna
           # # pkgs.python313Packages.yt-dlp
           # pkgs.python313Packages.mutagen
           # pkgs.python313Packages.tqdm

@@ -40,8 +40,8 @@ def main():
             known_values=known_values,
             search_molarity=search_molarity,
         ),
-        n_trials=2000,
-        n_jobs=100,
+        n_trials=10,
+        n_jobs=8,
     )
 
 
@@ -52,7 +52,7 @@ def main():
     ]
 
     with open('pka.txt', 'w') as f:
-        f.write(f'Error: {study.best_trial.params}, pkas: {study.best_trial.value}')
+        f.write(f'Error: {study.best_trial.value}\npkas: {study.best_trial.params}')
 
     ratios = []
     citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=graph_molarity)
