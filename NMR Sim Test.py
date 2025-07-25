@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -38,7 +38,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
+    mo.md(
+        r"""Use the SpinSystem to create the peak list, and get the peak list"""
+    )
     return
 
 
@@ -98,7 +100,10 @@ def _(np):
 
 @app.cell
 def _(SpinSystem, citrate):
-    citratesystem = SpinSystem(citrate[0], citrate[1], )
+    citratesystem = SpinSystem(
+        citrate[0],
+        citrate[1],
+    )
 
     citratesystem.peaklist()
     return (citratesystem,)
@@ -142,20 +147,19 @@ def _(citratesystem, mplplot):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Create 100 noisy spectra""")
+    mo.md(r"""Create 10000 noisy spectra""")
     return
 
 
 @app.cell
 def _(np, plt, x, y):
-    ys = [y] * 100
-
+    ys = [y] * 10000
 
     for i in range(0, len(ys)):
         sigma = np.random.rand() / 100
         noise = np.random.normal(0.0, sigma, len(ys[0]))
         ys[i] = y + noise
-    
+
     plt.plot(x, ys[10])
     return
 
@@ -177,8 +181,8 @@ def _(mplplot, np):
     def spectra_creator(plot):
         x, y = mplplot(plot.peaklist(), y_max=0.4)
 
-        ys = [y] * 100
-    
+        ys = [y] * 10000
+
         for i in range(0, len(ys)):
             sigma = np.random.rand() / 100
             noise = np.random.normal(0.0, sigma, len(ys[0]))
@@ -186,6 +190,7 @@ def _(mplplot, np):
 
         spectra = [[x, y] for y in ys]
         return spectra
+
     return (spectra_creator,)
 
 
@@ -206,12 +211,7 @@ def _(citratesystem, plt, spectra_creator, vinylsystem):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    And now create a torch model to classify between the two?
-
-    """
-    )
+    mo.md(r"""And now create a torch model to classify between the two?""")
     return
 
 
@@ -221,7 +221,7 @@ def _():
 
     # Define the model
     model = nn.Sequential(
-        nn.Linear(8, 24),
+        nn.Linear(800, 24),
         nn.ReLU(),
         nn.Linear(24, 12),
         nn.ReLU(),
@@ -229,7 +229,7 @@ def _():
         nn.ReLU(),
         nn.Linear(6, 1),
     )
-    return (model,)
+    return model, nn
 
 
 @app.cell(hide_code=True)
@@ -237,14 +237,17 @@ def _(citrate_spectra, np, vinyl_spectra):
     import torch
     from sklearn.model_selection import train_test_split
 
+    citrate_y = np.array([spectrum[1] for spectrum in citrate_spectra])
+    vinyl_y = np.array([spectrum[1] for spectrum in vinyl_spectra])
 
+    data = np.concatenate([citrate_y, vinyl_y], axis=0)
 
-    data = np.concatenate([citrate_spectra, vinyl_spectra], axis=0)
+    labels = np.concatenate(
+        [np.zeros(int(len(data) / 2)), np.ones(int(len(data) / 2))]
+    )
 
-    labels = np.concatenate([
-        np.zeros(100),
-        np.ones(100)
-    ])
+    print(data.shape)
+    print(labels.shape)
 
     train_ratio = 0.7   # 70% of the data is used for training, 30% for testing
 
@@ -252,8 +255,10 @@ def _(citrate_spectra, np, vinyl_spectra):
         data, labels, train_size=train_ratio, shuffle=True
     )
 
-    data_train = torch.tensor(citrate_spectra)
-    labels_train = torch.tensor(vinyl_spectra)
+    data_train = torch.tensor(data_train, dtype=torch.float32)
+    labels_train = torch.tensor(labels_train, dtype=torch.float32)
+    data_test = torch.tensor(data_test, dtype=torch.float32)
+    labels_test = torch.tensor(labels_test, dtype=torch.float32)
 
     print(data_train.shape)
     print(labels_train.shape)
@@ -261,23 +266,18 @@ def _(citrate_spectra, np, vinyl_spectra):
 
 
 @app.cell
-def _(
-    data_test,
-    data_train,
-    labels_test,
-    labels_train,
-    loss_fn,
-    model,
-    np,
-    optimizer,
-    torch,
-):
+def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
+    import tqdm
+    import copy
+    import torch.optim as optim
+
     n_epochs = 100   # number of epochs to run
     batch_size = 10  # size of each batch
     batch_start = torch.arange(0, len(data_train), batch_size)
 
-    import tqdm
-    import copy
+    # loss function and optimizer
+    loss_fn = nn.MSELoss()  # mean square error
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
     best_mse = np.inf   # init to infinity
     best_weights = None
@@ -312,8 +312,19 @@ def _(
         if mse < best_mse:
             best_mse = mse
             best_weights = copy.deepcopy(model.state_dict())
+    return best_mse, best_weights, history
+
+
+@app.cell
+def _(best_mse, best_weights, history, model, np, plt):
+    model.load_state_dict(best_weights)
+
+    print('MSE: %.2f' % best_mse)
+    print('RMSE: %.2f' % np.sqrt(best_mse))
+    plt.plot(history)
+    plt.show()
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
