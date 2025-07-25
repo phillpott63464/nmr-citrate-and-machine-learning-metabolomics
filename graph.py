@@ -33,9 +33,10 @@ def main():
             known_values=known_values,
             search_molarity=search_molarity,
         ),
+        n_jobs = 8,
         callbacks=[
             optuna.study.MaxTrialsCallback(
-                2000, states=(optuna.trial.TrialState.COMPLETE,)
+                10000, states=(optuna.trial.TrialState.COMPLETE,)
             )
         ],
     )
