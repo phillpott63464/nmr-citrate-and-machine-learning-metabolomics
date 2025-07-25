@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium", layout_file="layouts/pHcalc test.slides.json")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium', layout_file='layouts/pHcalc test.slides.json')
 
 
 @app.cell
@@ -15,13 +15,9 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(r"""pHcalc the pypi package is broken, ignore""")
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""- Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
+    mo.md(
+        r"""- Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
+    )
     return
 
 
@@ -35,7 +31,9 @@ def _(phfork):
         ]
 
         """Evaluate error for a single pKa combination"""
-        citricacid = phfork.AcidAq(pKa=pka_values, charge=0, conc=search_molarity)
+        citricacid = phfork.AcidAq(
+            pKa=pka_values, charge=0, conc=search_molarity
+        )
         ratios = []
 
         for i in range(0, 201):
@@ -58,6 +56,7 @@ def _(phfork):
             error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
 
         return error
+
     return (evaluate_pka_error,)
 
 
@@ -72,11 +71,13 @@ def _(evaluate_pka_error, known_values):
     import optuna
     from functools import partial
 
-    search_molarity=0.1
+    search_molarity = 0.1
 
     def objective(trial, search_molarity, known_values):
         error = evaluate_pka_error(
-            trial=trial, search_molarity=search_molarity, known_values=known_values
+            trial=trial,
+            search_molarity=search_molarity,
+            known_values=known_values,
         )
         return error
 
@@ -174,5 +175,5 @@ def _(AcidAq, IonAq, System, study):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
