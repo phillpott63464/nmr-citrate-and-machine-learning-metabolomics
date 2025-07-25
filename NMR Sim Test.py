@@ -295,7 +295,7 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
                 labels_batch = labels_train[start : start + batch_size]
                 # forward pass
                 labels_pred = model(data_batch)
-                loss = loss_fn(labels_pred, labels_batch)
+                loss = loss_fn(labels_pred.squeeze(), labels_batch)  # Add .squeeze() here
                 # backward pass
                 optimizer.zero_grad()
                 loss.backward()
@@ -306,7 +306,7 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
         # evaluate accuracy at end of each epoch
         model.eval()
         labels_pred = model(data_test)
-        mse = loss_fn(labels_pred, labels_test)
+        mse = loss_fn(labels_pred.squeeze(), labels_test)  # Add .squeeze() here too
         mse = float(mse)
         history.append(mse)
         if mse < best_mse:
