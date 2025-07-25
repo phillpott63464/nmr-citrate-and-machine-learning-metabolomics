@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.13"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -13,9 +13,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing."""
-    )
+    mo.md(r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing.""")
     return
 
 
@@ -52,9 +50,7 @@ def _(data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""- Define a model. This is a 4 layer MLP using ReLU activation."""
-    )
+    mo.md(r"""- Define a model. This is a 4 layer MLP using ReLU activation.""")
     return
 
 
@@ -77,9 +73,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""- Define a loss function (mean square error) and optimizer (adam)"""
-    )
+    mo.md(r"""- Define a loss function (mean square error) and optimizer (adam)""")
     return
 
 
@@ -229,5 +223,5 @@ def _(best_mse, history, np):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
