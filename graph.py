@@ -110,9 +110,9 @@ def evaluate_pka_error(known_values, search_molarity, trial):
         )
 
     error = 0.0
-    for ph in known_values:
-        closest_ph = min(ratios, key=lambda d: abs(d['pH'] - ph['ph']))
-        error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
+    for known in known_values:
+        closest_entry = min(ratios, key=lambda d: abs(d['acid ratio'] - known['acid ratio']))
+        error += (known['ph'] - closest_entry['pH']) ** 2
 
     return error
 
