@@ -33,7 +33,11 @@ def main():
             known_values=known_values,
             search_molarity=search_molarity,
         ),
-        callbacks=[optuna.study.MaxTrialsCallback(2000, states=(optuna.trial.TrialState.COMPLETE,))]
+        callbacks=[
+            optuna.study.MaxTrialsCallback(
+                2000, states=(optuna.trial.TrialState.COMPLETE,)
+            )
+        ],
     )
 
     pka = [
@@ -41,31 +45,16 @@ def main():
     ]
 
     with open('pka.txt', 'w') as f:
-        f.write(
-            f'Error: {round(study.best_trial.value, 10)}\npkas: {pka}'
-        )
+        f.write(f'Error: {round(study.best_trial.value, 10)}\npkas: {pka}')
 
-    ratios = []
-    citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=graph_molarity)
-    for i in range(0, 201):
-        na_molarity = graph_molarity * 3 * (i / 200)
-        na = phfork.IonAq(charge=1, conc=na_molarity)
-        system = phfork.System(citricacid, na)
-        system.pHsolve()
-
-        ratios.append(
-            {
-                'pH': round(system.pH, 2),
-                'acid ratio': 100 - i / 2,
-                'base ratio': i / 2,
-            }
-        )
+    ratios = simulate_ph_graph(pka=pka, conc=graph_molarity)
 
     out = pd.DataFrame.from_dict(ratios)
     out.to_csv('ratios.csv', index=False)
 
     phs = np.linspace(1, 9, 1000)
 
+    citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=graph_molarity)
     fracs = citricacid.alpha(phs)
 
     plt.plot(phs, fracs)
@@ -83,11 +72,24 @@ def evaluate_pka_error(known_values, search_molarity, trial):
     ]
 
     """Evaluate error for a single pKa combination"""
-    citricacid = phfork.AcidAq(pKa=pka_values, charge=0, conc=search_molarity)
-    ratios = []
 
+    ratios = simulate_ph_graph(pka=pka_values, conc=search_molarity)
+
+    error = 0.0
+    for known in known_values:
+        closest_entry = min(
+            ratios, key=lambda d: abs(d['acid ratio'] - known['acid ratio'])
+        )
+        error += (known['ph'] - closest_entry['pH']) ** 2
+
+    return error
+
+
+def simulate_ph_graph(pka, conc, charge=0):
+    ratios = []
+    citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=conc)
     for i in range(0, 201):
-        na_molarity = search_molarity * 3 * (i / 200)
+        na_molarity = conc * 3 * (i / 200)
         na = phfork.IonAq(charge=1, conc=na_molarity)
         system = phfork.System(citricacid, na)
         system.pHsolve()
@@ -100,14 +102,7 @@ def evaluate_pka_error(known_values, search_molarity, trial):
             }
         )
 
-    error = 0.0
-    for known in known_values:
-        closest_entry = min(
-            ratios, key=lambda d: abs(d['acid ratio'] - known['acid ratio'])
-        )
-        error += (known['ph'] - closest_entry['pH']) ** 2
-
-    return error
+    return ratios
 
 
 def objective(trial, search_molarity, known_values):
