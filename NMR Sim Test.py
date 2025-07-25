@@ -276,7 +276,7 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
     batch_start = torch.arange(0, len(data_train), batch_size)
 
     # loss function and optimizer
-    loss_fn = nn.MSELoss()  # mean square error
+    loss_fn = nn.BCEWithLogitsLoss()  # Binary cross-entropy for classification
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
     best_mse = np.inf   # init to infinity
@@ -312,6 +312,18 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
         if mse < best_mse:
             best_mse = mse
             best_weights = copy.deepcopy(model.state_dict())
+
+    model.eval()
+    with torch.no_grad():
+        labels_pred = model(data_test)
+        predictions = torch.sigmoid(labels_pred) > 0.5  # Convert to binary predictions
+        accuracy = (predictions.squeeze() == labels_test).float().mean()
+        print(f'Accuracy: {accuracy:.2%}')
+        
+        # Show some example predictions
+        print(f'First 10 predictions: {torch.sigmoid(labels_pred[:10]).squeeze()}')
+        print(f'First 10 true labels: {labels_test[:10]}')
+
     return best_mse, best_weights, history
 
 
