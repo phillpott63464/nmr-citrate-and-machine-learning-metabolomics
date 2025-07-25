@@ -31,22 +31,32 @@ def main():
         direction='minimize',
         study_name='PKA_STUDY',
         storage='sqlite:///PKA_STUDY.db',
-        load_if_exists = True,
+        load_if_exists=True,
     )
 
     study.optimize(
-        partial(objective, known_values=known_values, search_molarity=search_molarity),
-          n_trials=10,
+        partial(
+            objective,
+            known_values=known_values,
+            search_molarity=search_molarity,
+        ),
+        n_trials=2000,
+        n_jobs=100,
     )
 
     print(study.best_trial.params)
 
+    pka = [
+        study.best_trial.params['pka1'],
+        study.best_trial.params['pka2'],
+        study.best_trial.params['pka3'],
+    ]
 
     with open('pka.txt', 'w') as f:
         f.write(str(pka))
 
     ratios = []
-    citricacid = phfork.AcidAq(pKa=pka['pkas'], charge=0, conc=graph_molarity)
+    citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=graph_molarity)
     for i in range(0, 201):
         na_molarity = graph_molarity * 3 * (i / 200)
         na = phfork.IonAq(charge=1, conc=na_molarity)
@@ -78,11 +88,9 @@ def main():
 def evaluate_pka_error(known_values, search_molarity, trial):
     pka_values = [
         trial.suggest_float('pka1', low=2.0, high=3.5, step=0.01),
-        trial.suggest_float('pka2', 4.0, 5.5, step=0.01),
-        trial.suggest_float('pka3', 5.5, 6.5, step=0.01),
+        trial.suggest_float('pka2', low=4.0, high=5.5, step=0.01),
+        trial.suggest_float('pka3', low=5.5, high=6.5, step=0.01),
     ]
-
-    print(pka_values)
 
     """Evaluate error for a single pKa combination"""
     citricacid = phfork.AcidAq(pKa=pka_values, charge=0, conc=search_molarity)
@@ -107,11 +115,15 @@ def evaluate_pka_error(known_values, search_molarity, trial):
         closest_ph = min(ratios, key=lambda d: abs(d['pH'] - ph['ph']))
         error += (ph['acid ratio'] - closest_ph['acid ratio']) ** 2
 
-    return error, pka_values
+    return error
+
 
 def objective(trial, search_molarity, known_values):
-    error = evaluate_pka_error(trial=trial, search_molarity=search_molarity, known_values=known_values)
+    error = evaluate_pka_error(
+        trial=trial, search_molarity=search_molarity, known_values=known_values
+    )
     return error
+
 
 if __name__ == '__main__':
     main()
