@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.13.6"
+__generated_with = "0.14.13"
 app = marimo.App(width="medium")
 
 
@@ -178,17 +178,37 @@ def _(mo):
 def _(mplplot, np):
     def spectra_creator(plot):
         x, y = mplplot(plot.peaklist(), y_max=0.4)
-
         ys = [y] * 10000
 
         for i in range(0, len(ys)):
-            sigma = np.random.rand() / 100
-            noise = np.random.normal(0.0, sigma, len(ys[0]))
-            ys[i] = y + noise
+            # Much more realistic noise levels
+            base_noise_level = 0.005 + np.random.rand() * 0.01  # 0.5-1.5% noise
+            
+            # 1. Gentle Gaussian noise
+            gaussian_noise = np.random.normal(0.0, base_noise_level, len(ys[0]))
+            
+            # 2. Subtle baseline drift
+            baseline_drift = np.random.normal(0, 0.002) * np.linspace(-1, 1, len(ys[0]))
+            
+            # 3. Occasional small spikes (much less frequent)
+            spike_noise = np.zeros_like(ys[0])
+            if np.random.rand() > 0.8:  # Only 20% chance of spikes
+                n_spikes = np.random.poisson(1)  # Usually 0-2 spikes
+                spike_positions = np.random.choice(len(ys[0]), size=min(n_spikes, len(ys[0])), replace=False)
+                spike_noise[spike_positions] = np.random.normal(0, base_noise_level * 3, len(spike_positions))
+            
+            # 4. Small intensity variation
+            scale_factor = 1.0 + np.random.normal(0, 0.05)  # ±5% intensity variation
+            
+            # 5. Minimal phase distortion
+            phase_error = np.random.normal(0, 0.02)
+            y_phase_distorted = y * np.cos(phase_error) + np.random.normal(0, 0.001, len(y)) * np.sin(phase_error)
+            
+            total_noise = gaussian_noise + baseline_drift + spike_noise
+            ys[i] = (y_phase_distorted * scale_factor) + total_noise
 
         spectra = [[x, y] for y in ys]
         return spectra
-
     return (spectra_creator,)
 
 
@@ -204,6 +224,7 @@ def _(citratesystem, plt, spectra_creator, vinylsystem):
     vinyl_spectra = spectra_creator(vinylsystem)
 
     plt.plot(citrate_spectra[0][0], citrate_spectra[0][1])
+    # plt.plot(vinyl_spectra[0][0], vinyl_spectra[0][1])
     return citrate_spectra, vinyl_spectra
 
 
