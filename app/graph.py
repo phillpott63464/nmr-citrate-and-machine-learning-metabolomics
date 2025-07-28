@@ -11,6 +11,7 @@ def _():
     import phfork
     from chempy import electrolytes
     import numpy as np
+
     return electrolytes, mo, np, phfork
 
 
@@ -22,7 +23,7 @@ def _(mo):
 
 @app.cell
 def _(electrolytes):
-    #Graph constants
+    # Graph constants
     EPS_R = 78.3   # relative permittivity of water at 25°C, should really change to 30C, maybe
     T = 303   # K
     RHO = 0.997
@@ -32,7 +33,7 @@ def _(electrolytes):
     search_molarity = 0.1
     graph_molarity = 0.001
 
-    #Sample constants
+    # Sample constants
     sample_vol = 0.0006   # l
     sample_conc = 0.1   # M
     acid_mass = 21.01   # g/l, 0.1M
@@ -106,6 +107,7 @@ def _(phfork):
             )
 
         return ratios
+
     return (simulate_ph_graph,)
 
 
@@ -129,11 +131,13 @@ def _(simulate_ph_graph):
         error = 0.0
         for known in known_values:
             closest_entry = min(
-                ratios, key=lambda d: abs(d['acid ratio'] - known['acid ratio'])
+                ratios,
+                key=lambda d: abs(d['acid ratio'] - known['acid ratio']),
             )
             error += (known['ph'] - closest_entry['pH']) ** 2
 
         return error
+
     return (evaluate_pka_error,)
 
 
@@ -164,7 +168,7 @@ def _():
 
     print(known_values[0])
     print(len(known_values))
-    return (known_values,)
+    return known_values, pd
 
 
 @app.cell
@@ -247,12 +251,10 @@ def _(A_CONST, np):
         # For now, just return ionic strength proportional to conc.
         return conc * 0.1  # crude approximation; you can improve this!
 
-
     def debeye_huckel_log_gamma(z, I):
         """Davies equation log10 gamma"""
         sqrt_I = np.sqrt(I)
         return -A_CONST * z**2 * (sqrt_I / (1 + sqrt_I) - 0.3 * I)
-
 
     def correct_pkas(pkas, I_old, I_new, charges):
         """Adjust each pKa from old ionic strength to new ionic strength."""
@@ -267,6 +269,7 @@ def _(A_CONST, np):
             delta_pka = log_gamma_new - log_gamma_old
             corrected.append(pka + delta_pka)
         return corrected
+
     return correct_pkas, ionic_strength_from_conc
 
 
@@ -333,9 +336,11 @@ def _(corrected_pka, graph_molarity, np, phfork):
     )
     fracs = citricacid.alpha(phs)
 
+    fig = plt.figure()
+
     plt.plot(phs, fracs)
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    return
+    return (fig,)
 
 
 @app.cell(hide_code=True)
@@ -390,7 +395,7 @@ def _(experiments, rounding, sample_vol):
         )
 
     print(''.join(f'{x}\n' for x in volumed_experiments))
-    return acid_vol, base_vol
+    return acid_vol, base_vol, volumed_experiments
 
 
 @app.cell(hide_code=True)
@@ -401,21 +406,22 @@ def _(mo):
 
 @app.cell
 def _(acid_mass, acid_vol, base_mass, base_vol, rounding):
+    stock_output = []
+
+    def stock(msg):
+        stock_output.append(f'{msg}\n')
+        print(msg)
+
     acid_weight = acid_mass * acid_vol
     base_weight = base_mass * base_vol
 
-
-    print(f'Actual requirements:')
-    print(
-        f'Acid weight: {round(acid_weight * 100, rounding)}mg'
-    )
-    print(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
-    print('\n')
-    print(
-        f'Base weight: {round(base_weight * 100, rounding)}mg'
-    )
-    print(f'Base volume: {round(base_vol * 1000, rounding)}ml')
-    return acid_weight, base_weight
+    stock(f'Actual requirements:')
+    stock(f'Acid weight: {round(acid_weight * 100, rounding)}mg')
+    stock(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
+    stock('\n')
+    stock(f'Base weight: {round(base_weight * 100, rounding)}mg')
+    stock(f'Base volume: {round(base_vol * 1000, rounding)}ml')
+    return acid_weight, base_weight, stock, stock_output
 
 
 @app.cell(hide_code=True)
@@ -425,7 +431,15 @@ def _(mo):
 
 
 @app.cell
-def _(acid_mass, acid_weight, balance, base_mass, base_weight, rounding):
+def _(
+    acid_mass,
+    acid_weight,
+    balance,
+    base_mass,
+    base_weight,
+    rounding,
+    stock,
+):
     from decimal import Decimal, ROUND_CEILING
 
     acid_weight_balance = Decimal(acid_weight).quantize(
@@ -435,19 +449,56 @@ def _(acid_mass, acid_weight, balance, base_mass, base_weight, rounding):
         Decimal(balance), rounding=ROUND_CEILING
     )
 
-    print(
+    stock(
         f'Acid weight: {round(float(acid_weight_balance) * 100, rounding)}mg'
     )
-    print(
+    stock(
         f'Acid volume: {round(float(acid_weight_balance)/acid_mass * 1000, rounding)}ml'
     )
-    print('\n')
-    print(
+    stock('\n')
+    stock(
         f'Base weight: {round(float(base_weight_balance) * 100, rounding)}mg'
     )
-    print(
+    stock(
         f'Base volume: {round(float(base_weight_balance)/base_mass * 1000, rounding)}ml'
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Save everything important to files""")
+    return
+
+
+@app.cell
+def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
+    import operator
+    import os
+
+    directory = 'output-graph'
+
+
+    if not os.path.isdir(directory):
+        os.mkdir(directory)
+
+
+    with open(f'{directory}/pka.txt', 'w') as f:
+        f.write(f'Error: {round(study.best_trial.value, 10)}\n')
+        f.write(f'Original pKas (0.1 M): {pka}\n')
+        f.write(
+            f'Corrected pKas (0.001 M): {[round(x, 2) for x in corrected_pka]}\n'
+        )
+
+    with open(file=f'{directory}/stocks.txt', mode='w') as f:
+            f.writelines(stock_output)
+
+    volumed_experiments.sort(key=operator.itemgetter('pH'))
+
+    out = pd.DataFrame.from_dict(volumed_experiments)
+    out.to_csv(path_or_buf=f'{directory}/experiments.csv', index=False)
+
+    fig.savefig(f'{directory}/graph.png')
     return
 
 
