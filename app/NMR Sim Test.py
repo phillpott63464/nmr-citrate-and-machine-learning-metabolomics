@@ -1,14 +1,15 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.13"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
-    return (mo,)
+    from sklearn.model_selection import train_test_split
+    import torch
+    return mo, torch, train_test_split
 
 
 @app.cell(hide_code=True)
@@ -46,9 +47,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Use the SpinSystem to create the peak list, and get the peak list"""
-    )
+    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
     return
 
 
@@ -277,10 +276,14 @@ def _():
 
 
 @app.cell
-def _(citrate_spectra, np, vinyl_spectra):
-    import torch
-    from sklearn.model_selection import train_test_split
-
+def _(
+    citrate_spectra,
+    np,
+    torch,
+    train_ratio,
+    train_test_split,
+    vinyl_spectra,
+):
     citrate_y = np.array([spectrum[1] for spectrum in citrate_spectra])
     vinyl_y = np.array([spectrum[1] for spectrum in vinyl_spectra])
 
@@ -292,8 +295,6 @@ def _(citrate_spectra, np, vinyl_spectra):
 
     print(data.shape)
     print(labels.shape)
-
-    train_ratio = 0.7   # 70% of the data is used for training, 30% for testing
 
     data_train, data_test, labels_train, labels_test = train_test_split(
         data, labels, train_size=train_ratio, shuffle=True
@@ -307,7 +308,7 @@ def _(citrate_spectra, np, vinyl_spectra):
     print(data_train.shape)
     print(labels_train.shape)
 
-    return data_test, data_train, labels_test, labels_train, torch
+    return data_test, data_train, labels_test, labels_train
 
 
 @app.cell
@@ -342,85 +343,295 @@ def _(citrate_spectra, data_train, plt):
 
 
 @app.cell
-def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
+def _(mo):
+    mo.md(
+        r"""
+    Better dimensionality reduction approaches for NMR data:
+
+    1. **Peak Integration**: Sum intensities in specific frequency ranges
+    2. **Spectral Binning**: Divide spectrum into bins and sum each bin
+    3. **Wavelet Transform**: Better at capturing peak-like features
+    4. **Autoencoders**: Non-linear dimensionality reduction
+    """
+    )
+    return
+
+
+@app.cell
+def _(citrate_spectra, np, plt, vinyl_spectra):
+    # Method 1: Spectral Binning (most common for NMR)
+    def spectral_binning(spectra, n_bins=50):
+        """Bin spectra into regions and integrate each bin"""
+        x = spectra[0][0]  # frequency axis
+        bin_edges = np.linspace(x.min(), x.max(), n_bins + 1)
+
+        binned_data = []
+        for spectrum in spectra:
+            y = spectrum[1]
+            binned_spectrum = []
+
+            for i in range(len(bin_edges) - 1):
+                # Find points in this bin
+                mask = (x >= bin_edges[i]) & (x < bin_edges[i + 1])
+                # Integrate (sum) the intensity in this bin
+                bin_integral = np.sum(y[mask]) if np.any(mask) else 0
+                binned_spectrum.append(bin_integral)
+
+            binned_data.append(binned_spectrum)
+
+        return np.array(binned_data)
+
+    # Apply binning
+    citrate_binned = spectral_binning(citrate_spectra, n_bins=50)
+    vinyl_binned = spectral_binning(vinyl_spectra, n_bins=50)
+
+    print(f"Original spectrum length: {len(citrate_spectra[0][1])}")
+    print(f"Binned spectrum length: {citrate_binned.shape[1]}")
+    print(f"Dimension reduction: {len(citrate_spectra[0][1]) / citrate_binned.shape[1]:.1f}x")
+
+    # Plot comparison
+    plt.figure(figsize=(12, 4))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(citrate_spectra[0][0], citrate_spectra[0][1], label='Original')
+    plt.title('Original Spectrum')
+    plt.xlabel('Frequency (Hz)')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(range(len(citrate_binned[0])), citrate_binned[0], 'o-', label='Binned')
+    plt.title('Binned Spectrum')
+    plt.xlabel('Bin Number')
+
+    plt.tight_layout()
+    plt.show()
+
+    return citrate_binned, vinyl_binned
+
+
+@app.cell
+def _(citrate_binned, np, vinyl_binned):
+    # Use binned data for classification instead of raw spectra
+    binned_data = np.concatenate([citrate_binned, vinyl_binned], axis=0)
+    binned_labels = np.concatenate([
+        np.zeros(len(citrate_binned)), 
+        np.ones(len(vinyl_binned))
+    ])
+
+    print(f"Binned data shape: {binned_data.shape}")
+    print(f"Labels shape: {binned_labels.shape}")
+
+    # This should work much better than PCA!
+    return binned_data, binned_labels
+
+
+@app.cell
+def _(binned_data, binned_labels, nn, torch, train_test_split):
+    # Use binned data instead of raw spectra
+    train_ratio = 0.7
+
+    data_train_binned, data_test_binned, labels_train_binned, labels_test_binned = train_test_split(
+        binned_data, binned_labels, train_size=train_ratio, shuffle=True
+    )
+
+    data_train_binned = torch.tensor(data_train_binned, dtype=torch.float32)
+    labels_train_binned = torch.tensor(labels_train_binned, dtype=torch.float32)
+    data_test_binned = torch.tensor(data_test_binned, dtype=torch.float32)
+    labels_test_binned = torch.tensor(labels_test_binned, dtype=torch.float32)
+
+    print(f"Binned training data shape: {data_train_binned.shape}")
+    print(f"Binned training labels shape: {labels_train_binned.shape}")
+
+    # Create a new model with the correct input size (50 bins instead of 800)
+    model_binned = nn.Sequential(
+        nn.Linear(50, 24),  # 50 bins input
+        nn.ReLU(),
+        nn.Linear(24, 12),
+        nn.ReLU(),
+        nn.Linear(12, 6),
+        nn.ReLU(),
+        nn.Linear(6, 1),
+    )
+
+    return (
+        data_test_binned,
+        data_train_binned,
+        labels_test_binned,
+        labels_train_binned,
+        model_binned,
+        train_ratio,
+    )
+
+
+@app.cell
+def _(nn, np, torch):
     import tqdm
     import copy
     import torch.optim as optim
 
-    n_epochs = 100   # number of epochs to run
-    batch_size = 10  # size of each batch
-    batch_start = torch.arange(0, len(data_train), batch_size)
+    def train_model(model, data_train, labels_train, data_test, labels_test, n_epochs=100, batch_size=10, lr=0.001):
+        """Generic training function for binary classification"""
 
-    # loss function and optimizer
-    loss_fn = nn.BCEWithLogitsLoss()  # Binary cross-entropy for classification
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        batch_start = torch.arange(0, len(data_train), batch_size)
 
-    best_mse = np.inf   # init to infinity
-    best_weights = None
-    history = []
+        # loss function and optimizer
+        loss_fn = nn.BCEWithLogitsLoss()
+        optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    for epoch in range(n_epochs):
-        model.train()
-        with tqdm.tqdm(
-            batch_start, unit='batch', mininterval=0, disable=True
-        ) as bar:
-            bar.set_description(f'Epoch {epoch}')
-            for start in bar:
-                # take a batch
-                data_batch = data_train[start : start + batch_size]
-                labels_batch = labels_train[start : start + batch_size]
-                # forward pass
-                labels_pred = model(data_batch)
-                loss = loss_fn(
-                    labels_pred.squeeze(), labels_batch
-                )  # Add .squeeze() here
-                # backward pass
-                optimizer.zero_grad()
-                loss.backward()
-                # update weights
-                optimizer.step()
-                # print progress
-                bar.set_postfix(mse=float(loss))
-        # evaluate accuracy at end of each epoch
+        best_loss = np.inf
+        best_weights = None
+        history = []
+
+        for epoch in range(n_epochs):
+            model.train()
+            with tqdm.tqdm(
+                batch_start, unit='batch', mininterval=0, disable=True
+            ) as bar:
+                bar.set_description(f'Epoch {epoch}')
+                for start in bar:
+                    # take a batch
+                    data_batch = data_train[start : start + batch_size]
+                    labels_batch = labels_train[start : start + batch_size]
+                    # forward pass
+                    labels_pred = model(data_batch)
+                    loss = loss_fn(labels_pred.squeeze(), labels_batch)
+                    # backward pass
+                    optimizer.zero_grad()
+                    loss.backward()
+                    # update weights
+                    optimizer.step()
+                    # print progress
+                    bar.set_postfix(loss=float(loss))
+
+            # evaluate accuracy at end of each epoch
+            model.eval()
+            with torch.no_grad():
+                labels_pred = model(data_test)
+                test_loss = loss_fn(labels_pred.squeeze(), labels_test)
+                test_loss = float(test_loss)
+                history.append(test_loss)
+
+                if test_loss < best_loss:
+                    best_loss = test_loss
+                    best_weights = copy.deepcopy(model.state_dict())
+
+        # Final evaluation
+        model.load_state_dict(best_weights)
         model.eval()
-        labels_pred = model(data_test)
-        mse = loss_fn(
-            labels_pred.squeeze(), labels_test
-        )  # Add .squeeze() here too
-        mse = float(mse)
-        history.append(mse)
-        if mse < best_mse:
-            best_mse = mse
-            best_weights = copy.deepcopy(model.state_dict())
+        with torch.no_grad():
+            labels_pred = model(data_test)
+            predictions = (torch.sigmoid(labels_pred) > 0.5)
+            accuracy = (predictions.squeeze() == labels_test).float().mean()
 
-    model.eval()
-    with torch.no_grad():
-        labels_pred = model(data_test)
-        predictions = (
-            torch.sigmoid(labels_pred) > 0.5
-        )  # Convert to binary predictions
-        accuracy = (predictions.squeeze() == labels_test).float().mean()
-        print(f'Accuracy: {accuracy:.2%}')
+            print(f'Final Accuracy: {accuracy:.2%}')
+            print(f'Best Loss: {best_loss:.4f}')
 
-        # Show some example predictions
-        print(
-            f'First 10 predictions: {torch.sigmoid(labels_pred[:10]).squeeze()}'
-        )
-        print(f'First 10 true labels: {labels_test[:10]}')
+            # Show some example predictions
+            probs = torch.sigmoid(labels_pred[:10]).squeeze()
+            print(f'First 10 prediction probabilities: {probs}')
+            print(f'First 10 true labels: {labels_test[:10]}')
 
-    return best_mse, best_weights, history
+        return best_loss, best_weights, history, accuracy
+
+    return (train_model,)
 
 
 @app.cell
-def _(best_mse, best_weights, history, model, np, plt):
-    model.load_state_dict(best_weights)
+def _(
+    data_test_binned,
+    data_train_binned,
+    labels_test_binned,
+    labels_train_binned,
+    model_binned,
+    train_model,
+):
+    # Train the binned model
+    print("Training binned model...")
+    best_loss_binned, best_weights_binned, history_binned, accuracy_binned = train_model(
+        model_binned, 
+        data_train_binned, 
+        labels_train_binned, 
+        data_test_binned, 
+        labels_test_binned,
+        n_epochs=100,
+        batch_size=10,
+        lr=0.001
+    )
 
-    print('MSE: %.2f' % best_mse)
-    print('RMSE: %.2f' % np.sqrt(best_mse))
-    plt.plot(history)
+    return accuracy_binned, best_loss_binned, history_binned
+
+
+@app.cell
+def _(data_test, data_train, labels_test, labels_train, model, train_model):
+    # Train the raw data model for comparison
+    print("Training raw data model...")
+    best_loss_raw, best_weights_raw, history_raw, accuracy_raw = train_model(
+        model,
+        data_train,
+        labels_train,
+        data_test,
+        labels_test,
+        n_epochs=100,
+        batch_size=10,
+        lr=0.0001  # Lower learning rate for the larger model
+    )
+
+    return accuracy_raw, best_loss_raw, history_raw
+
+
+@app.cell
+def _(history_binned, history_raw, plt):
+    # Compare training curves
+    plt.figure(figsize=(15, 5))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(history_binned, label='Binned Data')
+    plt.plot(history_raw, label='Raw Data')
+    plt.title('Training Loss Comparison')
+    plt.xlabel('Epoch')
+    plt.ylabel('BCE Loss')
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(1, 3, 2)
+    plt.plot(history_binned[10:], label='Binned Data')
+    plt.title('Binned Model Loss (after epoch 10)')
+    plt.xlabel('Epoch')
+    plt.ylabel('BCE Loss')
+    plt.grid(True)
+
+    plt.subplot(1, 3, 3)
+    plt.plot(history_raw[10:], label='Raw Data')
+    plt.title('Raw Model Loss (after epoch 10)')
+    plt.xlabel('Epoch')
+    plt.ylabel('BCE Loss')
+    plt.grid(True)
+
+    plt.tight_layout()
     plt.show()
+
     return
 
 
-if __name__ == '__main__':
+@app.cell
+def _(accuracy_binned, accuracy_raw, best_loss_binned, best_loss_raw, mo):
+    mo.md(
+        f"""
+    ## Model Comparison Results
+
+    | Model | Accuracy | Best Loss |
+    |-------|----------|-----------|
+    | Binned Data (50 features) | {accuracy_binned:.2%} | {best_loss_binned:.4f} |
+    | Raw Data (800 features) | {accuracy_raw:.2%} | {best_loss_raw:.4f} |
+
+    The binned approach should perform significantly better due to:
+    - Better feature representation
+    - Reduced noise
+    - More stable training
+    - Lower computational cost
+    """
+    )
+    return
+
+
+if __name__ == "__main__":
     app.run()
