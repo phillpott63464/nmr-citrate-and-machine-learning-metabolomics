@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.13"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -21,7 +21,7 @@ def _(mo):
 def _():
     import numpy as np
 
-    def rioux():
+    def rioux(): #original vinyl
         v = np.array([430.0, 265.0, 300.0])
         J = np.zeros((3, 3))
         J[0, 1] = 7.0
@@ -30,7 +30,18 @@ def _():
         J = J + J.T
         return [v, J]
 
-    vinyl = rioux()
+    def createfalsecitrate():
+        v = np.array(
+            [3.1 * 600, 2.5 * 600]
+        )
+        J = np.zeros((2, 2))
+        J[0, 1] = 8 / 400 * 600
+        J[1, 0] = 8 / 400 * 600
+        J = J + J.T
+        return v, J
+
+
+    vinyl = createfalsecitrate()
     print('v: ', vinyl[0])  # frequencies in Hz
     print('J: \n', vinyl[1])  # matrix of coupling constants
     return np, vinyl
@@ -38,9 +49,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Use the SpinSystem to create the peak list, and get the peak list"""
-    )
+    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
     return
 
 
@@ -156,7 +165,7 @@ def _(np, plt, x, y):
     ys = [y] * 10000
 
     for i in range(0, len(ys)):
-        sigma = np.random.rand() / 100
+        sigma = np.random.rand() / 50
         noise = np.random.normal(0.0, sigma, len(ys[0]))
         ys[i] = y + noise
 
@@ -268,7 +277,7 @@ def _():
     return model, nn
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(citrate_spectra, np, vinyl_spectra):
     import torch
     from sklearn.model_selection import train_test_split
@@ -298,7 +307,38 @@ def _(citrate_spectra, np, vinyl_spectra):
 
     print(data_train.shape)
     print(labels_train.shape)
+
     return data_test, data_train, labels_test, labels_train, torch
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    Attempted PCA on NMR spectra
+
+    Result: absoloute nonsense, 99% of the variance is not contained in a single data point
+    """
+    )
+    return
+
+
+@app.cell
+def _(data_train, plt):
+    from sklearn.decomposition import PCA
+
+    pca = PCA(n_components=400)
+
+    data_train_reduced = pca.fit_transform(data_train)
+
+    print(data_train.shape)
+    print(data_train_reduced.shape)
+
+    print(data_train_reduced[400])
+
+    plt.plot(data_train[400])
+    plt.plot(data_train_reduced[400])
+    return
 
 
 @app.cell
@@ -382,5 +422,5 @@ def _(best_mse, best_weights, history, model, np, plt):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

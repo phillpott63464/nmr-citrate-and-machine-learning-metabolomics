@@ -29,9 +29,10 @@ def _(electrolytes):
     RHO = 0.997
     B0 = 1.0
     A_CONST = electrolytes.A(eps_r=EPS_R, T=T, rho=RHO, b0=B0)
-    trials = 10000
+    trials = 10
     search_molarity = 0.1
     graph_molarity = 0.001
+    stock_molarity = 0.01
 
     # Sample constants
     sample_vol = 0.0006   # l
@@ -39,7 +40,7 @@ def _(electrolytes):
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
     rounding = 3
-    balance = '0.01'   # In quotations because reasons?
+    balance = '0.1'   # In quotations because reasons?
 
     options = [
         2.1,
@@ -77,6 +78,7 @@ def _(electrolytes):
         rounding,
         sample_vol,
         search_molarity,
+        stock_molarity,
         trials,
     )
 
@@ -121,9 +123,9 @@ def _(mo):
 def _(simulate_ph_graph):
     def evaluate_pka_error(known_values, search_molarity, trial):
         pka_values = [
-            trial.suggest_float('pka1', low=2.0, high=3.5, step=0.01),
-            trial.suggest_float('pka2', low=4.0, high=5.5, step=0.01),
-            trial.suggest_float('pka3', low=5.5, high=6.5, step=0.01),
+            trial.suggest_float('pka1', low=2.0, high=3.5, step=0.001),
+            trial.suggest_float('pka2', low=4.0, high=5.5, step=0.001),
+            trial.suggest_float('pka3', low=5.5, high=6.5, step=0.001),
         ]
 
         ratios = simulate_ph_graph(pka=pka_values, conc=search_molarity)
@@ -223,7 +225,7 @@ def _(mo):
 @app.cell
 def _(study):
     pka = [
-        round(study.best_trial.params[x], 4) for x in study.best_trial.params
+        round(study.best_trial.params[x], 5) for x in study.best_trial.params
     ]
     print(pka)
     return (pka,)
@@ -369,7 +371,7 @@ def _(mo):
 
 
 @app.cell
-def _(experiments, rounding, sample_vol):
+def _(experiments, rounding, sample_vol, stock_molarity):
     acid_vol = 0
     base_vol = 0
 
@@ -389,8 +391,8 @@ def _(experiments, rounding, sample_vol):
         volumed_experiments.append(
             {
                 'pH': row['pH'],
-                'acid volume': round(acid_vol_add * 1000, rounding),
-                'base volume': round(base_vol_add * 1000, rounding),
+                'acid volume': round(acid_vol_add * 1/stock_molarity, rounding),
+                'base volume': round(base_vol_add * 1/stock_molarity, rounding),
             }
         )
 
@@ -439,6 +441,7 @@ def _(
     base_weight,
     rounding,
     stock,
+    stock_molarity,
 ):
     from decimal import Decimal, ROUND_CEILING
 
@@ -449,20 +452,23 @@ def _(
         Decimal(balance), rounding=ROUND_CEILING
     )
 
+    stock(f'\nRequirements for {stock_molarity}M stock solution:')
     stock(
         f'Acid weight: {round(float(acid_weight_balance) * 100, rounding)}mg'
     )
     stock(
-        f'Acid volume: {round(float(acid_weight_balance)/acid_mass * 1000, rounding)}ml'
+        f'Acid volume: {round(float(acid_weight_balance)/acid_mass * 1/stock_molarity, rounding)}ml'
     )
     stock('\n')
     stock(
         f'Base weight: {round(float(base_weight_balance) * 100, rounding)}mg'
     )
     stock(
-        f'Base volume: {round(float(base_weight_balance)/base_mass * 1000, rounding)}ml'
+        f'Base volume: {round(float(base_weight_balance)/base_mass * 1/stock_molarity, rounding)}ml'
     )
-    return
+
+    stupid_variable = True
+    return (stupid_variable,)
 
 
 @app.cell(hide_code=True)
@@ -472,12 +478,23 @@ def _(mo):
 
 
 @app.cell
-def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
+def _(
+    corrected_pka,
+    fig,
+    pd,
+    pka,
+    stock_output,
+    study,
+    stupid_variable,
+    volumed_experiments,
+):
     import operator
     import os
 
     directory = 'output-graph'
 
+    if stupid_variable == False:
+        print('Done a stupid')
 
     if not os.path.isdir(directory):
         os.mkdir(directory)
@@ -487,7 +504,7 @@ def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
         f.write(f'Error: {round(study.best_trial.value, 10)}\n')
         f.write(f'Original pKas (0.1 M): {pka}\n')
         f.write(
-            f'Corrected pKas (0.001 M): {[round(x, 2) for x in corrected_pka]}\n'
+            f'Corrected pKas (0.001 M): {[round(x, 3) for x in corrected_pka]}\n'
         )
 
     with open(file=f'{directory}/stocks.txt', mode='w') as f:

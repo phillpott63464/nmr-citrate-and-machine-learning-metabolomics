@@ -1,3 +1,3 @@
 Error: 0.004
-Original pKas (0.1 M): [2.97, 4.39, 5.72]
-Corrected pKas (0.001 M): [2.97, 4.4, 5.73]
+Original pKas (0.1 M): [2.98, 4.385, 5.72]
+Corrected pKas (0.001 M): [2.983, 4.393, 5.734]
