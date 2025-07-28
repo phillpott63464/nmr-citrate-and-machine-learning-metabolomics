@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -21,7 +21,7 @@ def _(mo):
 def _():
     import numpy as np
 
-    def rioux(): #original vinyl
+    def rioux():   # original vinyl
         v = np.array([430.0, 265.0, 300.0])
         J = np.zeros((3, 3))
         J[0, 1] = 7.0
@@ -31,15 +31,12 @@ def _():
         return [v, J]
 
     def createfalsecitrate():
-        v = np.array(
-            [3.1 * 600, 2.5 * 600]
-        )
+        v = np.array([1700, 1000])
         J = np.zeros((2, 2))
         J[0, 1] = 8 / 400 * 600
         J[1, 0] = 8 / 400 * 600
         J = J + J.T
         return v, J
-
 
     vinyl = createfalsecitrate()
     print('v: ', vinyl[0])  # frequencies in Hz
@@ -49,7 +46,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
+    mo.md(
+        r"""Use the SpinSystem to create the peak list, and get the peak list"""
+    )
     return
 
 
@@ -266,13 +265,13 @@ def _():
 
     # Define the model
     model = nn.Sequential(
-        nn.Linear(800, 24),
+        nn.Linear(800, 24),  # 800*24
         nn.ReLU(),
-        nn.Linear(24, 12),
+        nn.Linear(24, 12),  # 24*12
         nn.ReLU(),
-        nn.Linear(12, 6),
+        nn.Linear(12, 6),  # 12*6
         nn.ReLU(),
-        nn.Linear(6, 1),
+        nn.Linear(6, 1),  # 6*1
     )
     return model, nn
 
@@ -314,7 +313,7 @@ def _(citrate_spectra, np, vinyl_spectra):
 @app.cell
 def _(mo):
     mo.md(
-        r"""
+        rf"""
     Attempted PCA on NMR spectra
 
     Result: absoloute nonsense, 99% of the variance is not contained in a single data point
@@ -324,7 +323,7 @@ def _(mo):
 
 
 @app.cell
-def _(data_train, plt):
+def _(citrate_spectra, data_train, plt):
     from sklearn.decomposition import PCA
 
     pca = PCA(n_components=400)
@@ -338,6 +337,7 @@ def _(data_train, plt):
 
     plt.plot(data_train[400])
     plt.plot(data_train_reduced[400])
+    plt.plot(citrate_spectra[400][0], data_train[400])
     return
 
 
@@ -422,5 +422,5 @@ def _(best_mse, best_weights, history, model, np, plt):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

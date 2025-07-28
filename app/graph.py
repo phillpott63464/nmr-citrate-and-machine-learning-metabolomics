@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -25,7 +25,7 @@ def _(mo):
 def _(electrolytes):
     # Graph constants
     EPS_R = 78.3   # relative permittivity of water at 25°C, should really change to 30C, maybe
-    T = 303   # K
+    T = 303  # K
     RHO = 0.997
     B0 = 1.0
     A_CONST = electrolytes.A(eps_r=EPS_R, T=T, rho=RHO, b0=B0)
@@ -33,10 +33,7 @@ def _(electrolytes):
     search_molarity = 0.1
     graph_molarity = 0.001
     stock_molarity = 0.01
-
-    # Sample constants
     sample_vol = 0.0006   # l
-    sample_conc = 0.1   # M
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
     rounding = 3
@@ -85,7 +82,9 @@ def _(electrolytes):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
+    mo.md(
+        r"""Define a function to simulate a ph graph at a concentration from pkas"""
+    )
     return
 
 
@@ -115,7 +114,9 @@ def _(phfork):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
+    mo.md(
+        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
+    )
     return
 
 
@@ -199,19 +200,28 @@ def _(evaluate_pka_error, known_values, search_molarity, trials):
         load_if_exists=True,
     )
 
-    study.optimize(
-        partial(
-            objective,
-            known_values=known_values,
-            search_molarity=search_molarity,
-        ),
-        n_jobs=8,
-        callbacks=[
-            optuna.study.MaxTrialsCallback(
-                trials, states=(optuna.trial.TrialState.COMPLETE,)
-            )
-        ],
+    completed_trials = len(
+        [
+            t
+            for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ]
     )
+
+    if trials - completed_trials > 0:
+        study.optimize(
+            partial(
+                objective,
+                known_values=known_values,
+                search_molarity=search_molarity,
+            ),
+            n_jobs=8,
+            callbacks=[
+                optuna.study.MaxTrialsCallback(
+                    trials, states=(optuna.trial.TrialState.COMPLETE,)
+                )
+            ],
+        )
 
     return (study,)
 
@@ -366,7 +376,9 @@ def _(options, ratios):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
+    mo.md(
+        r"""Calculate volume of acid/base needed to complete these experiments"""
+    )
     return
 
 
@@ -391,8 +403,12 @@ def _(experiments, rounding, sample_vol, stock_molarity):
         volumed_experiments.append(
             {
                 'pH': row['pH'],
-                'acid volume': round(acid_vol_add * 1/stock_molarity, rounding),
-                'base volume': round(base_vol_add * 1/stock_molarity, rounding),
+                'acid volume': round(
+                    acid_vol_add * 1 / stock_molarity, rounding
+                ),
+                'base volume': round(
+                    base_vol_add * 1 / stock_molarity, rounding
+                ),
             }
         )
 
@@ -467,7 +483,7 @@ def _(
         f'Base volume: {round(float(base_weight_balance)/base_mass * 1/stock_molarity, rounding)}ml'
     )
 
-    stupid_variable = True
+    stupid_variable = True   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
     return (stupid_variable,)
 
 
@@ -493,12 +509,13 @@ def _(
 
     directory = 'output-graph'
 
-    if stupid_variable == False:
+    if (
+        stupid_variable == False
+    ):   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
         print('Done a stupid')
 
     if not os.path.isdir(directory):
         os.mkdir(directory)
-
 
     with open(f'{directory}/pka.txt', 'w') as f:
         f.write(f'Error: {round(study.best_trial.value, 10)}\n')
@@ -508,7 +525,7 @@ def _(
         )
 
     with open(file=f'{directory}/stocks.txt', mode='w') as f:
-            f.writelines(stock_output)
+        f.writelines(stock_output)
 
     volumed_experiments.sort(key=operator.itemgetter('pH'))
 
@@ -519,5 +536,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
