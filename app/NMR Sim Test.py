@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -38,7 +38,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
+    mo.md(
+        r"""Use the SpinSystem to create the peak list, and get the peak list"""
+    )
     return
 
 
@@ -182,33 +184,48 @@ def _(mplplot, np):
 
         for i in range(0, len(ys)):
             # Much more realistic noise levels
-            base_noise_level = 0.005 + np.random.rand() * 0.01  # 0.5-1.5% noise
-            
+            base_noise_level = (
+                0.005 + np.random.rand() * 0.01
+            )  # 0.5-1.5% noise
+
             # 1. Gentle Gaussian noise
-            gaussian_noise = np.random.normal(0.0, base_noise_level, len(ys[0]))
-            
+            gaussian_noise = np.random.normal(
+                0.0, base_noise_level, len(ys[0])
+            )
+
             # 2. Subtle baseline drift
-            baseline_drift = np.random.normal(0, 0.002) * np.linspace(-1, 1, len(ys[0]))
-            
+            baseline_drift = np.random.normal(0, 0.002) * np.linspace(
+                -1, 1, len(ys[0])
+            )
+
             # 3. Occasional small spikes (much less frequent)
             spike_noise = np.zeros_like(ys[0])
             if np.random.rand() > 0.8:  # Only 20% chance of spikes
                 n_spikes = np.random.poisson(1)  # Usually 0-2 spikes
-                spike_positions = np.random.choice(len(ys[0]), size=min(n_spikes, len(ys[0])), replace=False)
-                spike_noise[spike_positions] = np.random.normal(0, base_noise_level * 3, len(spike_positions))
-            
+                spike_positions = np.random.choice(
+                    len(ys[0]), size=min(n_spikes, len(ys[0])), replace=False
+                )
+                spike_noise[spike_positions] = np.random.normal(
+                    0, base_noise_level * 3, len(spike_positions)
+                )
+
             # 4. Small intensity variation
-            scale_factor = 1.0 + np.random.normal(0, 0.05)  # ±5% intensity variation
-            
+            scale_factor = 1.0 + np.random.normal(
+                0, 0.05
+            )  # ±5% intensity variation
+
             # 5. Minimal phase distortion
             phase_error = np.random.normal(0, 0.02)
-            y_phase_distorted = y * np.cos(phase_error) + np.random.normal(0, 0.001, len(y)) * np.sin(phase_error)
-            
+            y_phase_distorted = y * np.cos(phase_error) + np.random.normal(
+                0, 0.001, len(y)
+            ) * np.sin(phase_error)
+
             total_noise = gaussian_noise + baseline_drift + spike_noise
             ys[i] = (y_phase_distorted * scale_factor) + total_noise
 
         spectra = [[x, y] for y in ys]
         return spectra
+
     return (spectra_creator,)
 
 
@@ -314,7 +331,9 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
                 labels_batch = labels_train[start : start + batch_size]
                 # forward pass
                 labels_pred = model(data_batch)
-                loss = loss_fn(labels_pred.squeeze(), labels_batch)  # Add .squeeze() here
+                loss = loss_fn(
+                    labels_pred.squeeze(), labels_batch
+                )  # Add .squeeze() here
                 # backward pass
                 optimizer.zero_grad()
                 loss.backward()
@@ -325,7 +344,9 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
         # evaluate accuracy at end of each epoch
         model.eval()
         labels_pred = model(data_test)
-        mse = loss_fn(labels_pred.squeeze(), labels_test)  # Add .squeeze() here too
+        mse = loss_fn(
+            labels_pred.squeeze(), labels_test
+        )  # Add .squeeze() here too
         mse = float(mse)
         history.append(mse)
         if mse < best_mse:
@@ -335,12 +356,16 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
     model.eval()
     with torch.no_grad():
         labels_pred = model(data_test)
-        predictions = torch.sigmoid(labels_pred) > 0.5  # Convert to binary predictions
+        predictions = (
+            torch.sigmoid(labels_pred) > 0.5
+        )  # Convert to binary predictions
         accuracy = (predictions.squeeze() == labels_test).float().mean()
         print(f'Accuracy: {accuracy:.2%}')
 
         # Show some example predictions
-        print(f'First 10 predictions: {torch.sigmoid(labels_pred[:10]).squeeze()}')
+        print(
+            f'First 10 predictions: {torch.sigmoid(labels_pred[:10]).squeeze()}'
+        )
         print(f'First 10 true labels: {labels_test[:10]}')
 
     return best_mse, best_weights, history
@@ -357,5 +382,5 @@ def _(best_mse, best_weights, history, model, np, plt):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

@@ -14,9 +14,6 @@ WORKDIR /usr/src/app
 # Copy uv configuration files
 COPY ./app/pyproject.toml ./app/uv.lock* ./
 
-# Install dependencies and the project
-RUN uv sync
-
 # Expose port 2718
 EXPOSE 2718
 
