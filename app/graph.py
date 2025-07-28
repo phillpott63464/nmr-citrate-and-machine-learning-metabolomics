@@ -16,31 +16,13 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(r"""Outputs:""")
-    return
-
-
-@app.cell
-def _(corrected_pka, fracs, phs, pka, plt):
-
-    print('Calculated pkas:')
-    print(pka)
-    print('Corrected pkas:')
-    print([round(x, 2) for x in corrected_pka])
-
-    plt.plot(phs, fracs)
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    return
-
-
-@app.cell
-def _(mo):
     mo.md(r"""Define constants""")
     return
 
 
 @app.cell
 def _(electrolytes):
+    #Graph constants
     EPS_R = 78.3   # relative permittivity of water at 25°C, should really change to 30C, maybe
     T = 303   # K
     RHO = 0.997
@@ -49,7 +31,53 @@ def _(electrolytes):
     trials = 10000
     search_molarity = 0.1
     graph_molarity = 0.001
-    return A_CONST, graph_molarity, search_molarity, trials
+
+    #Sample constants
+    sample_vol = 0.0006   # l
+    sample_conc = 0.1   # M
+    acid_mass = 21.01   # g/l, 0.1M
+    base_mass = 29.41   # g/1, 0.1M
+    rounding = 3
+    balance = '0.01'   # In quotations because reasons?
+
+    options = [
+        2.1,
+        3.2,
+        3.5,
+        3.7,  # 4
+        3.8,
+        4,
+        4.2,
+        4.4,  # 8
+        4.5,
+        4.6,
+        4.8,
+        5,  # 12
+        5.2,
+        5.4,
+        5.5,
+        5.7,  # 16
+        5.9,
+        6,
+        6.2,
+        6.4,  # 20
+        6.6,
+        7,
+        7.4,
+        8,  # 24
+    ]
+    return (
+        A_CONST,
+        acid_mass,
+        balance,
+        base_mass,
+        graph_molarity,
+        options,
+        rounding,
+        sample_vol,
+        search_molarity,
+        trials,
+    )
 
 
 @app.cell
@@ -285,7 +313,7 @@ def _(mo):
 @app.cell
 def _(corrected_pka, graph_molarity, simulate_ph_graph):
     ratios = simulate_ph_graph(pka=corrected_pka, conc=graph_molarity)
-    return
+    return (ratios,)
 
 
 @app.cell(hide_code=True)
@@ -307,7 +335,120 @@ def _(corrected_pka, graph_molarity, np, phfork):
 
     plt.plot(phs, fracs)
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    return fracs, phs, plt
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Choose options from calculated ratios""")
+    return
+
+
+@app.cell
+def _(options, ratios):
+    experiments = []
+    for option in options:
+        experiments.append(
+            min(ratios, key=lambda d: abs(float(d['pH']) - option))
+        )
+
+    print(''.join(f'{x}\n' for x in experiments))
+
+    return (experiments,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
+    return
+
+
+@app.cell
+def _(experiments, rounding, sample_vol):
+    acid_vol = 0
+    base_vol = 0
+
+    volumed_experiments = []
+
+    for row in experiments:
+
+        acid_multiplier = float(row['acid ratio']) / 100
+        acid_vol_add = acid_multiplier * sample_vol
+
+        base_multiplier = float(row['base ratio']) / 100
+        base_vol_add = base_multiplier * sample_vol
+
+        acid_vol += acid_vol_add
+        base_vol += base_vol_add
+
+        volumed_experiments.append(
+            {
+                'pH': row['pH'],
+                'acid volume': round(acid_vol_add * 1000, rounding),
+                'base volume': round(base_vol_add * 1000, rounding),
+            }
+        )
+
+    print(''.join(f'{x}\n' for x in volumed_experiments))
+    return acid_vol, base_vol
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Define stock requirements""")
+    return
+
+
+@app.cell
+def _(acid_mass, acid_vol, base_mass, base_vol, rounding):
+    acid_weight = acid_mass * acid_vol
+    base_weight = base_mass * base_vol
+
+
+    print(f'Actual requirements:')
+    print(
+        f'Acid weight: {round(acid_weight * 100, rounding)}mg'
+    )
+    print(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
+    print('\n')
+    print(
+        f'Base weight: {round(base_weight * 100, rounding)}mg'
+    )
+    print(f'Base volume: {round(base_vol * 1000, rounding)}ml')
+    return acid_weight, base_weight
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Define stock requirements based upon the validty of a balance""")
+    return
+
+
+@app.cell
+def _(acid_mass, acid_weight, balance, base_mass, base_weight, rounding):
+    from decimal import Decimal, ROUND_CEILING
+
+    acid_weight_balance = Decimal(acid_weight).quantize(
+        Decimal(balance), rounding=ROUND_CEILING
+    )
+    base_weight_balance = Decimal(base_weight).quantize(
+        Decimal(balance), rounding=ROUND_CEILING
+    )
+
+    print(
+        f'Acid weight: {round(float(acid_weight_balance) * 100, rounding)}mg'
+    )
+    print(
+        f'Acid volume: {round(float(acid_weight_balance)/acid_mass * 1000, rounding)}ml'
+    )
+    print('\n')
+    print(
+        f'Base weight: {round(float(base_weight_balance) * 100, rounding)}mg'
+    )
+    print(
+        f'Base volume: {round(float(base_weight_balance)/base_mass * 1000, rounding)}ml'
+    )
+    return
 
 
 if __name__ == "__main__":
