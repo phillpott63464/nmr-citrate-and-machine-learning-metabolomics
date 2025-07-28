@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.13.6"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -38,9 +38,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Use the SpinSystem to create the peak list, and get the peak list"""
-    )
+    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
     return
 
 
@@ -319,7 +317,7 @@ def _(data_test, data_train, labels_test, labels_train, model, nn, np, torch):
         predictions = torch.sigmoid(labels_pred) > 0.5  # Convert to binary predictions
         accuracy = (predictions.squeeze() == labels_test).float().mean()
         print(f'Accuracy: {accuracy:.2%}')
-        
+
         # Show some example predictions
         print(f'First 10 predictions: {torch.sigmoid(labels_pred[:10]).squeeze()}')
         print(f'First 10 true labels: {labels_test[:10]}')
@@ -338,5 +336,5 @@ def _(best_mse, best_weights, history, model, np, plt):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
