@@ -32,10 +32,12 @@ def _():
         return [v, J]
 
     def createfalsecitrate():
-        v = np.array([1700, 1000])
+        v = np.array(
+            [2.85 * 600, 2.76 * 600]
+        )
         J = np.zeros((2, 2))
-        J[0, 1] = 8 / 400 * 600
-        J[1, 0] = 8 / 400 * 600
+        J[0, 1] = 15.89 / 400 * 600
+        J[1, 0] = 15.89 / 400 * 600
         J = J + J.T
         return v, J
 
@@ -134,7 +136,7 @@ def _(citratesystem, mplplot, vinylsystem):
 
     mix = Spectrum([citratesystem, vinylsystem])
     mplplot(mix.peaklist())
-    return
+    return (Spectrum,)
 
 
 @app.cell(hide_code=True)
@@ -630,6 +632,45 @@ def _(accuracy_binned, accuracy_raw, best_loss_binned, best_loss_raw, mo):
     - Lower computational cost
     """
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Create a DSS peak and integrate with compound spectra""")
+    return
+
+
+@app.cell
+def _(Spectrum, SpinSystem, citratesystem, mplplot, np, plt):
+    def create_dss():
+        """Create DSS reference peak at 0 ppm (0 Hz at any field strength)"""
+        v = np.array([0.0])  # DSS peak at 0 Hz
+        J = np.zeros((1, 1))  # No coupling for DSS
+        return v, J
+
+    dssvars = create_dss()
+
+    dss_system = SpinSystem(dssvars[0], dssvars[1])
+
+    def get_x_y(system, y_max=0.5):
+        x, y = mplplot(system.peaklist(), y_max=y_max)
+        return x, y
+
+    dss = get_x_y(dss_system)
+
+    citrate_dss_spectrum = Spectrum([citratesystem, dss_system])
+
+    citrate_dss = get_x_y(citrate_dss_spectrum)
+
+    plt.plot(citrate_dss[1])
+
+
+
+
+
+
+
     return
 
 
