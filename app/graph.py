@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.13"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -33,9 +33,12 @@ def _(electrolytes):
     search_molarity = 0.1
     graph_molarity = 0.001
     stock_molarity = 0.01
+    stock_volume = 50
     sample_vol = 0.0006   # l
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
+    acid_molecular_weight = 191.12 #g/mol
+    base_molecular_weight = 258.07 #g/mol
     rounding = 3
     balance = '0.1'   # In quotations because reasons?
 
@@ -68,23 +71,23 @@ def _(electrolytes):
     return (
         A_CONST,
         acid_mass,
-        balance,
+        acid_molecular_weight,
         base_mass,
+        base_molecular_weight,
         graph_molarity,
         options,
         rounding,
         sample_vol,
         search_molarity,
         stock_molarity,
+        stock_volume,
         trials,
     )
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""Define a function to simulate a ph graph at a concentration from pkas"""
-    )
+    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
     return
 
 
@@ -114,9 +117,7 @@ def _(phfork):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
-    )
+    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
     return
 
 
@@ -376,9 +377,7 @@ def _(options, ratios):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Calculate volume of acid/base needed to complete these experiments"""
-    )
+    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
     return
 
 
@@ -439,7 +438,7 @@ def _(acid_mass, acid_vol, base_mass, base_vol, rounding):
     stock('\n')
     stock(f'Base weight: {round(base_weight * 100, rounding)}mg')
     stock(f'Base volume: {round(base_vol * 1000, rounding)}ml')
-    return acid_weight, base_weight, stock, stock_output
+    return stock, stock_output
 
 
 @app.cell(hide_code=True)
@@ -450,38 +449,43 @@ def _(mo):
 
 @app.cell
 def _(
-    acid_mass,
-    acid_weight,
-    balance,
-    base_mass,
-    base_weight,
+    acid_molecular_weight,
+    base_molecular_weight,
     rounding,
     stock,
     stock_molarity,
+    stock_volume,
 ):
-    from decimal import Decimal, ROUND_CEILING
+    stock_acid_weight = stock_molarity*(stock_volume/1000)*acid_molecular_weight
+    stock_base_weight = stock_molarity*(stock_volume/1000)*base_molecular_weight
 
-    acid_weight_balance = Decimal(acid_weight).quantize(
-        Decimal(balance), rounding=ROUND_CEILING
-    )
-    base_weight_balance = Decimal(base_weight).quantize(
-        Decimal(balance), rounding=ROUND_CEILING
-    )
 
-    stock(f'\nRequirements for {stock_molarity}M stock solution:')
+    stock(f'\nRequirements for {stock_volume}ml {stock_molarity}M stock solution:')
     stock(
-        f'Acid weight: {round(float(acid_weight_balance) * 100, rounding)}mg'
+        f'Acid weight: {round(stock_acid_weight*1000, rounding)}mg'
     )
     stock(
-        f'Acid volume: {round(float(acid_weight_balance)/acid_mass * 1/stock_molarity, rounding)}ml'
+        f'Acid volume: {stock_volume}ml'
     )
     stock('\n')
     stock(
-        f'Base weight: {round(float(base_weight_balance) * 100, rounding)}mg'
+        f'Base weight: {round(stock_base_weight*1000, rounding)}mg'
     )
     stock(
-        f'Base volume: {round(float(base_weight_balance)/base_mass * 1/stock_molarity, rounding)}ml'
+        f'Base volume: {stock_volume}ml'
     )
+    stock('\n')
+    stock(f'Water requirements: {stock_volume*0.95}ml')
+    stock(f'D2O requirements: {stock_volume*0.05}ml')
+
+    #n=m/M
+    #c=n/V
+    #c=(m/M)/v
+    #cv=m/M
+    #cvM=m
+    #weight=concentration*volume*molarity
+
+
 
     stupid_variable = True   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
     return (stupid_variable,)
@@ -536,5 +540,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

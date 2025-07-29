@@ -58,7 +58,7 @@ def _():
             all_peaklists.extend(scaled)
 
         # Now convert the combined peaklist to plotting format
-        plots = mplplot(all_peaklists)
+        plots = mplplot(all_peaklists, hidden=True)
         return plots
 
     return (spectrum_creator,)
@@ -99,7 +99,7 @@ def _(createcitrate, createdss, np, spectrum_creator):
     v_dss, j_dss = createdss()
     v_citrate, j_citrate = createcitrate()
 
-    spectrum = spectrum_creator(
+    basespectrum = spectrum_creator(
         analytes=[
             {
                 'v': v_dss,
@@ -116,11 +116,59 @@ def _(createcitrate, createdss, np, spectrum_creator):
         ]
     )
 
-    print(np.array(spectrum).shape)
+    print(np.array(basespectrum).shape)
 
-    plt.title('Full spectrum')
-    plt.plot(spectrum[0], spectrum[1])
+    plt.title('Base spectrum')
+    plt.plot(basespectrum[0], basespectrum[1])
 
+    return j_citrate, j_dss, plt, v_citrate, v_dss
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Now, create multiple of these spectra with varying concentrations""")
+    return
+
+
+@app.cell
+def _(j_citrate, j_dss, np, spectrum_creator, v_citrate, v_dss):
+    count = 100
+
+    labels = []
+    spectra = []
+
+    for spectracounter in range (0, count):
+        print(f'{spectracounter}/{count}')
+        concentration = np.random.uniform(0.5, 0.01)
+        spectra.append(spectrum_creator(
+            analytes=[
+                {
+                    'v': v_dss,
+                    'j': j_dss,
+                    'protons': 9,
+                    'concentration': 1.0
+                },
+                {
+                    'v': v_citrate,
+                    'j': j_citrate,
+                    'protons': 4,
+                    'concentration': concentration
+                }
+            ]
+        ))
+
+    return (spectra,)
+
+
+@app.cell
+def _(plt, spectra):
+    print(len(spectra))
+
+    graph_count = 9
+
+    for graphcounter in range(graph_count):
+        plt.subplot(1, int(graph_count/3), graphcounter)
+        plt.plot(spectra[graphcounter][0], spectra[graphcounter][1])
     return
 
 
