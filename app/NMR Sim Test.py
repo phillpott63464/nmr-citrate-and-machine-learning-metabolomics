@@ -136,7 +136,7 @@ def _(citratesystem, mplplot, vinylsystem):
 
     mix = Spectrum([citratesystem, vinylsystem])
     mplplot(mix.peaklist())
-    return (Spectrum,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -348,12 +348,9 @@ def _(citrate_spectra, data_train, plt):
 def _(mo):
     mo.md(
         r"""
-    Better dimensionality reduction approaches for NMR data:
+    Attempted binning
 
-    1. **Peak Integration**: Sum intensities in specific frequency ranges
-    2. **Spectral Binning**: Divide spectrum into bins and sum each bin
-    3. **Wavelet Transform**: Better at capturing peak-like features
-    4. **Autoencoders**: Non-linear dimensionality reduction
+    It works much better for containing the shape of the data, but since the integral is summed, it completely screws with intensities and ergo concentration
     """
     )
     return
@@ -390,6 +387,9 @@ def _(citrate_spectra, np, plt, vinyl_spectra):
     print(f"Original spectrum length: {len(citrate_spectra[0][1])}")
     print(f"Binned spectrum length: {citrate_binned.shape[1]}")
     print(f"Dimension reduction: {len(citrate_spectra[0][1]) / citrate_binned.shape[1]:.1f}x")
+
+    print(f'Max intensity of original spectra: {max(citrate_spectra[0][1])}')
+    print(f'Max intensity of binned spectra: {max(citrate_binned[0])}')
 
     # Plot comparison
     plt.figure(figsize=(12, 4))
@@ -464,14 +464,14 @@ def _(binned_data, binned_labels, nn, torch, train_test_split):
     )
 
 
-@app.cell
-def _(nn, np, torch):
+app._unparsable_cell(
+    r"""
     import tqdm
     import copy
     import torch.optim as optim
 
     def train_model(model, data_train, labels_train, data_test, labels_test, n_epochs=100, batch_size=10, lr=0.001):
-        """Generic training function for binary classification"""
+        \"\"\"Generic training function for binary classification\"\"\"
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
@@ -519,7 +519,9 @@ def _(nn, np, torch):
         # Final evaluation
         model.load_state_dict(best_weights)
         model.eval()
-        with torch.no_grad():
+        with torch.no_grad(): nmrsim.math.normalize_peaklist(peaklist, n=1)[source]
+
+        Normalize the intensities in a peaklist so that total intensity equals value n (nominally the number of nuclei giving rise to the signal).
             labels_pred = model(data_test)
             predictions = (torch.sigmoid(labels_pred) > 0.5)
             accuracy = (predictions.squeeze() == labels_test).float().mean()
@@ -534,7 +536,9 @@ def _(nn, np, torch):
 
         return best_loss, best_weights, history, accuracy
 
-    return (train_model,)
+    """,
+    name="_"
+)
 
 
 @app.cell
@@ -642,7 +646,9 @@ def _(mo):
 
 
 @app.cell
-def _(Spectrum, SpinSystem, citratesystem, mplplot, np, plt):
+def _(SpinSystem, mplplot, np, plt):
+    from nmrsim.math import normalize_peaklist as normalize
+
     def create_dss():
         """Create DSS reference peak at 0 ppm (0 Hz at any field strength)"""
         v = np.array([0.0])  # DSS peak at 0 Hz
@@ -653,23 +659,63 @@ def _(Spectrum, SpinSystem, citratesystem, mplplot, np, plt):
 
     dss_system = SpinSystem(dssvars[0], dssvars[1])
 
-    def get_x_y(system, y_max=0.5):
-        x, y = mplplot(system.peaklist(), y_max=y_max)
-        return x, y
+    dss_normalized_peaklist = normalize(dss_system.peaklist(), n=9)
+    dss_scaled = [(f, i * 1) for f, i in dss_normalized_peaklist]
 
-    dss = get_x_y(dss_system)
+    dss_normal_x_y = mplplot(dss_system.peaklist())
+    dss_normalized_x_y = mplplot(dss_normalized_peaklist)
+    dss_scaled_x_y = mplplot(dss_scaled)
 
-    citrate_dss_spectrum = Spectrum([citratesystem, dss_system])
+    plt.figure(figsize=(12, 4))
 
-    citrate_dss = get_x_y(citrate_dss_spectrum)
+    plt.subplot(1, 3, 1)
+    plt.plot(dss_normalized_x_y[1])
+    plt.subplot(1, 3, 2)
+    plt.plot(dss_normal_x_y[1])
+    plt.subplot(1, 3, 3)
+    plt.plot(dss_scaled_x_y[1])
 
-    plt.plot(citrate_dss[1])
+    return dss_scaled_x_y, normalize
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Attempt to use first order multiplet""")
+    return
 
 
+@app.cell
+def _(citrate_spectra, citratesystem, mplplot, normalize, plt):
+    citrate_normalized_peaklist = normalize(citratesystem.peaklist(), n=4)
+
+    citrate_scaled = [(f, i * 0.1) for f, i in citrate_normalized_peaklist]
+
+    citrate_normalized_x_y = mplplot(citrate_normalized_peaklist, 0.5)
+    citrate_scaled_x_y = mplplot(citrate_scaled, 0.5)
+
+    plt.figure(figsize=(12, 4))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(citrate_normalized_x_y[1])
+    plt.subplot(1, 3, 2)
+    plt.plot(citrate_spectra[0][1])
+    plt.subplot(1, 3, 3)
+    plt.plot(citrate_scaled_x_y[1])
+    return (citrate_scaled_x_y,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Combine scaled DSS peak with scaled citrate peaks""")
+    return
+
+
+@app.cell
+def _(citrate_scaled_x_y, dss_scaled_x_y, np, plt):
+    # mixed_peaks = np.concatenate((np.array(dss_scaled_x_y), np.array(citrate_scaled_x_y)), axis=1)
+    mixed_peaks = np.concatenate((dss_scaled_x_y, citrate_scaled_x_y), axis=1)
+
+    plt.plot(mixed_peaks[0], mixed_peaks[1])
 
     return
 
