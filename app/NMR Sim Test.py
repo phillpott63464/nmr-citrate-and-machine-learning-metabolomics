@@ -351,6 +351,8 @@ def _(mo):
     Attempted binning
 
     It works much better for containing the shape of the data, but since the integral is summed, it completely screws with intensities and ergo concentration
+
+    Using max instead of sum keeps peak heights, still messes with total integral area
     """
     )
     return
@@ -373,7 +375,7 @@ def _(citrate_spectra, np, plt, vinyl_spectra):
                 # Find points in this bin
                 mask = (x >= bin_edges[i]) & (x < bin_edges[i + 1])
                 # Integrate (sum) the intensity in this bin
-                bin_integral = np.sum(y[mask]) if np.any(mask) else 0
+                bin_integral = np.max(y[mask]) if np.any(mask) else 0
                 binned_spectrum.append(bin_integral)
 
             binned_data.append(binned_spectrum)
@@ -659,8 +661,10 @@ def _(SpinSystem, mplplot, np, plt):
 
     dss_system = SpinSystem(dssvars[0], dssvars[1])
 
+    dss_concentration = 1
+
     dss_normalized_peaklist = normalize(dss_system.peaklist(), n=9)
-    dss_scaled = [(f, i * 1) for f, i in dss_normalized_peaklist]
+    dss_scaled = [(f, i * dss_concentration) for f, i in dss_normalized_peaklist]
 
     dss_normal_x_y = mplplot(dss_system.peaklist())
     dss_normalized_x_y = mplplot(dss_normalized_peaklist)
@@ -669,11 +673,11 @@ def _(SpinSystem, mplplot, np, plt):
     plt.figure(figsize=(12, 4))
 
     plt.subplot(1, 3, 1)
-    plt.plot(dss_normalized_x_y[1])
+    plt.plot(dss_normal_x_y[0], dss_normal_x_y[1])
     plt.subplot(1, 3, 2)
-    plt.plot(dss_normal_x_y[1])
+    plt.plot(dss_normalized_x_y[0], dss_normalized_x_y[1])
     plt.subplot(1, 3, 3)
-    plt.plot(dss_scaled_x_y[1])
+    plt.plot(dss_scaled_x_y[0], dss_scaled_x_y[1])
 
     return dss_scaled_x_y, normalize
 
@@ -696,9 +700,9 @@ def _(citrate_spectra, citratesystem, mplplot, normalize, plt):
     plt.figure(figsize=(12, 4))
 
     plt.subplot(1, 3, 1)
-    plt.plot(citrate_normalized_x_y[1])
-    plt.subplot(1, 3, 2)
     plt.plot(citrate_spectra[0][1])
+    plt.subplot(1, 3, 2)
+    plt.plot(citrate_normalized_x_y[1])
     plt.subplot(1, 3, 3)
     plt.plot(citrate_scaled_x_y[1])
     return (citrate_scaled_x_y,)
@@ -715,8 +719,65 @@ def _(citrate_scaled_x_y, dss_scaled_x_y, np, plt):
     # mixed_peaks = np.concatenate((np.array(dss_scaled_x_y), np.array(citrate_scaled_x_y)), axis=1)
     mixed_peaks = np.concatenate((dss_scaled_x_y, citrate_scaled_x_y), axis=1)
 
+    print(np.array(dss_scaled_x_y).shape, np.array(citrate_scaled_x_y).shape)
+    print(mixed_peaks.shape)
+
     plt.plot(mixed_peaks[0], mixed_peaks[1])
 
+    return (mixed_peaks,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    Test resampling, which is better than binning for retaining peak shape and integrals
+
+    Nope, no it's not, completely destroys both intensities and definition
+    """
+    )
+    return
+
+
+@app.cell
+def _(mixed_peaks, np, plt):
+    def resample_spectrum(spectrum, n_points=256):
+        x_old, y_old = spectrum
+        x_new = np.linspace(x_old.min(), x_old.max(), n_points)
+        y_new = np.interp(x_new, x_old, y_old)
+        return x_new, y_new
+
+    resampled_mixed_peaks = resample_spectrum(mixed_peaks)
+
+    print(np.array(resampled_mixed_peaks).shape)
+
+    plt.plot(resampled_mixed_peaks[0], resampled_mixed_peaks[1])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Try just yoinking parts of the plot out""")
+    return
+
+
+@app.cell
+def _(mixed_peaks, np, plt):
+    yoinkrange = [0, 1800]
+
+    indices_range = np.where((mixed_peaks[0] >= yoinkrange[0]) & (mixed_peaks[0] >= yoinkrange[1]))[0]
+
+    print(indices_range)
+
+    print(mixed_peaks.shape)
+
+    yoinked_peaks = (mixed_peaks[:, indices_range])
+
+    print(yoinked_peaks.shape)
+
+    print(yoinked_peaks[0])
+
+    plt.plot(yoinked_peaks[0], yoinked_peaks[1])
     return
 
 
