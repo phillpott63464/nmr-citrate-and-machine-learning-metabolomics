@@ -763,19 +763,21 @@ def _(mo):
 
 @app.cell
 def _(mixed_peaks, np, plt):
-    yoinkrange = [0, 1800]
+    yoinkrange = [
+        [1600, 1800],
+        [-20, 20]
+    ]
 
-    indices_range = np.where((mixed_peaks[0] >= yoinkrange[0]) & (mixed_peaks[0] >= yoinkrange[1]))[0]
-
-    print(indices_range)
+    indices_range = [
+        np.where((mixed_peaks[0] >= yoinkrange[0][0]) & (mixed_peaks[0] <= yoinkrange[0][1]))[0],
+        np.where((mixed_peaks[0] >= yoinkrange[1][0]) & (mixed_peaks[0] <= yoinkrange[1][1]))[0]
+    ]
 
     print(mixed_peaks.shape)
 
-    yoinked_peaks = (mixed_peaks[:, indices_range])
+    yoinked_peaks = np.hstack([(mixed_peaks[:, indices_range[0]]), (mixed_peaks[:, indices_range[1]])])
 
     print(yoinked_peaks.shape)
-
-    print(yoinked_peaks[0])
 
     plt.plot(yoinked_peaks[0], yoinked_peaks[1])
     return
