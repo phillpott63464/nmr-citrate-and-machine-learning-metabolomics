@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -9,6 +9,7 @@ def _():
     import marimo as mo
     from sklearn.model_selection import train_test_split
     import torch
+
     return mo, torch, train_test_split
 
 
@@ -32,9 +33,7 @@ def _():
         return [v, J]
 
     def createfalsecitrate():
-        v = np.array(
-            [2.85 * 600, 2.76 * 600]
-        )
+        v = np.array([2.85 * 600, 2.76 * 600])
         J = np.zeros((2, 2))
         J[0, 1] = 15.89 / 400 * 600
         J[1, 0] = 15.89 / 400 * 600
@@ -49,7 +48,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
+    mo.md(
+        r"""Use the SpinSystem to create the peak list, and get the peak list"""
+    )
     return
 
 
@@ -386,9 +387,11 @@ def _(citrate_spectra, np, plt, vinyl_spectra):
     citrate_binned = spectral_binning(citrate_spectra, n_bins=50)
     vinyl_binned = spectral_binning(vinyl_spectra, n_bins=50)
 
-    print(f"Original spectrum length: {len(citrate_spectra[0][1])}")
-    print(f"Binned spectrum length: {citrate_binned.shape[1]}")
-    print(f"Dimension reduction: {len(citrate_spectra[0][1]) / citrate_binned.shape[1]:.1f}x")
+    print(f'Original spectrum length: {len(citrate_spectra[0][1])}')
+    print(f'Binned spectrum length: {citrate_binned.shape[1]}')
+    print(
+        f'Dimension reduction: {len(citrate_spectra[0][1]) / citrate_binned.shape[1]:.1f}x'
+    )
 
     print(f'Max intensity of original spectra: {max(citrate_spectra[0][1])}')
     print(f'Max intensity of binned spectra: {max(citrate_binned[0])}')
@@ -402,7 +405,9 @@ def _(citrate_spectra, np, plt, vinyl_spectra):
     plt.xlabel('Frequency (Hz)')
 
     plt.subplot(1, 2, 2)
-    plt.plot(range(len(citrate_binned[0])), citrate_binned[0], 'o-', label='Binned')
+    plt.plot(
+        range(len(citrate_binned[0])), citrate_binned[0], 'o-', label='Binned'
+    )
     plt.title('Binned Spectrum')
     plt.xlabel('Bin Number')
 
@@ -416,13 +421,12 @@ def _(citrate_spectra, np, plt, vinyl_spectra):
 def _(citrate_binned, np, vinyl_binned):
     # Use binned data for classification instead of raw spectra
     binned_data = np.concatenate([citrate_binned, vinyl_binned], axis=0)
-    binned_labels = np.concatenate([
-        np.zeros(len(citrate_binned)), 
-        np.ones(len(vinyl_binned))
-    ])
+    binned_labels = np.concatenate(
+        [np.zeros(len(citrate_binned)), np.ones(len(vinyl_binned))]
+    )
 
-    print(f"Binned data shape: {binned_data.shape}")
-    print(f"Labels shape: {binned_labels.shape}")
+    print(f'Binned data shape: {binned_data.shape}')
+    print(f'Labels shape: {binned_labels.shape}')
 
     # This should work much better than PCA!
     return binned_data, binned_labels
@@ -433,17 +437,24 @@ def _(binned_data, binned_labels, nn, torch, train_test_split):
     # Use binned data instead of raw spectra
     train_ratio = 0.7
 
-    data_train_binned, data_test_binned, labels_train_binned, labels_test_binned = train_test_split(
+    (
+        data_train_binned,
+        data_test_binned,
+        labels_train_binned,
+        labels_test_binned,
+    ) = train_test_split(
         binned_data, binned_labels, train_size=train_ratio, shuffle=True
     )
 
     data_train_binned = torch.tensor(data_train_binned, dtype=torch.float32)
-    labels_train_binned = torch.tensor(labels_train_binned, dtype=torch.float32)
+    labels_train_binned = torch.tensor(
+        labels_train_binned, dtype=torch.float32
+    )
     data_test_binned = torch.tensor(data_test_binned, dtype=torch.float32)
     labels_test_binned = torch.tensor(labels_test_binned, dtype=torch.float32)
 
-    print(f"Binned training data shape: {data_train_binned.shape}")
-    print(f"Binned training labels shape: {labels_train_binned.shape}")
+    print(f'Binned training data shape: {data_train_binned.shape}')
+    print(f'Binned training labels shape: {labels_train_binned.shape}')
 
     # Create a new model with the correct input size (50 bins instead of 800)
     model_binned = nn.Sequential(
@@ -466,14 +477,23 @@ def _(binned_data, binned_labels, nn, torch, train_test_split):
     )
 
 
-app._unparsable_cell(
-    r"""
+@app.cell
+def _(nn, np, torch):
     import tqdm
     import copy
     import torch.optim as optim
 
-    def train_model(model, data_train, labels_train, data_test, labels_test, n_epochs=100, batch_size=10, lr=0.001):
-        \"\"\"Generic training function for binary classification\"\"\"
+    def train_model(
+        model,
+        data_train,
+        labels_train,
+        data_test,
+        labels_test,
+        n_epochs=100,
+        batch_size=10,
+        lr=0.001,
+    ):
+        """Generic training function for binary classification"""
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
@@ -521,11 +541,9 @@ app._unparsable_cell(
         # Final evaluation
         model.load_state_dict(best_weights)
         model.eval()
-        with torch.no_grad(): nmrsim.math.normalize_peaklist(peaklist, n=1)[source]
-
-        Normalize the intensities in a peaklist so that total intensity equals value n (nominally the number of nuclei giving rise to the signal).
+        with torch.no_grad():
             labels_pred = model(data_test)
-            predictions = (torch.sigmoid(labels_pred) > 0.5)
+            predictions = torch.sigmoid(labels_pred) > 0.5
             accuracy = (predictions.squeeze() == labels_test).float().mean()
 
             print(f'Final Accuracy: {accuracy:.2%}')
@@ -538,9 +556,7 @@ app._unparsable_cell(
 
         return best_loss, best_weights, history, accuracy
 
-    """,
-    name="_"
-)
+    return (train_model,)
 
 
 @app.cell
@@ -553,16 +569,21 @@ def _(
     train_model,
 ):
     # Train the binned model
-    print("Training binned model...")
-    best_loss_binned, best_weights_binned, history_binned, accuracy_binned = train_model(
-        model_binned, 
-        data_train_binned, 
-        labels_train_binned, 
-        data_test_binned, 
+    print('Training binned model...')
+    (
+        best_loss_binned,
+        best_weights_binned,
+        history_binned,
+        accuracy_binned,
+    ) = train_model(
+        model_binned,
+        data_train_binned,
+        labels_train_binned,
+        data_test_binned,
         labels_test_binned,
         n_epochs=100,
         batch_size=10,
-        lr=0.001
+        lr=0.001,
     )
 
     return accuracy_binned, best_loss_binned, history_binned
@@ -571,7 +592,7 @@ def _(
 @app.cell
 def _(data_test, data_train, labels_test, labels_train, model, train_model):
     # Train the raw data model for comparison
-    print("Training raw data model...")
+    print('Training raw data model...')
     best_loss_raw, best_weights_raw, history_raw, accuracy_raw = train_model(
         model,
         data_train,
@@ -580,7 +601,7 @@ def _(data_test, data_train, labels_test, labels_train, model, train_model):
         labels_test,
         n_epochs=100,
         batch_size=10,
-        lr=0.0001  # Lower learning rate for the larger model
+        lr=0.0001,  # Lower learning rate for the larger model
     )
 
     return accuracy_raw, best_loss_raw, history_raw
@@ -664,7 +685,9 @@ def _(SpinSystem, mplplot, np, plt):
     dss_concentration = 1
 
     dss_normalized_peaklist = normalize(dss_system.peaklist(), n=9)
-    dss_scaled = [(f, i * dss_concentration) for f, i in dss_normalized_peaklist]
+    dss_scaled = [
+        (f, i * dss_concentration) for f, i in dss_normalized_peaklist
+    ]
 
     dss_normal_x_y = mplplot(dss_system.peaklist())
     dss_normalized_x_y = mplplot(dss_normalized_peaklist)
@@ -765,17 +788,29 @@ def _(mo):
 def _(mixed_peaks, np, plt):
     yoinkrange = [
         [1600, 1800],
-        [-20, 20]
+        [-5, 5],
+        [500, 700],
     ]
 
     indices_range = [
-        np.where((mixed_peaks[0] >= yoinkrange[0][0]) & (mixed_peaks[0] <= yoinkrange[0][1]))[0],
-        np.where((mixed_peaks[0] >= yoinkrange[1][0]) & (mixed_peaks[0] <= yoinkrange[1][1]))[0]
+        np.where(
+            (mixed_peaks[0] >= yoinkrange[0][0])
+            & (mixed_peaks[0] <= yoinkrange[0][1])
+        )[0],
+        np.where(
+            (mixed_peaks[0] >= yoinkrange[1][0])
+            & (mixed_peaks[0] <= yoinkrange[1][1])
+        )[0],
     ]
 
     print(mixed_peaks.shape)
 
-    yoinked_peaks = np.hstack([(mixed_peaks[:, indices_range[0]]), (mixed_peaks[:, indices_range[1]])])
+    yoinked_peaks = np.hstack(
+        [
+            (mixed_peaks[:, indices_range[0]]),
+            (mixed_peaks[:, indices_range[1]]),
+        ]
+    )
 
     print(yoinked_peaks.shape)
 
@@ -783,5 +818,5 @@ def _(mixed_peaks, np, plt):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

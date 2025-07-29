@@ -1,0 +1,79 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.14.13"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "KrnR",
+      "code_hash": "8344d9ccdb31dec5aa9a43fbd547fc18",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><h2 id=\"nmr-sim-concentration-model\">NMR Sim Concentration Model</h2>\n<ul>\n<li>Taken using knowledge learn from NMR Sim Test.py, but cleaned up, and with certain aspects removed</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "NMfI",
+      "code_hash": "714ae6bd62baf15a72c614251c2d1171",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><span class=\"paragraph\">Define a spectrum creation and normalisation function</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "abux",
+      "code_hash": null,
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "QTBJ",
+      "code_hash": "f680b577bea70f1e16870af9b97e4537",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<span class=\"markdown prose dark:prose-invert\"><span class=\"paragraph\">Now, try and create and plot citrate via thi</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "UBuk",
+      "code_hash": "9cb2414afb744c31b1ace48a4e1bf0ab",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "syntax",
+          "evalue": "line 21\n    v, j = createdss(),\n       ^^^^^^^^^^^^^^^\nSyntaxError: invalid syntax. Maybe you meant '==' or ':=' instead of '='?\n",
+          "traceback": []
+        }
+      ],
+      "console": []
+    }
+  ]
+}
