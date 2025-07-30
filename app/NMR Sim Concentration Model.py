@@ -193,7 +193,7 @@ def _(mo, np, spectra, training_data):
 
 
 @app.cell
-def _(labels, spectra):
+def _(labels, np, spectra):
     from sklearn.model_selection import train_test_split
     import torch
 
@@ -205,7 +205,7 @@ def _(labels, spectra):
                 axes, (x/y)
                 points along each axis (float32)
             ]
-        
+
             labels = array of labels (float32)
 
             train_ratio = ratio of data to be trained. Defaults 0.7, 70% data used for training
@@ -221,16 +221,18 @@ def _(labels, spectra):
             labels_train = array of labels (float32)
             labels_test = identical
         """
+        data = np.array(data)
+    
         data_train, data_test, labels_train, labels_test = train_test_split(
             data, labels, train_size=train_ratio, shuffle=True
         )
-    
+
         data_train = torch.tensor(data_train, dtype=torch.float32).view(len(data_train), axes)
         labels_train = torch.tensor(labels_train, dtype=torch.float32)
         data_test = torch.tensor(data_test, dtype=torch.float32).view(len(data_test), axes)
         labels_test = torch.tensor(labels_test, dtype=torch.float32)
 
-    
+
         return {
             'data_train': data_train,
             'data_test': data_test,
@@ -256,13 +258,15 @@ def _():
     no_transform_model = nn.Sequential(
         nn.Linear(1600, 800),  # 1600*800
         nn.ReLU(),
+        nn.Linear(800, 24), # 800*24
+        nn.ReLU(),
         nn.Linear(24, 12),  # 24*12
         nn.ReLU(),
         nn.Linear(12, 6),  # 12*6
         nn.ReLU(),
         nn.Linear(6, 1),  # 6*1
     )
-    return (nn,)
+    return nn, no_transform_model
 
 
 @app.cell(hide_code=True)
@@ -272,13 +276,17 @@ def _(mo):
 
 
 @app.cell
-def _(copy, nn, np, optim, torch, tqdm):
+def _(nn, np, torch):
+    import tqdm
+    import copy
+    import torch.optim as optim
+
     def train_mlp_model(
         model,
         training_data,
         n_epochs=100,
         batch_size=10,
-        lr=0.001,
+        lr=1e-3,
     ):
         """Generic training function for binary classification"""
 
@@ -286,11 +294,11 @@ def _(copy, nn, np, optim, torch, tqdm):
         data_test = training_data['data_test']
         labels_train = training_data['labels_train']
         labels_test = training_data['labels_test']
-    
+
         batch_start = torch.arange(0, len(data_train), batch_size)
 
         # loss function and optimizer
-        loss_fn = nn.BCEWithLogitsLoss()
+        loss_fn = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         best_loss = np.inf
@@ -347,6 +355,20 @@ def _(copy, nn, np, optim, torch, tqdm):
             print(f'First 10 true labels: {labels_test[:10]}')
 
         return best_loss, best_weights, history, accuracy
+    return (train_mlp_model,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""## Train the model""")
+    return
+
+
+@app.cell
+def _(no_transform_model, train_mlp_model, training_data):
+    best_loss, best_weights, history, accuracy = train_mlp_model(no_transform_model, training_data)
+
+
     return
 
 
