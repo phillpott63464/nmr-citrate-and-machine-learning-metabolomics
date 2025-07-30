@@ -5,9 +5,12 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+def _(torch):
     import marimo as mo
-
+    import marimo as mo
+    print(torch.version.hip)  # Should show HIP version if ROCm build
+    print(torch.backends.cuda.is_built())  # Should be False for ROCm
+    print(torch.cuda.device_count())  # Should show GPU count if detected
     return (mo,)
 
 
@@ -181,7 +184,11 @@ def _(np, preprocessed_spectra):
     from sklearn.model_selection import train_test_split
     import torch
 
-
+    # Add device detection and setup
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     def get_training_data_mlp(spectra, train_ratio=0.7, axes=0):
         """
@@ -220,11 +227,11 @@ def _(np, preprocessed_spectra):
             data, labels, train_size=train_ratio, shuffle=True
         )
 
-        data_train = torch.tensor(data_train, dtype=torch.float32)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).squeeze(1)
-        data_test = torch.tensor(data_test, dtype=torch.float32)
-        labels_test = torch.tensor(labels_test, dtype=torch.float32).squeeze(1)
-
+        # Move tensors to GPU
+        data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).squeeze(1).to(device)
+        data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32).squeeze(1).to(device)
 
         return {
             'data_train': data_train,
@@ -254,30 +261,30 @@ def _(mo):
 
 
 @app.cell
-def _(np, r2, torch):
+def _(np, torch):
     import tqdm
     import copy
     import torch.optim as optim
     import torch.nn as nn
 
-    def train_mlp_model(
-        training_data, trial
-    ):
-        """Generic training function for regression"""
+    def train_mlp_model(training_data, trial):
+        # Get device from training data tensors
+        device = training_data['data_train'].device
+        print(f"Training on device: {device}")
 
         n_epochs=int(trial.suggest_float('n_epochs', 10, 100, step=10))
         batch_size=int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr=trial.suggest_float('lr', 1e-5, 1e-1)
         div_size=trial.suggest_float('div_size', 2, 10, step=1)
-    
-    
+
+
         a = len(training_data['data_train'][0])
         b = int(a/div_size)
         c = int(b/div_size)
         d = int(c/div_size)
         e = int(d/div_size)
 
-        # Define the model
+        # Define the model and move to GPU
         model = nn.Sequential(
             nn.Linear(a, b), 
             nn.ReLU(),
@@ -288,8 +295,9 @@ def _(np, r2, torch):
             nn.Linear(d, e), 
             nn.ReLU(),
             nn.Linear(e, 1),  
-        )
+        ).to(device)  # Move model to GPU
 
+        # Data is already on GPU from get_training_data_mlp
         data_train = training_data['data_train']
         data_test = training_data['data_test']
         labels_train = training_data['labels_train']
@@ -363,7 +371,7 @@ def _(np, r2, torch):
             print(f'First 10 true labels: {labels_test[:10]}')
             print(f'Prediction errors: {torch.abs(labels_pred[:10] - labels_test[:10])}')
 
-        return mae, rmse, r2
+        return mae, rmse, r2_score
     return (train_mlp_model,)
 
 
@@ -390,16 +398,17 @@ def _(train_mlp_model, training_data):
     import optuna
     from functools import partial
 
-    trials = 10
+    trials = 100
 
     def objective(training_data, trial):
         mae, rmse, r2 = train_mlp_model(training_data, trial)
-    
-        score = mae + rmse - r2
-        return score
+
+        # score = mae + rmse - r2
+        # return score
+        return r2
 
     study = optuna.create_study(
-        direction='minimize',
+        direction='maximize',
         study_name='mlp_study',
         storage='sqlite:///mlp_study.db',
         load_if_exists=True,
@@ -425,6 +434,13 @@ def _(train_mlp_model, training_data):
 
 
 
+    return (study,)
+
+
+@app.cell
+def _(study):
+    print(study.best_trial.params)
+    print(study.best_trial.value)
     return
 
 
