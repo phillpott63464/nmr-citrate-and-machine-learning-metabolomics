@@ -44,7 +44,7 @@ def _():
     }
 
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
-    count = 10
+    count = 1000
 
     labels = []
     spectra = []
@@ -56,10 +56,12 @@ def _():
             rondomlyScaleSubstances=True,
         ))
 
-    print(spectra[0]['scales'])
-    print(spectra[0]['intensities'].shape)
+    print(''.join(f"{x['scales']}\n'" for x in spectra)) #Dict including scaling references
+    print(spectra[0]['intensities'].shape) #Y axis
+    print(spectra[0]['positions'].shape) #X axis
+    print(spectra[0]['components'].shape) #Peaks of all separate componenets, not import
 
-    return labels, np, spectra
+    return labels, np, spectra, substanceDict
 
 
 @app.cell
@@ -79,7 +81,84 @@ def _(labels, spectra):
         plt.plot(spectra[graphcounter]['positions'], spectra[graphcounter]['intensities'][0])
 
     plt.show()
+    return (plt,)
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ## Now preprocess the full spectra
+    - Extract only the relevant parts of the spectra
+    """
+    )
     return
+
+
+@app.cell
+def _(np, plt, spectra, substanceDict):
+    def preprocess_peaks(intensities, positions, ranges):
+        indices_range = []
+        for range in ranges:
+            indices_range.append(np.where(
+                (positions >= range[0]) & (positions <= range[1])
+            )[0])
+
+        new_intensities = []
+        new_positions = []
+    
+        for range in indices_range:
+            temp_intensities = np.hstack(intensities[:, range])
+
+            temp_positions = [positions[x] for x in range]
+
+            new_intensities = np.concatenate([new_intensities, temp_intensities])
+            new_positions = np.concatenate([new_positions, temp_positions])
+
+        return new_positions, new_intensities
+
+    def preprocess_ratio(scales, substanceDict):
+        referenceScale= scales['tsp'][0]
+
+        substanceIds = [substanceDict[id][0] for id in substanceDict]
+
+        substanceScales = [scales[id][0] for id in substanceIds]
+
+        ratios = [scale/referenceScale for scale in substanceScales]
+    
+        return ratios
+
+    def preprocess_spectra(spectra, ranges, substanceDict):
+        new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges)
+
+        ratios = preprocess_ratio(spectra['scales'], substanceDict)
+
+        return {
+            'intensities': new_intensities,
+            'positions': new_positions,
+            'scales': spectra['scales'],
+            'components': spectra['components'],
+            'ratios': ratios,
+        }
+
+    ranges = [
+        [2.2, 2.8],
+        [-0.1, 0.1],
+    ]
+
+    preprocessed_spectra = []
+
+    for spectrum in spectra:
+        preprocessed_spectra.append(preprocess_spectra(spectra[0], ranges, substanceDict))
+
+    print(len(preprocessed_spectra[0]['positions']))
+    print(len(preprocessed_spectra[0]['intensities']))
+
+    plt.plot(preprocessed_spectra[0]['positions'], preprocessed_spectra[0]['intensities'])
+
+
+
+    return (preprocessed_spectra,)
 
 
 @app.cell(hide_code=True)
@@ -97,11 +176,13 @@ def _(mo, np, spectra, training_data):
 
 
 @app.cell
-def _(labels, np, spectra):
+def _(np, preprocessed_spectra):
     from sklearn.model_selection import train_test_split
     import torch
 
-    def get_training_data_mlp(data, labels, train_ratio=0.7, axes=0):
+
+
+    def get_training_data_mlp(spectra, train_ratio=0.7, axes=0):
         """
         Input:
             data = [
@@ -125,16 +206,23 @@ def _(labels, np, spectra):
             labels_train = array of labels (float32)
             labels_test = identical
         """
-        data = np.array(data)
+        data = []
+        labels = []
+    
+        for spectrum in spectra:
+            data.append(np.concatenate([spectrum['intensities'], spectrum['positions']]))
+            labels.append(spectrum['ratios'])
+
+        data=np.array(data)
 
         data_train, data_test, labels_train, labels_test = train_test_split(
             data, labels, train_size=train_ratio, shuffle=True
         )
 
-        data_train = torch.tensor(data_train, dtype=torch.float32).view(len(data_train), axes)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32)
-        data_test = torch.tensor(data_test, dtype=torch.float32).view(len(data_test), axes)
-        labels_test = torch.tensor(labels_test, dtype=torch.float32)
+        data_train = torch.tensor(data_train, dtype=torch.float32)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).squeeze(1)
+        data_test = torch.tensor(data_test, dtype=torch.float32)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32).squeeze(1)
 
 
         return {
@@ -144,7 +232,11 @@ def _(labels, np, spectra):
             'labels_test': labels_test
         }
 
-    training_data = get_training_data_mlp(data=spectra, labels=labels, axes=-1)
+    training_data = get_training_data_mlp(spectra=preprocessed_spectra)
+
+    print([training_data[x].shape for x in training_data])
+    print(len(training_data['data_train'][0]))
+
     return torch, training_data
 
 
@@ -155,20 +247,28 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(training_data):
     import torch.nn as nn
+
+    a = len(training_data['data_train'][0])
+    b = int(a/2)
+    c = int(b/2)
+    d = int(c/2)
+    e = int(d/2)
+
+    print(a, b, c, d, e)
 
     # Define the model
     no_transform_model = nn.Sequential(
-        nn.Linear(1600, 512),  # 1600*800
+        nn.Linear(a, b),  # 1600*800
         nn.ReLU(),
-        nn.Linear(512, 128), # 800*24
+        nn.Linear(b, c), # 800*24
         nn.ReLU(),
-        nn.Linear(128, 32),  # 24*12
+        nn.Linear(c, d),  # 24*12
         nn.ReLU(),
-        nn.Linear(32, 8),  # 12*6
+        nn.Linear(d, e),  # 12*6
         nn.ReLU(),
-        nn.Linear(8, 1),  # 6*1
+        nn.Linear(e, 1),  # 6*1
     )
     return nn, no_transform_model
 

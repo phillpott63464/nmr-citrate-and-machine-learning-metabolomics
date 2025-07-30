@@ -475,9 +475,14 @@ def _(binned_data, binned_labels, nn, torch, train_test_split):
     )
 
 
-@app.cell
-def _(nn, np, torch):
-    import tqdm
+app._unparsable_cell(
+    r"""
+    {
+            'scales': pd.DataFrame(scalesDict),
+            'positions': positions,
+            'intensities': np.vstack(intensitiesList), 
+            'components': np.vstack(untransformedComponentsList)
+            }import tqdm
     import copy
     import torch.optim as optim
 
@@ -491,7 +496,7 @@ def _(nn, np, torch):
         batch_size=10,
         lr=0.001,
     ):
-        """Generic training function for binary classification"""
+        \"\"\"Generic training function for binary classification\"\"\"
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
@@ -554,7 +559,9 @@ def _(nn, np, torch):
 
         return best_loss, best_weights, history, accuracy
 
-    return (train_model,)
+    """,
+    name="_"
+)
 
 
 @app.cell
@@ -800,6 +807,8 @@ def _(mixed_peaks, np, plt):
             & (mixed_peaks[0] <= yoinkrange[1][1])
         )[0],
     ]
+
+    print(indices_range)
 
     print(mixed_peaks.shape)
 
