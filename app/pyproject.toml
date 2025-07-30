@@ -18,6 +18,24 @@ dependencies = [
     "scipy>=1.15.3",
     "setuptools>=80.9.0",
     "torch>=2.7.1",
+    "torchaudio",
+    "torchvision",
     "tqdm>=4.67.1",
     "wheel>=0.45.1",
 ]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
+package = "torch"
+explicit = true
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
+package = "torchvision"
+explicit = true
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
+package = "torchaudio"
+explicit = true
+
