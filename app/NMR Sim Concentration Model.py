@@ -107,7 +107,7 @@ def _(np, plt, spectra, substanceDict):
 
         new_intensities = []
         new_positions = []
-    
+
         for range in indices_range:
             temp_intensities = np.hstack(intensities[:, range])
 
@@ -126,7 +126,7 @@ def _(np, plt, spectra, substanceDict):
         substanceScales = [scales[id][0] for id in substanceIds]
 
         ratios = [scale/referenceScale for scale in substanceScales]
-    
+
         return ratios
 
     def preprocess_spectra(spectra, ranges, substanceDict):
@@ -209,7 +209,7 @@ def _(np, preprocessed_spectra):
         """
         data = []
         labels = []
-    
+
         for spectrum in spectra:
             data.append(np.concatenate([spectrum['intensities'], spectrum['positions']]))
             labels.append(spectrum['ratios'])
@@ -247,33 +247,6 @@ def _(mo):
     return
 
 
-@app.cell
-def _(training_data):
-    import torch.nn as nn
-
-    a = len(training_data['data_train'][0])
-    b = int(a/2)
-    c = int(b/2)
-    d = int(c/2)
-    e = int(d/2)
-
-    print(a, b, c, d, e)
-
-    # Define the model
-    no_transform_model = nn.Sequential(
-        nn.Linear(a, b), 
-        nn.ReLU(),
-        nn.Linear(b, c),
-        nn.ReLU(),
-        nn.Linear(c, d),
-        nn.ReLU(),
-        nn.Linear(d, e), 
-        nn.ReLU(),
-        nn.Linear(e, 1),  
-    )
-    return nn, no_transform_model
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## Define a training loop for an MLP model""")
@@ -281,19 +254,41 @@ def _(mo):
 
 
 @app.cell
-def _(nn, np, torch):
+def _(np, r2, torch):
     import tqdm
     import copy
     import torch.optim as optim
+    import torch.nn as nn
 
     def train_mlp_model(
-        model,
-        training_data,
-        n_epochs=100,
-        batch_size=10,
-        lr=1e-3,
+        training_data, trial
     ):
         """Generic training function for regression"""
+
+        n_epochs=int(trial.suggest_float('n_epochs', 10, 100, step=10))
+        batch_size=int(trial.suggest_float('batch_size', 10, 100, step=10))
+        lr=trial.suggest_float('lr', 1e-5, 1e-1)
+        div_size=trial.suggest_float('div_size', 2, 10, step=1)
+    
+    
+        a = len(training_data['data_train'][0])
+        b = int(a/div_size)
+        c = int(b/div_size)
+        d = int(c/div_size)
+        e = int(d/div_size)
+
+        # Define the model
+        model = nn.Sequential(
+            nn.Linear(a, b), 
+            nn.ReLU(),
+            nn.Linear(b, c),
+            nn.ReLU(),
+            nn.Linear(c, d),
+            nn.ReLU(),
+            nn.Linear(d, e), 
+            nn.ReLU(),
+            nn.Linear(e, 1),  
+        )
 
         data_train = training_data['data_train']
         data_test = training_data['data_test']
@@ -368,7 +363,7 @@ def _(nn, np, torch):
             print(f'First 10 true labels: {labels_test[:10]}')
             print(f'Prediction errors: {torch.abs(labels_pred[:10] - labels_test[:10])}')
 
-        return best_loss, best_weights, history, {'mae': mae, 'rmse': rmse, 'r2': r2_score}
+        return mae, rmse, r2
     return (train_mlp_model,)
 
 
@@ -379,8 +374,57 @@ def _(mo):
 
 
 @app.cell
-def _(no_transform_model, train_mlp_model, training_data):
-    best_loss, best_weights, history, metrics = train_mlp_model(no_transform_model, training_data)
+def _():
+    # best_loss, best_weights, history, metrics = train_mlp_model(training_data)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Now hyperparameter optimisation""")
+    return
+
+
+@app.cell
+def _(train_mlp_model, training_data):
+    import optuna
+    from functools import partial
+
+    trials = 10
+
+    def objective(training_data, trial):
+        mae, rmse, r2 = train_mlp_model(training_data, trial)
+    
+        score = mae + rmse - r2
+        return score
+
+    study = optuna.create_study(
+        direction='minimize',
+        study_name='mlp_study',
+        storage='sqlite:///mlp_study.db',
+        load_if_exists=True,
+    )
+
+    completed_trials = len(
+        [
+            t
+            for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ]
+    )
+
+    if trials - completed_trials > 0:
+        study.optimize(
+            partial(objective, training_data),
+            callbacks=[
+                optuna.study.MaxTrialsCallback(
+                    trials, states=(optuna.trial.TrialState.COMPLETE,)
+                )
+            ],
+        )
+
+
+
     return
 
 
