@@ -1,25 +1,34 @@
 import marimo
 
 __generated_with = "0.14.13"
-app = marimo.App(width="medium")
+app = marimo.App(
+    width="medium",
+    layout_file="layouts/NMR Sim Concentration Model.slides.json",
+)
 
 
 @app.cell
-def _(torch):
+def _():
     import marimo as mo
-    import marimo as mo
-    print(torch.version.hip)  # Should show HIP version if ROCm build
-    print(torch.backends.cuda.is_built())  # Should be False for ROCm
-    print(torch.cuda.device_count())  # Should show GPU count if detected
-    return (mo,)
+    import torch
+
+    # Store device info for markdown display
+    hip_version = torch.version.hip
+    cuda_built = torch.backends.cuda.is_built()
+    gpu_count = torch.cuda.device_count()
+
+    return cuda_built, gpu_count, hip_version, mo, torch
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(cuda_built, gpu_count, hip_version, mo):
     mo.md(
-        r"""
-    ## NMR Sim Concentration Model
-    - Taken using knowledge learn from NMR Sim Test.py, but cleaned up, and with certain aspects removed
+        f"""
+    ## PyTorch GPU Setup Information
+
+    - **HIP Version:** {hip_version}
+    - **CUDA Built:** {cuda_built}
+    - **GPU Device Count:** {gpu_count}
     """
     )
     return
@@ -27,13 +36,23 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Define a spectrum creation and normalisation function""")
+    mo.md(r"""# NMR Sim Concentration Model""")
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Now, create multiple of these spectra with varying concentrations""")
+def _(mo, spectrafigures, substanceDict):
+    mo.md(
+        rf"""
+    ## Data Creation
+
+    Create spectra using morgan's code overlaying nmrsim
+
+    Contains metabolites: {''.join(f"{x}, " for x in substanceDict)}
+
+    {mo.as_html(spectrafigures)}
+    """
+    )
     return
 
 
@@ -52,23 +71,85 @@ def _():
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
     count = 1000
 
+    # Use the built-in loop capability of createTrainingData
+    batch_data = createTrainingData(
+        substanceSpectrumIds=substanceSpectrumIds,
+        sampleNumber=count,  # This creates 1000 samples in one call
+        rondomlyScaleSubstances=True,
+        # referenceSubstanceSpectrumId='dss',
+    )
+
+    # Extract data into your current format
     labels = []
     spectra = []
 
-    for spectracounter in range (0, count):
-        print(f'{spectracounter}/{count}')
-        spectra.append(createTrainingData(
-            substanceSpectrumIds=substanceSpectrumIds,
-            rondomlyScaleSubstances=True,
-            # referenceSubstanceSpectrumId='dss',
-        ))
+    for i in range(count):
+        # Extract scales for this sample
+        sample_scales = {key: [values[i]] for key, values in batch_data['scales'].items()}
 
-    print(''.join(f"{x['scales']}\n'" for x in spectra)) #Dict including scaling references
+        # Create spectrum dict in your current format
+        spectrum = {
+            'scales': sample_scales,
+            'intensities': batch_data['intensities'][i:i+1],  # Keep 2D shape
+            'positions': batch_data['positions'],
+            'components': batch_data['components']  # This is shared across all samples
+        }
+        spectra.append(spectrum)
+
+    print(''.join(f"{x['scales']}\n'" for x in spectra[:5])) # Show first 5 only
     print(spectra[0]['intensities'].shape) #Y axis
     print(spectra[0]['positions'].shape) #X axis
-    print(spectra[0]['components'].shape) #Peaks of all separate componenets, not import
+    print(spectra[0]['components'].shape) #Peaks of all separate components
 
-    return labels, np, spectra, substanceDict
+    # Get sample information for markdown display
+    sample_scales_preview = '\n'.join([f"Sample {i+1}: {spectrum['scales']}" for i, spectrum in enumerate(spectra[:5])])
+    intensities_shape = spectra[0]['intensities'].shape
+    positions_shape = spectra[0]['positions'].shape
+    components_shape = spectra[0]['components'].shape
+
+    return (
+        components_shape,
+        count,
+        intensities_shape,
+        labels,
+        np,
+        positions_shape,
+        sample_scales_preview,
+        spectra,
+        substanceDict,
+    )
+
+
+@app.cell(hide_code=True)
+def _(
+    components_shape,
+    count,
+    intensities_shape,
+    mo,
+    positions_shape,
+    sample_scales_preview,
+):
+    mo.md(
+        rf"""
+    ## Data Generation Results
+
+    **Generated {count} samples successfully**
+
+    **Data Structure:**
+
+    - **Intensities Shape:** {intensities_shape} (Y axis)
+
+    - **Positions Shape:** {positions_shape} (X axis) 
+
+    - **Components Shape:** {components_shape} (Peaks of all separate components)
+
+    **Sample Scales Preview (First 5 samples):**
+    ```
+    {sample_scales_preview}
+    ```
+    """
+    )
+    return
 
 
 @app.cell
@@ -87,16 +168,32 @@ def _(labels, spectra):
         # plt.title(f'{round(labels[graphcounter], 3)}M')
         plt.plot(spectra[graphcounter]['positions'], spectra[graphcounter]['intensities'][0])
 
-    plt.show()
-    return graph_count, plt
+    spectrafigures = plt.gca()
+    return graph_count, plt, spectrafigures
+
+
+@app.cell(hide_code=True)
+def _(mo, spectra):
+    mo.md(
+        rf"""
+    ## Spectra Overview
+
+    - **Total Spectra Generated:** {len(spectra)}
+    """
+    )
+    return
 
 
 @app.cell
-def _(mo):
+def _(mo, preprocessedfigure):
     mo.md(
-        r"""
-    ## Now preprocess the full spectra
+        rf"""
+    ## Spectra Preprocessing
     - Extract only the relevant parts of the spectra
+    - Add baseline distortion
+    - Extract ratio of citrate to reference
+
+    {mo.as_html(preprocessedfigure)}
     """
     )
     return
@@ -164,14 +261,51 @@ def _(np, spectra, substanceDict):
     # Add baseline distortion flag
     baseline_distortion = True  # Set to False to disable baseline distortion
 
-    preprocessed_spectra = []
 
-    for spectrum in spectra:
-        preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict, baseline_distortion))
+
+    def _(spectra):
+        preprocessed_spectra = []
+        for spectrum in spectra:
+            preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict, baseline_distortion))
+
+        return preprocessed_spectra
+
+    preprocessed_spectra = _(spectra)
 
     print(len(preprocessed_spectra[0]['positions']))
     print(len(preprocessed_spectra[0]['intensities']))
-    return (preprocessed_spectra,)
+
+    positions_count = len(preprocessed_spectra[0]['positions'])
+    intensities_count = len(preprocessed_spectra[0]['intensities'])
+    return (
+        baseline_distortion,
+        intensities_count,
+        positions_count,
+        preprocessed_spectra,
+        ranges,
+    )
+
+
+@app.cell(hide_code=True)
+def _(baseline_distortion, intensities_count, mo, positions_count, ranges):
+    mo.md(
+        rf"""
+    ## Preprocessing Results
+
+    **Configuration:**
+
+    - **Baseline Distortion:** {'Enabled' if baseline_distortion else 'Disabled'}
+
+    - **Spectral Ranges:** {ranges}
+
+    **Processed Data Dimensions:**
+
+    - **Positions Count:** {positions_count}
+
+    - **Intensities Count:** {intensities_count}
+    """
+    )
+    return
 
 
 @app.cell
@@ -186,28 +320,13 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
         # plt.title(f'{round(labels[graphcounter], 3)}M')
         plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
 
-    plt.show()
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo, np, spectra, training_data):
-    mo.md(
-        rf"""
-    Shape of spectra: {np.array(spectra).shape}
-
-    ## Define a function to convert the spectra x/y into training tensors
-
-    Shape of tensors: {[training_data[x].shape for x in training_data]}
-    """
-    )
-    return
+    preprocessedfigure = plt.gca()
+    return (preprocessedfigure,)
 
 
 @app.cell
-def _(np, preprocessed_spectra):
+def _(np, preprocessed_spectra, torch):
     from sklearn.model_selection import train_test_split
-    import torch
 
     # Add device detection and setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -289,23 +408,39 @@ def _(np, preprocessed_spectra):
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
 
-    return torch, training_data
+    # Get sample ratio for display
+    sample_ratio = preprocessed_spectra[0]['ratio']
+    data_length = len(training_data['data_train'][0])
 
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Define a pytorch MLP model (fairly simple one)""")
-    return
+    return data_length, device, sample_ratio, training_data
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""## Define a training loop for an MLP model""")
+def _(data_length, device, mo, sample_ratio, training_data):
+    mo.md(
+        rf"""
+    ## Training Data Preparation
+
+    **Device Information:**
+
+    - **Using Device:** {device}
+
+    **Sample Information:**
+
+    - **Sample Ratio (first spectrum):** {sample_ratio:.6f}
+
+    - **Feature Vector Length:** {data_length}
+
+    **Tensor Shapes:**
+
+    {chr(10).join([f"- **{key}:** {value.shape}" for key, value in training_data.items()])}
+    """
+    )
     return
 
 
 @app.cell
-def _(np, torch):
+def _(np, torch, training_data):
     import tqdm
     import copy
     import torch.optim as optim
@@ -314,7 +449,6 @@ def _(np, torch):
     def train_mlp_model(training_data, trial):
         # Get device from training data tensors
         device = training_data['data_train'].device
-        print(f"Training on device: {device}")
 
         n_epochs=int(trial.suggest_float('n_epochs', 10, 100, step=10))
         batch_size=int(trial.suggest_float('batch_size', 10, 100, step=10))
@@ -338,7 +472,7 @@ def _(np, torch):
             nn.Linear(d, e), 
             nn.ReLU(),
             nn.Linear(e, 1),  
-        ).to(device)  # Move model to GPU
+        ).to(device)
 
         # Data is already on GPU from get_training_data_mlp
         data_train = training_data['data_train']
@@ -411,12 +545,37 @@ def _(np, torch):
             ss_tot_test = torch.sum((labels_test - torch.mean(labels_test)) ** 2)
             test_r2_score = 1 - (ss_res_test / ss_tot_test)
 
-            print(f'Validation - MAE: {val_mae:.6f}, RMSE: {val_rmse:.6f}, R²: {val_r2_score:.4f}')
-            print(f'Test - MAE: {test_mae:.6f}, RMSE: {test_rmse:.6f}, R²: {test_r2_score:.4f}')
-
         # Return validation metrics for optimization and test metrics for final evaluation
-        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score
-    return (train_mlp_model,)
+        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score, device
+
+    # Get device info from training data
+    device_info = training_data['data_train'].device
+    gpu_name = ""
+    if torch.cuda.is_available():
+        gpu_name = f" ({torch.cuda.get_device_name(0)})"
+    return device_info, gpu_name, train_mlp_model
+
+
+@app.cell(hide_code=True)
+def _(device_info, gpu_name, mo):
+    mo.md(
+        rf"""
+    ## Model Training Setup
+
+    **Hardware Configuration:**
+
+    - **Training Device:** {device_info} / {gpu_name}
+
+    **Model Architecture:** Multi-Layer Perceptron (MLP)
+
+    - Sequential neural network with ReLU activations
+
+    - Variable width controlled by division size hyperparameter
+
+    - Final output: Single regression value
+    """
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -475,7 +634,7 @@ def _(train_mlp_model, training_data):
     return optuna, study
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, optuna, study):
     mo.md(
         f"""
@@ -505,6 +664,7 @@ def _(mo, optuna, study):
     Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 1 output
 
     **Data Split:**
+
     - Training: 70% 
     - Validation: 15% (used for hyperparameter optimization)
     - Test: 15% (held out for final evaluation)
