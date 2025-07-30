@@ -119,27 +119,29 @@ def _(np, plt, spectra, substanceDict):
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        referenceScale = scales['tsp'][0]
+        # referenceScale = scales['tsp'][0]
 
-        substanceIds = [substanceDict[id][0] for id in substanceDict]
+        # substanceIds = [substanceDict[id][0] for id in substanceDict]
 
-        substanceScales = [scales[id][0] for id in substanceIds]
+        # substanceScales = [scales[id][0] for id in substanceIds]
 
-        ratios = [scale/referenceScale for scale in substanceScales]
+        # ratio = [scale/referenceScale for scale in substanceScales]
 
-        return ratios
+        ratio = scales['SP:3368'][0]/scales['tsp'][0]
+
+        return ratio
 
     def preprocess_spectra(spectra, ranges, substanceDict):
         new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges)
 
-        ratios = preprocess_ratio(spectra['scales'], substanceDict)
+        ratio = preprocess_ratio(spectra['scales'], substanceDict)
 
         return {
             'intensities': new_intensities,
             'positions': new_positions,
             'scales': spectra['scales'],
             'components': spectra['components'],
-            'ratios': ratios,
+            'ratio': ratio,
         }
 
     ranges = [
@@ -212,7 +214,9 @@ def _(np, preprocessed_spectra):
 
         for spectrum in spectra:
             data.append(np.concatenate([spectrum['intensities'], spectrum['positions']]))
-            labels.append(spectrum['ratios'])
+            labels.append(spectrum['ratio'])
+
+        print(spectra[0]['ratio'])
 
         data=np.array(data)
 
@@ -221,9 +225,9 @@ def _(np, preprocessed_spectra):
         )
 
         data_train = torch.tensor(data_train, dtype=torch.float32)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).squeeze(1)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32)
         data_test = torch.tensor(data_test, dtype=torch.float32)
-        labels_test = torch.tensor(labels_test, dtype=torch.float32).squeeze(1)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32)
 
 
         return {
@@ -254,7 +258,7 @@ def _(mo):
 
 
 @app.cell
-def _(np, r2, torch):
+def _(np, torch):
     import tqdm
     import copy
     import torch.optim as optim
@@ -363,7 +367,7 @@ def _(np, r2, torch):
             print(f'First 10 true labels: {labels_test[:10]}')
             print(f'Prediction errors: {torch.abs(labels_pred[:10] - labels_test[:10])}')
 
-        return mae, rmse, r2
+        return mae, rmse, r2_score
     return (train_mlp_model,)
 
 
