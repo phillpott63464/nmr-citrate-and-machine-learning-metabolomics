@@ -139,7 +139,7 @@ def _(j_citrate, j_dss, np, spectrum_creator, v_citrate, v_dss):
 
     for spectracounter in range (0, count):
         print(f'{spectracounter}/{count}')
-        concentration = np.random.uniform(0.5, 0.01)
+        labels.append(np.random.uniform(0.5, 0.01))
         spectra.append(spectrum_creator(
             analytes=[
                 {
@@ -152,23 +152,201 @@ def _(j_citrate, j_dss, np, spectrum_creator, v_citrate, v_dss):
                     'v': v_citrate,
                     'j': j_citrate,
                     'protons': 4,
-                    'concentration': concentration
+                    'concentration': labels[spectracounter]
                 }
             ]
         ))
 
-    return (spectra,)
+    return labels, spectra
 
 
 @app.cell
-def _(plt, spectra):
+def _(labels, plt, spectra):
     print(len(spectra))
+    print(len(labels))
 
-    graph_count = 9
+    graph_count = 4
 
-    for graphcounter in range(graph_count):
-        plt.subplot(1, int(graph_count/3), graphcounter)
+    plt.figure(figsize=(graph_count*4, graph_count*4))
+
+    for graphcounter in range(1, graph_count**2+1):
+        plt.subplot(graph_count, graph_count, graphcounter)
+        plt.title(f'{round(labels[graphcounter], 3)}M')
         plt.plot(spectra[graphcounter][0], spectra[graphcounter][1])
+
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, np, spectra, training_data):
+    mo.md(
+        rf"""
+    Shape of spectra: {np.array(spectra).shape}
+
+    ## Define a function to convert the spectra x/y into training tensors
+
+    Shape of tensors: {[training_data[x].shape for x in training_data]}
+    """
+    )
+    return
+
+
+@app.cell
+def _(labels, spectra):
+    from sklearn.model_selection import train_test_split
+    import torch
+
+    def get_training_data_mlp(data, labels, train_ratio=0.7, axes=0):
+        """
+        Input:
+            data = [
+                data instances, (float32)
+                axes, (x/y)
+                points along each axis (float32)
+            ]
+        
+            labels = array of labels (float32)
+
+            train_ratio = ratio of data to be trained. Defaults 0.7, 70% data used for training
+
+            axes = number of axes to remove. Defaults to 0 (no transformation). Use negative numbers
+
+        Output:
+            data_train = [
+                data instances, (float32)
+                points along both axes in single vector, (float32)
+            ]
+            data_test = identical
+            labels_train = array of labels (float32)
+            labels_test = identical
+        """
+        data_train, data_test, labels_train, labels_test = train_test_split(
+            data, labels, train_size=train_ratio, shuffle=True
+        )
+    
+        data_train = torch.tensor(data_train, dtype=torch.float32).view(len(data_train), axes)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32)
+        data_test = torch.tensor(data_test, dtype=torch.float32).view(len(data_test), axes)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32)
+
+    
+        return {
+            'data_train': data_train,
+            'data_test': data_test,
+            'labels_train': labels_train,
+            'labels_test': labels_test
+        }
+
+    training_data = get_training_data_mlp(data=spectra, labels=labels, axes=-1)
+    return torch, training_data
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""## Define a pytorch MLP model (fairly simple one)""")
+    return
+
+
+@app.cell
+def _():
+    import torch.nn as nn
+
+    # Define the model
+    no_transform_model = nn.Sequential(
+        nn.Linear(1600, 800),  # 1600*800
+        nn.ReLU(),
+        nn.Linear(24, 12),  # 24*12
+        nn.ReLU(),
+        nn.Linear(12, 6),  # 12*6
+        nn.ReLU(),
+        nn.Linear(6, 1),  # 6*1
+    )
+    return (nn,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""## Define a training loop for an MLP model""")
+    return
+
+
+@app.cell
+def _(copy, nn, np, optim, torch, tqdm):
+    def train_mlp_model(
+        model,
+        training_data,
+        n_epochs=100,
+        batch_size=10,
+        lr=0.001,
+    ):
+        """Generic training function for binary classification"""
+
+        data_train = training_data['data_train']
+        data_test = training_data['data_test']
+        labels_train = training_data['labels_train']
+        labels_test = training_data['labels_test']
+    
+        batch_start = torch.arange(0, len(data_train), batch_size)
+
+        # loss function and optimizer
+        loss_fn = nn.BCEWithLogitsLoss()
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+
+        best_loss = np.inf
+        best_weights = None
+        history = []
+
+        for epoch in range(n_epochs):
+            model.train()
+            with tqdm.tqdm(
+                batch_start, unit='batch', mininterval=0, disable=True
+            ) as bar:
+                bar.set_description(f'Epoch {epoch}')
+                for start in bar:
+                    # take a batch
+                    data_batch = data_train[start : start + batch_size]
+                    labels_batch = labels_train[start : start + batch_size]
+                    # forward pass
+                    labels_pred = model(data_batch)
+                    loss = loss_fn(labels_pred.squeeze(), labels_batch)
+                    # backward pass
+                    optimizer.zero_grad()
+                    loss.backward()
+                    # update weights
+                    optimizer.step()
+                    # print progress
+                    bar.set_postfix(loss=float(loss))
+
+            # evaluate accuracy at end of each epoch
+            model.eval()
+            with torch.no_grad():
+                labels_pred = model(data_test)
+                test_loss = loss_fn(labels_pred.squeeze(), labels_test)
+                test_loss = float(test_loss)
+                history.append(test_loss)
+
+                if test_loss < best_loss:
+                    best_loss = test_loss
+                    best_weights = copy.deepcopy(model.state_dict())
+
+        # Final evaluation
+        model.load_state_dict(best_weights)
+        model.eval()
+        with torch.no_grad():
+            labels_pred = model(data_test)
+            predictions = torch.sigmoid(labels_pred) > 0.5
+            accuracy = (predictions.squeeze() == labels_test).float().mean()
+
+            print(f'Final Accuracy: {accuracy:.2%}')
+            print(f'Best Loss: {best_loss:.4f}')
+
+            # Show some example predictions
+            probs = torch.sigmoid(labels_pred[:10]).squeeze()
+            print(f'First 10 prediction probabilities: {probs}')
+            print(f'First 10 true labels: {labels_test[:10]}')
+
+        return best_loss, best_weights, history, accuracy
     return
 
 
