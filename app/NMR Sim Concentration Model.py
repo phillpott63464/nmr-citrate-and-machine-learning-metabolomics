@@ -222,7 +222,7 @@ def _(labels, np, spectra):
             labels_test = identical
         """
         data = np.array(data)
-    
+
         data_train, data_test, labels_train, labels_test = train_test_split(
             data, labels, train_size=train_ratio, shuffle=True
         )
@@ -288,7 +288,7 @@ def _(nn, np, torch):
         batch_size=10,
         lr=1e-3,
     ):
-        """Generic training function for binary classification"""
+        """Generic training function for regression"""
 
         data_train = training_data['data_train']
         data_test = training_data['data_test']
@@ -338,23 +338,32 @@ def _(nn, np, torch):
                     best_loss = test_loss
                     best_weights = copy.deepcopy(model.state_dict())
 
-        # Final evaluation
+        # Final evaluation for regression
         model.load_state_dict(best_weights)
         model.eval()
         with torch.no_grad():
-            labels_pred = model(data_test)
-            predictions = torch.sigmoid(labels_pred) > 0.5
-            accuracy = (predictions.squeeze() == labels_test).float().mean()
+            labels_pred = model(data_test).squeeze()
 
-            print(f'Final Accuracy: {accuracy:.2%}')
-            print(f'Best Loss: {best_loss:.4f}')
+            # Calculate regression metrics instead of classification accuracy
+            mae = torch.mean(torch.abs(labels_pred - labels_test))
+            rmse = torch.sqrt(torch.mean((labels_pred - labels_test)**2))
 
-            # Show some example predictions
-            probs = torch.sigmoid(labels_pred[:10]).squeeze()
-            print(f'First 10 prediction probabilities: {probs}')
+            # Calculate R² score
+            ss_res = torch.sum((labels_test - labels_pred) ** 2)
+            ss_tot = torch.sum((labels_test - torch.mean(labels_test)) ** 2)
+            r2_score = 1 - (ss_res / ss_tot)
+
+            print(f'Final MAE: {mae:.6f}')
+            print(f'Final RMSE: {rmse:.6f}')
+            print(f'R² Score: {r2_score:.4f}')
+            print(f'Best Loss: {best_loss:.6f}')
+
+            # Show some example predictions vs true values
+            print(f'First 10 predictions: {labels_pred[:10]}')
             print(f'First 10 true labels: {labels_test[:10]}')
+            print(f'Prediction errors: {torch.abs(labels_pred[:10] - labels_test[:10])}')
 
-        return best_loss, best_weights, history, accuracy
+        return best_loss, best_weights, history, {'mae': mae, 'rmse': rmse, 'r2': r2_score}
     return (train_mlp_model,)
 
 
@@ -366,7 +375,7 @@ def _(mo):
 
 @app.cell
 def _(no_transform_model, train_mlp_model, training_data):
-    best_loss, best_weights, history, accuracy = train_mlp_model(no_transform_model, training_data)
+    best_loss, best_weights, history, metrics = train_mlp_model(no_transform_model, training_data)
 
 
     return
