@@ -132,7 +132,7 @@ def _(mo):
 
 @app.cell
 def _(j_citrate, j_dss, np, spectrum_creator, v_citrate, v_dss):
-    count = 10000
+    count = 1000
 
     labels = []
     spectra = []
@@ -146,7 +146,7 @@ def _(j_citrate, j_dss, np, spectrum_creator, v_citrate, v_dss):
                     'v': v_dss,
                     'j': j_dss,
                     'protons': 9,
-                    'concentration': 1.0
+                    'concentration': 1
                 },
                 {
                     'v': v_citrate,
@@ -256,15 +256,15 @@ def _():
 
     # Define the model
     no_transform_model = nn.Sequential(
-        nn.Linear(1600, 800),  # 1600*800
+        nn.Linear(1600, 512),  # 1600*800
         nn.ReLU(),
-        nn.Linear(800, 24), # 800*24
+        nn.Linear(512, 128), # 800*24
         nn.ReLU(),
-        nn.Linear(24, 12),  # 24*12
+        nn.Linear(128, 32),  # 24*12
         nn.ReLU(),
-        nn.Linear(12, 6),  # 12*6
+        nn.Linear(32, 8),  # 12*6
         nn.ReLU(),
-        nn.Linear(6, 1),  # 6*1
+        nn.Linear(8, 1),  # 6*1
     )
     return nn, no_transform_model
 
@@ -378,6 +378,32 @@ def _(no_transform_model, train_mlp_model, training_data):
     best_loss, best_weights, history, metrics = train_mlp_model(no_transform_model, training_data)
 
 
+    return
+
+
+@app.cell
+def _(labels, np):
+    print(np.mean(labels))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    Problem: the model is spitting out a single prediction no matter what.
+
+    Potential solutions:
+
+    - Increase the data quantity (didn't work)
+    - Reduce concentration of DSS (didn't work)
+    - Alter model:
+        - Add extra layer for a more gentle reduction
+        - Add dropout regularization
+    - Alter trianing parameters
+    - Normalize the data when preprocessing
+    """
+    )
     return
 
 
