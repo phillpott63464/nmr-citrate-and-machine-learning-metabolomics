@@ -382,18 +382,6 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # best_loss, best_weights, history, metrics = train_mlp_model(training_data)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Now hyperparameter optimisation""")
-    return
-
-
-@app.cell
 def _(train_mlp_model, training_data):
     import optuna
     from functools import partial
@@ -403,8 +391,12 @@ def _(train_mlp_model, training_data):
     def objective(training_data, trial):
         mae, rmse, r2 = train_mlp_model(training_data, trial)
 
-        # score = mae + rmse - r2
-        # return score
+        # Store all metrics in the trial for later analysis
+        trial.set_user_attr('mae', float(mae))
+        trial.set_user_attr('rmse', float(rmse))
+        trial.set_user_attr('r2_score', float(r2))
+
+        # Optimize for R² score (higher is better)
         return r2
 
     study = optuna.create_study(
@@ -432,15 +424,39 @@ def _(train_mlp_model, training_data):
             ],
         )
 
-
-
-    return (study,)
+    return optuna, study
 
 
 @app.cell
 def _(study):
     print(study.best_trial.params)
     print(study.best_trial.value)
+    return
+
+
+@app.cell
+def _(mo, optuna, study):
+    mo.md(
+        f"""
+    ## Hyperparameter Optimization Results
+
+    **Best Trial Performance:**
+    - **R² Score: {study.best_trial.value:.4f}** (Coefficient of determination - measures how well the model explains variance in the data. Range: 0-1, higher is better)
+    - **MAE: {study.best_trial.user_attrs['mae']:.6f}** (Mean Absolute Error - average absolute difference between predictions and true values. Lower is better)
+    - **RMSE: {study.best_trial.user_attrs['rmse']:.6f}** (Root Mean Square Error - penalizes larger errors more heavily than MAE. Lower is better)
+
+    **Best Hyperparameters:**
+    - **Number of Epochs:** {study.best_trial.params['n_epochs']:.0f}
+    - **Batch Size:** {study.best_trial.params['batch_size']:.0f}
+    - **Learning Rate:** {study.best_trial.params['lr']:.2e}
+    - **Division Size:** {study.best_trial.params['div_size']:.0f} (controls network width - smaller values = wider layers)
+
+    **Model Architecture:**
+    Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 1 output
+
+    **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
+    """
+    )
     return
 
 
