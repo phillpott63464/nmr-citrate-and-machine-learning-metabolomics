@@ -88,7 +88,7 @@ def _(labels, spectra):
         plt.plot(spectra[graphcounter]['positions'], spectra[graphcounter]['intensities'][0])
 
     plt.show()
-    return (plt,)
+    return graph_count, plt
 
 
 @app.cell
@@ -103,8 +103,8 @@ def _(mo):
 
 
 @app.cell
-def _(np, plt, spectra, substanceDict):
-    def preprocess_peaks(intensities, positions, ranges):
+def _(np, spectra, substanceDict):
+    def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False):
         indices_range = []
         for range in ranges:
             indices_range.append(np.where(
@@ -116,8 +116,14 @@ def _(np, plt, spectra, substanceDict):
 
         for range in indices_range:
             temp_intensities = np.hstack(intensities[:, range])
-
             temp_positions = [positions[x] for x in range]
+
+            # Add baseline distortion if enabled
+            if baseline_distortion:
+                # Normalize positions to [0, 1] for consistent baseline calculation
+                x_normalized = (np.array(temp_positions) - np.min(temp_positions)) / (np.max(temp_positions) - np.min(temp_positions))
+                baseline = 0.02 * np.sin(0.5 * np.pi * x_normalized)
+                temp_intensities = temp_intensities + baseline
 
             new_intensities = np.concatenate([new_intensities, temp_intensities])
             new_positions = np.concatenate([new_positions, temp_positions])
@@ -137,8 +143,8 @@ def _(np, plt, spectra, substanceDict):
 
         return ratio
 
-    def preprocess_spectra(spectra, ranges, substanceDict):
-        new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges)
+    def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False):
+        new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges, baseline_distortion)
 
         ratio = preprocess_ratio(spectra['scales'], substanceDict)
 
@@ -155,19 +161,33 @@ def _(np, plt, spectra, substanceDict):
         [-0.1, 0.1],
     ]
 
+    # Add baseline distortion flag
+    baseline_distortion = True  # Set to False to disable baseline distortion
+
     preprocessed_spectra = []
 
     for spectrum in spectra:
-        preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict))
+        preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict, baseline_distortion))
 
     print(len(preprocessed_spectra[0]['positions']))
     print(len(preprocessed_spectra[0]['intensities']))
-
-    plt.plot(preprocessed_spectra[0]['positions'], preprocessed_spectra[0]['intensities'])
-
-
-
     return (preprocessed_spectra,)
+
+
+@app.cell
+def _(graph_count, labels, plt, preprocessed_spectra, spectra):
+    print(len(spectra))
+    print(len(labels))
+
+    plt.figure(figsize=(graph_count*4, graph_count*4))
+
+    for graphcounter2 in range(1, graph_count**2+1):
+        plt.subplot(graph_count, graph_count, graphcounter2)
+        # plt.title(f'{round(labels[graphcounter], 3)}M')
+        plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
+
+    plt.show()
+    return
 
 
 @app.cell(hide_code=True)
