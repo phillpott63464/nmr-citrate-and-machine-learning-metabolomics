@@ -54,6 +54,7 @@ def _():
         spectra.append(createTrainingData(
             substanceSpectrumIds=substanceSpectrumIds,
             rondomlyScaleSubstances=True,
+            # referenceSubstanceSpectrumId='dss',
         ))
 
     print(''.join(f"{x['scales']}\n'" for x in spectra)) #Dict including scaling references
@@ -118,7 +119,7 @@ def _(np, plt, spectra, substanceDict):
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        referenceScale= scales['tsp'][0]
+        referenceScale = scales['tsp'][0]
 
         substanceIds = [substanceDict[id][0] for id in substanceDict]
 
@@ -149,7 +150,7 @@ def _(np, plt, spectra, substanceDict):
     preprocessed_spectra = []
 
     for spectrum in spectra:
-        preprocessed_spectra.append(preprocess_spectra(spectra[0], ranges, substanceDict))
+        preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict))
 
     print(len(preprocessed_spectra[0]['positions']))
     print(len(preprocessed_spectra[0]['intensities']))
@@ -260,15 +261,15 @@ def _(training_data):
 
     # Define the model
     no_transform_model = nn.Sequential(
-        nn.Linear(a, b),  # 1600*800
+        nn.Linear(a, b), 
         nn.ReLU(),
-        nn.Linear(b, c), # 800*24
+        nn.Linear(b, c),
         nn.ReLU(),
-        nn.Linear(c, d),  # 24*12
+        nn.Linear(c, d),
         nn.ReLU(),
-        nn.Linear(d, e),  # 12*6
+        nn.Linear(d, e), 
         nn.ReLU(),
-        nn.Linear(e, 1),  # 6*1
+        nn.Linear(e, 1),  
     )
     return nn, no_transform_model
 
@@ -380,34 +381,6 @@ def _(mo):
 @app.cell
 def _(no_transform_model, train_mlp_model, training_data):
     best_loss, best_weights, history, metrics = train_mlp_model(no_transform_model, training_data)
-
-
-    return
-
-
-@app.cell
-def _(labels, np):
-    print(np.mean(labels))
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    Problem: the model is spitting out a single prediction no matter what.
-
-    Potential solutions:
-
-    - Increase the data quantity (didn't work)
-    - Reduce concentration of DSS (didn't work)
-    - Alter model:
-        - Add extra layer for a more gentle reduction
-        - Add dropout regularization
-    - Alter trianing parameters
-    - Normalize the data when preprocessing
-    """
-    )
     return
 
 
