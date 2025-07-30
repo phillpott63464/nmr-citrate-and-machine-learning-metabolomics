@@ -44,6 +44,9 @@ def _():
 
     substanceDict = {
         'Citric acid': ['SP:3368'],
+        'Succinic acid': ['SP:3211'],
+        'Maleic acid': ['SP:3110'],
+        'Lactic acid': ['SP:3675'],
     }
 
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
@@ -432,30 +435,26 @@ def _(train_mlp_model, training_data):
 
 
 @app.cell
-def _(study):
-    print(study.best_trial.params)
-    print(study.best_trial.value)
-    return
-
-
-@app.cell
 def _(mo, optuna, study):
     mo.md(
         f"""
     ## Hyperparameter Optimization Results
 
     **Best Trial Performance:**
+
     - **R² Score: {study.best_trial.value:.4f}** (Coefficient of determination - measures how well the model explains variance in the data. Range: 0-1, higher is better)
     - **MAE: {study.best_trial.user_attrs['mae']:.6f}** (Mean Absolute Error - average absolute difference between predictions and true values. Lower is better)
     - **RMSE: {study.best_trial.user_attrs['rmse']:.6f}** (Root Mean Square Error - penalizes larger errors more heavily than MAE. Lower is better)
 
     **Best Hyperparameters:**
+
     - **Number of Epochs:** {study.best_trial.params['n_epochs']:.0f}
     - **Batch Size:** {study.best_trial.params['batch_size']:.0f}
     - **Learning Rate:** {study.best_trial.params['lr']:.2e}
     - **Division Size:** {study.best_trial.params['div_size']:.0f} (controls network width - smaller values = wider layers)
 
     **Model Architecture:**
+
     Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 1 output
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
