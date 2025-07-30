@@ -195,7 +195,7 @@ def _(np, preprocessed_spectra):
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    def get_training_data_mlp(spectra, train_ratio=0.7, axes=0):
+    def get_training_data_mlp(spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
         """
         Input:
             data = [
@@ -207,6 +207,8 @@ def _(np, preprocessed_spectra):
             labels = array of labels (float32)
 
             train_ratio = ratio of data to be trained. Defaults 0.7, 70% data used for training
+            val_ratio = ratio of data for validation. Defaults 0.15, 15% data used for validation
+            # test_ratio = 1 - train_ratio - val_ratio (automatically calculated)
 
             axes = number of axes to remove. Defaults to 0 (no transformation). Use negative numbers
 
@@ -215,8 +217,10 @@ def _(np, preprocessed_spectra):
                 data instances, (float32)
                 points along both axes in single vector, (float32)
             ]
+            data_val = identical
             data_test = identical
             labels_train = array of labels (float32)
+            labels_val = identical
             labels_test = identical
         """
         data = []
@@ -228,22 +232,35 @@ def _(np, preprocessed_spectra):
 
         print(spectra[0]['ratio'])
 
-        data=np.array(data)
+        data = np.array(data)
 
-        data_train, data_test, labels_train, labels_test = train_test_split(
-            data, labels, train_size=train_ratio, shuffle=True
+        # First split: separate out test data
+        test_ratio = 1 - train_ratio - val_ratio
+        data_temp, data_test, labels_temp, labels_test = train_test_split(
+            data, labels, test_size=test_ratio, shuffle=True, random_state=42
+        )
+
+        # Second split: divide remaining data into train and validation
+        # Calculate validation ratio relative to the remaining data
+        val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
+        data_train, data_val, labels_train, labels_val = train_test_split(
+            data_temp, labels_temp, test_size=val_ratio_adjusted, shuffle=True, random_state=42
         )
 
         # Move tensors to GPU
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
         labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
+        labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
         labels_test = torch.tensor(labels_test, dtype=torch.float32).to(device)
 
         return {
             'data_train': data_train,
+            'data_val': data_val,
             'data_test': data_test,
             'labels_train': labels_train,
+            'labels_val': labels_val,
             'labels_test': labels_test
         }
 
@@ -284,7 +301,6 @@ def _(np, torch):
         lr=trial.suggest_float('lr', 1e-5, 1e-1)
         div_size=trial.suggest_float('div_size', 2, 10, step=1)
 
-
         a = len(training_data['data_train'][0])
         b = int(a/div_size)
         c = int(b/div_size)
@@ -306,8 +322,10 @@ def _(np, torch):
 
         # Data is already on GPU from get_training_data_mlp
         data_train = training_data['data_train']
+        data_val = training_data['data_val']
         data_test = training_data['data_test']
         labels_train = training_data['labels_train']
+        labels_val = training_data['labels_val']
         labels_test = training_data['labels_test']
 
         batch_start = torch.arange(0, len(data_train), batch_size)
@@ -341,44 +359,43 @@ def _(np, torch):
                     # print progress
                     bar.set_postfix(loss=float(loss))
 
-            # evaluate accuracy at end of each epoch
+            # evaluate on validation set at end of each epoch
             model.eval()
             with torch.no_grad():
-                labels_pred = model(data_test)
-                test_loss = loss_fn(labels_pred.squeeze(), labels_test)
-                test_loss = float(test_loss)
-                history.append(test_loss)
+                labels_pred = model(data_val)
+                val_loss = loss_fn(labels_pred.squeeze(), labels_val)
+                val_loss = float(val_loss)
+                history.append(val_loss)
 
-                if test_loss < best_loss:
-                    best_loss = test_loss
+                if val_loss < best_loss:
+                    best_loss = val_loss
                     best_weights = copy.deepcopy(model.state_dict())
 
-        # Final evaluation for regression
+        # Load best weights and evaluate on test set for final metrics
         model.load_state_dict(best_weights)
         model.eval()
         with torch.no_grad():
-            labels_pred = model(data_test).squeeze()
+            # Validation metrics (for optimization)
+            val_pred = model(data_val).squeeze()
+            val_mae = torch.mean(torch.abs(val_pred - labels_val))
+            val_rmse = torch.sqrt(torch.mean((val_pred - labels_val)**2))
+            ss_res_val = torch.sum((labels_val - val_pred) ** 2)
+            ss_tot_val = torch.sum((labels_val - torch.mean(labels_val)) ** 2)
+            val_r2_score = 1 - (ss_res_val / ss_tot_val)
 
-            # Calculate regression metrics instead of classification accuracy
-            mae = torch.mean(torch.abs(labels_pred - labels_test))
-            rmse = torch.sqrt(torch.mean((labels_pred - labels_test)**2))
+            # Test metrics (for final evaluation)
+            test_pred = model(data_test).squeeze()
+            test_mae = torch.mean(torch.abs(test_pred - labels_test))
+            test_rmse = torch.sqrt(torch.mean((test_pred - labels_test)**2))
+            ss_res_test = torch.sum((labels_test - test_pred) ** 2)
+            ss_tot_test = torch.sum((labels_test - torch.mean(labels_test)) ** 2)
+            test_r2_score = 1 - (ss_res_test / ss_tot_test)
 
-            # Calculate R² score
-            ss_res = torch.sum((labels_test - labels_pred) ** 2)
-            ss_tot = torch.sum((labels_test - torch.mean(labels_test)) ** 2)
-            r2_score = 1 - (ss_res / ss_tot)
+            print(f'Validation - MAE: {val_mae:.6f}, RMSE: {val_rmse:.6f}, R²: {val_r2_score:.4f}')
+            print(f'Test - MAE: {test_mae:.6f}, RMSE: {test_rmse:.6f}, R²: {test_r2_score:.4f}')
 
-            print(f'Final MAE: {mae:.6f}')
-            print(f'Final RMSE: {rmse:.6f}')
-            print(f'R² Score: {r2_score:.4f}')
-            print(f'Best Loss: {best_loss:.6f}')
-
-            # Show some example predictions vs true values
-            print(f'First 10 predictions: {labels_pred[:10]}')
-            print(f'First 10 true labels: {labels_test[:10]}')
-            print(f'Prediction errors: {torch.abs(labels_pred[:10] - labels_test[:10])}')
-
-        return mae, rmse, r2_score
+        # Return validation metrics for optimization and test metrics for final evaluation
+        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score
     return (train_mlp_model,)
 
 
@@ -396,15 +413,18 @@ def _(train_mlp_model, training_data):
     trials = 100
 
     def objective(training_data, trial):
-        mae, rmse, r2 = train_mlp_model(training_data, trial)
+        val_mae, val_rmse, val_r2, test_mae, test_rmse, test_r2 = train_mlp_model(training_data, trial)
 
         # Store all metrics in the trial for later analysis
-        trial.set_user_attr('mae', float(mae))
-        trial.set_user_attr('rmse', float(rmse))
-        trial.set_user_attr('r2_score', float(r2))
+        trial.set_user_attr('val_mae', float(val_mae))
+        trial.set_user_attr('val_rmse', float(val_rmse))
+        trial.set_user_attr('val_r2_score', float(val_r2))
+        trial.set_user_attr('test_mae', float(test_mae))
+        trial.set_user_attr('test_rmse', float(test_rmse))
+        trial.set_user_attr('test_r2_score', float(test_r2))
 
-        # Optimize for R² score (higher is better)
-        return r2
+        # Optimize for validation R² score (higher is better)
+        return val_r2
 
     study = optuna.create_study(
         direction='maximize',
@@ -424,6 +444,7 @@ def _(train_mlp_model, training_data):
     if trials - completed_trials > 0:
         study.optimize(
             partial(objective, training_data),
+            n_jobs=4,
             callbacks=[
                 optuna.study.MaxTrialsCallback(
                     trials, states=(optuna.trial.TrialState.COMPLETE,)
@@ -440,11 +461,17 @@ def _(mo, optuna, study):
         f"""
     ## Hyperparameter Optimization Results
 
-    **Best Trial Performance:**
+    **Best Trial Performance (Validation Set):**
 
     - **R² Score: {study.best_trial.value:.4f}** (Coefficient of determination - measures how well the model explains variance in the data. Range: 0-1, higher is better)
-    - **MAE: {study.best_trial.user_attrs['mae']:.6f}** (Mean Absolute Error - average absolute difference between predictions and true values. Lower is better)
-    - **RMSE: {study.best_trial.user_attrs['rmse']:.6f}** (Root Mean Square Error - penalizes larger errors more heavily than MAE. Lower is better)
+    - **MAE: {study.best_trial.user_attrs['val_mae']:.6f}** (Mean Absolute Error - average absolute difference between predictions and true values. Lower is better)
+    - **RMSE: {study.best_trial.user_attrs['val_rmse']:.6f}** (Root Mean Square Error - penalizes larger errors more heavily than MAE. Lower is better)
+
+    **Final Test Set Performance:**
+
+    - **R² Score: {study.best_trial.user_attrs['test_r2_score']:.4f}**
+    - **MAE: {study.best_trial.user_attrs['test_mae']:.6f}**
+    - **RMSE: {study.best_trial.user_attrs['test_rmse']:.6f}**
 
     **Best Hyperparameters:**
 
@@ -456,6 +483,11 @@ def _(mo, optuna, study):
     **Model Architecture:**
 
     Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 1 output
+
+    **Data Split:**
+    - Training: 70% 
+    - Validation: 15% (used for hyperparameter optimization)
+    - Test: 15% (held out for final evaluation)
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
     """
