@@ -25,7 +25,7 @@ def _(mo):
 def _(electrolytes):
     # Graph constants
     EPS_R = 78.3   # relative permittivity of water at 25°C, should really change to 30C, maybe
-    T = 303  # K
+    T = 298  # K
     RHO = 0.997
     B0 = 1.0
     A_CONST = electrolytes.A(eps_r=EPS_R, T=T, rho=RHO, b0=B0)
@@ -33,47 +33,53 @@ def _(electrolytes):
     search_molarity = 0.1
     graph_molarity = 0.001
     stock_molarity = 0.01
-    stock_volume = 50
+    stock_volume = 50 # ml
     sample_vol = 0.0006   # l
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
-    acid_molecular_weight = 191.12 #g/mol
+    acid_molecular_weight = 192.12 #g/mol
     base_molecular_weight = 258.07 #g/mol
+    dss_molecular_weight = 224.36 #g/mol
+    dss_molarity = 0.001
     rounding = 3
     balance = '0.1'   # In quotations because reasons?
 
     options = [
-        2.1,
-        3.2,
+        0,
+        3.4,
         3.5,
-        3.7,  # 4
+        3.6,
+        3.7,
         3.8,
         4,
         4.2,
-        4.4,  # 8
+        4.4,
         4.5,
         4.6,
         4.8,
-        5,  # 12
+        5,
         5.2,
         5.4,
         5.5,
-        5.7,  # 16
+        5.6,
+        5.7,  
         5.9,
         6,
         6.2,
-        6.4,  # 20
-        6.6,
-        7,
-        7.4,
-        8,  # 24
+        6.4, 
+        6.8,
+        9,
     ]
+
+    print(len(options))
     return (
         A_CONST,
         acid_mass,
         acid_molecular_weight,
         base_mass,
         base_molecular_weight,
+        dss_molarity,
+        dss_molecular_weight,
         graph_molarity,
         options,
         rounding,
@@ -329,6 +335,7 @@ def _(mo):
 @app.cell
 def _(corrected_pka, graph_molarity, simulate_ph_graph):
     ratios = simulate_ph_graph(pka=corrected_pka, conc=graph_molarity)
+    print(''.join(f'{x}\n' for x in ratios))
     return (ratios,)
 
 
@@ -438,6 +445,7 @@ def _(acid_mass, acid_vol, base_mass, base_vol, rounding):
     stock('\n')
     stock(f'Base weight: {round(base_weight * 100, rounding)}mg')
     stock(f'Base volume: {round(base_vol * 1000, rounding)}ml')
+
     return stock, stock_output
 
 
@@ -451,6 +459,8 @@ def _(mo):
 def _(
     acid_molecular_weight,
     base_molecular_weight,
+    dss_molarity,
+    dss_molecular_weight,
     rounding,
     stock,
     stock_molarity,
@@ -458,7 +468,7 @@ def _(
 ):
     stock_acid_weight = stock_molarity*(stock_volume/1000)*acid_molecular_weight
     stock_base_weight = stock_molarity*(stock_volume/1000)*base_molecular_weight
-
+    dss_weight = dss_molarity*(stock_volume/1000)*dss_molecular_weight
 
     stock(f'\nRequirements for {stock_volume}ml {stock_molarity}M stock solution:')
     stock(
@@ -477,6 +487,8 @@ def _(
     stock('\n')
     stock(f'Water requirements: {stock_volume*0.95}ml')
     stock(f'D2O requirements: {stock_volume*0.05}ml')
+    stock(f'DSS requirements: {dss_weight*1000}mg')
+    print(f'DSS cost: £{840*dss_weight}')
 
     #n=m/M
     #c=n/V
