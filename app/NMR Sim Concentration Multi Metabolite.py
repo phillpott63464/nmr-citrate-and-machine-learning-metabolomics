@@ -1,10 +1,7 @@
 import marimo
 
 __generated_with = "0.14.13"
-app = marimo.App(
-    width="medium",
-    layout_file="layouts/NMR Sim Concentration Multi Metabolite.slides.json",
-)
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -202,8 +199,11 @@ def _(mo, preprocessedfigure):
 
 
 @app.cell
-def _(np, spectra, substanceDict):
-    def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False):
+def _(downsampled_y, np, spectra, substanceDict):
+    from scipy.signal import resample
+    from scipy.interpolate import interp1d
+
+    def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False, downsample=0):
         indices_range = []
         for range in ranges:
             indices_range.append(np.where(
@@ -227,6 +227,22 @@ def _(np, spectra, substanceDict):
             new_intensities = np.concatenate([new_intensities, temp_intensities])
             new_positions = np.concatenate([new_positions, temp_positions])
 
+        if downsample > 0:
+            min, max = new_positions.min(), new_positions.max()
+            bin_edges = np.linspace(min, max, downsample + 1)
+            bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+            downsampled_intensities = np.zeros(downsample)
+
+            for i in range(downsample):
+                mask = (new_positions >= bin_edges[i]) & (new_positions < bin_edges[i+1])
+                if np.any(mask):
+                    downsampled_y[i] = np.trapz(new_intensities[mask], new_positions[mask]) / (bin_edges[i+1] - bin_edges[i])
+                else:
+                    downsampled_y[i] = 0.0
+
+            new_intensities = downsampled_y
+            new_positions = bin_centers
+
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
@@ -242,8 +258,8 @@ def _(np, spectra, substanceDict):
 
         return ratio
 
-    def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False):
-        new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges, baseline_distortion)
+    def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False, downsample=0):
+        new_positions, new_intensities = preprocess_peaks(intensities=spectra['intensities'], positions=spectra['positions'], ranges=ranges, baseline_distortion=baseline_distortion, downsample=downsample)
 
         ratio = preprocess_ratio(spectra['scales'], substanceDict)
 
@@ -264,13 +280,13 @@ def _(np, spectra, substanceDict):
 
     # Add baseline distortion flag
     baseline_distortion = True  # Set to False to disable baseline distortion
-
+    downsample = int(2048)
 
 
     def _(spectra):
         preprocessed_spectra = []
         for spectrum in spectra:
-            preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict, baseline_distortion))
+            preprocessed_spectra.append(preprocess_spectra(spectra=spectrum, ranges=ranges, substanceDict=substanceDict, baseline_distortion=baseline_distortion, downsample=downsample))
 
         return preprocessed_spectra
 
@@ -313,6 +329,20 @@ def _(baseline_distortion, intensities_count, mo, positions_count, ranges):
 
 
 @app.cell
+def _():
+    return
+
+
+@app.cell
+def _(plt, pre):
+    plt.figure(12, 4)
+
+    plt.subplot(1, 2, 1)
+    plt.plot(pre)
+    return
+
+
+@app.cell
 def _(graph_count, labels, plt, preprocessed_spectra, spectra):
     print(len(spectra))
     print(len(labels))
@@ -322,6 +352,7 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
     for graphcounter2 in range(1, graph_count**2+1):
         plt.subplot(graph_count, graph_count, graphcounter2)
         # plt.title(f'{round(labels[graphcounter], 3)}M')
+        plt.plot(spectra[graphcounter2]['positions'], spectra[graphcounter2]['intensities'][0])
         plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
 
     preprocessedfigure = plt.gca()
@@ -624,7 +655,7 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(train_mlp_model, training_data, val_r22):
+def _(train_mlp_model, training_data):
     # Hyperparameter optimisation loop
 
     import optuna
@@ -644,7 +675,7 @@ def _(train_mlp_model, training_data, val_r22):
         trial.set_user_attr('test_r2_score', float(test_r2))
 
         # Optimize for validation R² score (higher is better)
-        return val_r22
+        return val_r2
 
     study = optuna.create_study(
         direction='maximize',
