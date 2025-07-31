@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -33,13 +33,13 @@ def _(electrolytes):
     search_molarity = 0.1
     graph_molarity = 0.001
     stock_molarity = 0.01
-    stock_volume = 50 # ml
+    stock_volume = 50   # ml
     sample_vol = 0.0006   # l
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
-    acid_molecular_weight = 192.12 #g/mol
-    base_molecular_weight = 258.07 #g/mol
-    dss_molecular_weight = 224.36 #g/mol
+    acid_molecular_weight = 192.12   # g/mol
+    base_molecular_weight = 258.07   # g/mol
+    dss_molecular_weight = 224.36   # g/mol
     dss_molarity = 0.001
     rounding = 3
     balance = '0.1'   # In quotations because reasons?
@@ -62,11 +62,11 @@ def _(electrolytes):
         5.4,
         5.5,
         5.6,
-        5.7,  
+        5.7,
         5.9,
         6,
         6.2,
-        6.4, 
+        6.4,
         6.8,
         9,
     ]
@@ -93,7 +93,9 @@ def _(electrolytes):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
+    mo.md(
+        r"""Define a function to simulate a ph graph at a concentration from pkas"""
+    )
     return
 
 
@@ -123,7 +125,9 @@ def _(phfork):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
+    mo.md(
+        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
+    )
     return
 
 
@@ -384,7 +388,9 @@ def _(options, ratios):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
+    mo.md(
+        r"""Calculate volume of acid/base needed to complete these experiments"""
+    )
     return
 
 
@@ -466,38 +472,34 @@ def _(
     stock_molarity,
     stock_volume,
 ):
-    stock_acid_weight = stock_molarity*(stock_volume/1000)*acid_molecular_weight
-    stock_base_weight = stock_molarity*(stock_volume/1000)*base_molecular_weight
-    dss_weight = dss_molarity*(stock_volume/1000)*dss_molecular_weight
+    stock_acid_weight = (
+        stock_molarity * (stock_volume / 1000) * acid_molecular_weight
+    )
+    stock_base_weight = (
+        stock_molarity * (stock_volume / 1000) * base_molecular_weight
+    )
+    dss_weight = dss_molarity * (stock_volume / 1000) * dss_molecular_weight
 
-    stock(f'\nRequirements for {stock_volume}ml {stock_molarity}M stock solution:')
     stock(
-        f'Acid weight: {round(stock_acid_weight*1000, rounding)}mg'
+        f'\nRequirements for {stock_volume}ml {stock_molarity}M stock solution:'
     )
-    stock(
-        f'Acid volume: {stock_volume}ml'
-    )
+    stock(f'Acid weight: {round(stock_acid_weight*1000, rounding)}mg')
+    stock(f'Acid volume: {stock_volume}ml')
     stock('\n')
-    stock(
-        f'Base weight: {round(stock_base_weight*1000, rounding)}mg'
-    )
-    stock(
-        f'Base volume: {stock_volume}ml'
-    )
+    stock(f'Base weight: {round(stock_base_weight*1000, rounding)}mg')
+    stock(f'Base volume: {stock_volume}ml')
     stock('\n')
     stock(f'Water requirements: {stock_volume*0.95}ml')
     stock(f'D2O requirements: {stock_volume*0.05}ml')
     stock(f'DSS requirements: {dss_weight*1000}mg')
     print(f'DSS cost: £{840*dss_weight}')
 
-    #n=m/M
-    #c=n/V
-    #c=(m/M)/v
-    #cv=m/M
-    #cvM=m
-    #weight=concentration*volume*molarity
-
-
+    # n=m/M
+    # c=n/V
+    # c=(m/M)/v
+    # cv=m/M
+    # cvM=m
+    # weight=concentration*volume*molarity
 
     stupid_variable = True   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
     return (stupid_variable,)
@@ -552,5 +554,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

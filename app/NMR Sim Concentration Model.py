@@ -1,9 +1,9 @@
 import marimo
 
-__generated_with = "0.14.13"
+__generated_with = '0.14.13'
 app = marimo.App(
-    width="medium",
-    layout_file="layouts/NMR Sim Concentration Model.slides.json",
+    width='medium',
+    layout_file='layouts/NMR Sim Concentration Model.slides.json',
 )
 
 
@@ -70,7 +70,9 @@ def _():
         'Lactic acid': ['SP:3675'],
     }
 
-    substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
+    substanceSpectrumIds = [
+        substanceDict[substance][-1] for substance in substanceDict
+    ]
     count = 10000
 
     # Use the built-in loop capability of createTrainingData
@@ -87,24 +89,37 @@ def _():
 
     for i in range(count):
         # Extract scales for this sample
-        sample_scales = {key: [values[i]] for key, values in batch_data['scales'].items()}
+        sample_scales = {
+            key: [values[i]] for key, values in batch_data['scales'].items()
+        }
 
         # Create spectrum dict in your current format
         spectrum = {
             'scales': sample_scales,
-            'intensities': batch_data['intensities'][i:i+1],  # Keep 2D shape
+            'intensities': batch_data['intensities'][
+                i : i + 1
+            ],  # Keep 2D shape
             'positions': batch_data['positions'],
-            'components': batch_data['components']  # This is shared across all samples
+            'components': batch_data[
+                'components'
+            ],  # This is shared across all samples
         }
         spectra.append(spectrum)
 
-    print(''.join(f"{x['scales']}\n'" for x in spectra[:5])) # Show first 5 only
-    print(spectra[0]['intensities'].shape) #Y axis
-    print(spectra[0]['positions'].shape) #X axis
-    print(spectra[0]['components'].shape) #Peaks of all separate components
+    print(
+        ''.join(f"{x['scales']}\n'" for x in spectra[:5])
+    )   # Show first 5 only
+    print(spectra[0]['intensities'].shape)   # Y axis
+    print(spectra[0]['positions'].shape)   # X axis
+    print(spectra[0]['components'].shape)   # Peaks of all separate components
 
     # Get sample information for markdown display
-    sample_scales_preview = '\n'.join([f"Sample {i+1}: {spectrum['scales']}" for i, spectrum in enumerate(spectra[:5])])
+    sample_scales_preview = '\n'.join(
+        [
+            f"Sample {i+1}: {spectrum['scales']}"
+            for i, spectrum in enumerate(spectra[:5])
+        ]
+    )
     intensities_shape = spectra[0]['intensities'].shape
     positions_shape = spectra[0]['positions'].shape
     components_shape = spectra[0]['components'].shape
@@ -163,12 +178,15 @@ def _(labels, spectra):
 
     graph_count = 3
 
-    plt.figure(figsize=(graph_count*4, graph_count*4))
+    plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
-    for graphcounter in range(1, graph_count**2+1):
+    for graphcounter in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter)
         # plt.title(f'{round(labels[graphcounter], 3)}M')
-        plt.plot(spectra[graphcounter]['positions'], spectra[graphcounter]['intensities'][0])
+        plt.plot(
+            spectra[graphcounter]['positions'],
+            spectra[graphcounter]['intensities'][0],
+        )
 
     spectrafigures = plt.gca()
     return graph_count, plt, spectrafigures
@@ -203,12 +221,14 @@ def _(mo, preprocessedfigure):
 
 @app.cell
 def _(np, spectra, substanceDict):
-    def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False):
+    def preprocess_peaks(
+        intensities, positions, ranges, baseline_distortion=False
+    ):
         indices_range = []
         for range in ranges:
-            indices_range.append(np.where(
-                (positions >= range[0]) & (positions <= range[1])
-            )[0])
+            indices_range.append(
+                np.where((positions >= range[0]) & (positions <= range[1]))[0]
+            )
 
         new_intensities = []
         new_positions = []
@@ -220,11 +240,15 @@ def _(np, spectra, substanceDict):
             # Add baseline distortion if enabled
             if baseline_distortion:
                 # Normalize positions to [0, 1] for consistent baseline calculation
-                x_normalized = (np.array(temp_positions) - np.min(temp_positions)) / (np.max(temp_positions) - np.min(temp_positions))
+                x_normalized = (
+                    np.array(temp_positions) - np.min(temp_positions)
+                ) / (np.max(temp_positions) - np.min(temp_positions))
                 baseline = 0.02 * np.sin(0.5 * np.pi * x_normalized)
                 temp_intensities = temp_intensities + baseline
 
-            new_intensities = np.concatenate([new_intensities, temp_intensities])
+            new_intensities = np.concatenate(
+                [new_intensities, temp_intensities]
+            )
             new_positions = np.concatenate([new_positions, temp_positions])
 
         return new_positions, new_intensities
@@ -238,12 +262,19 @@ def _(np, spectra, substanceDict):
 
         # ratio = [scale/referenceScale for scale in substanceScales]
 
-        ratio = scales['SP:3368'][0]/scales['tsp'][0]
+        ratio = scales['SP:3368'][0] / scales['tsp'][0]
 
         return ratio
 
-    def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False):
-        new_positions, new_intensities = preprocess_peaks(spectra['intensities'], spectra['positions'], ranges, baseline_distortion)
+    def preprocess_spectra(
+        spectra, ranges, substanceDict, baseline_distortion=False
+    ):
+        new_positions, new_intensities = preprocess_peaks(
+            spectra['intensities'],
+            spectra['positions'],
+            ranges,
+            baseline_distortion,
+        )
 
         ratio = preprocess_ratio(spectra['scales'], substanceDict)
 
@@ -263,12 +294,14 @@ def _(np, spectra, substanceDict):
     # Add baseline distortion flag
     baseline_distortion = True  # Set to False to disable baseline distortion
 
-
-
     def _(spectra):
         preprocessed_spectra = []
         for spectrum in spectra:
-            preprocessed_spectra.append(preprocess_spectra(spectrum, ranges, substanceDict, baseline_distortion))
+            preprocessed_spectra.append(
+                preprocess_spectra(
+                    spectrum, ranges, substanceDict, baseline_distortion
+                )
+            )
 
         return preprocessed_spectra
 
@@ -315,12 +348,15 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
     print(len(spectra))
     print(len(labels))
 
-    plt.figure(figsize=(graph_count*4, graph_count*4))
+    plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
-    for graphcounter2 in range(1, graph_count**2+1):
+    for graphcounter2 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter2)
         # plt.title(f'{round(labels[graphcounter], 3)}M')
-        plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
+        plt.plot(
+            preprocessed_spectra[graphcounter2]['positions'],
+            preprocessed_spectra[graphcounter2]['intensities'],
+        )
 
     preprocessedfigure = plt.gca()
     return (preprocessedfigure,)
@@ -332,11 +368,13 @@ def _(np, preprocessed_spectra, torch):
 
     # Add device detection and setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    print(f'Using device: {device}')
     if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f'GPU: {torch.cuda.get_device_name(0)}')
 
-    def get_training_data_mlp(spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
+    def get_training_data_mlp(
+        spectra, train_ratio=0.7, val_ratio=0.15, axes=0
+    ):
         """
         Input:
             data = [
@@ -368,7 +406,11 @@ def _(np, preprocessed_spectra, torch):
         labels = []
 
         for spectrum in spectra:
-            data.append(np.concatenate([spectrum['intensities'], spectrum['positions']]))
+            data.append(
+                np.concatenate(
+                    [spectrum['intensities'], spectrum['positions']]
+                )
+            )
             labels.append(spectrum['ratio'])
 
         print(spectra[0]['ratio'])
@@ -385,12 +427,18 @@ def _(np, preprocessed_spectra, torch):
         # Calculate validation ratio relative to the remaining data
         val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
         data_train, data_val, labels_train, labels_val = train_test_split(
-            data_temp, labels_temp, test_size=val_ratio_adjusted, shuffle=True, random_state=42
+            data_temp,
+            labels_temp,
+            test_size=val_ratio_adjusted,
+            shuffle=True,
+            random_state=42,
         )
 
         # Move tensors to GPU
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
+            device
+        )
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
         labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
@@ -402,7 +450,7 @@ def _(np, preprocessed_spectra, torch):
             'data_test': data_test,
             'labels_train': labels_train,
             'labels_val': labels_val,
-            'labels_test': labels_test
+            'labels_test': labels_test,
         }
 
     training_data = get_training_data_mlp(spectra=preprocessed_spectra)
@@ -452,28 +500,28 @@ def _(np, torch, training_data):
         # Get device from training data tensors
         device = training_data['data_train'].device
 
-        n_epochs=int(trial.suggest_float('n_epochs', 10, 100, step=10))
-        batch_size=int(trial.suggest_float('batch_size', 10, 100, step=10))
-        lr=trial.suggest_float('lr', 1e-5, 1e-1)
-        div_size=trial.suggest_float('div_size', 2, 10, step=1)
+        n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
+        batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
+        lr = trial.suggest_float('lr', 1e-5, 1e-1)
+        div_size = trial.suggest_float('div_size', 2, 10, step=1)
 
         a = len(training_data['data_train'][0])
-        b = int(a/div_size)
-        c = int(b/div_size)
-        d = int(c/div_size)
-        e = int(d/div_size)
+        b = int(a / div_size)
+        c = int(b / div_size)
+        d = int(c / div_size)
+        e = int(d / div_size)
 
         # Define the model and move to GPU
         model = nn.Sequential(
-            nn.Linear(a, b), 
+            nn.Linear(a, b),
             nn.ReLU(),
             nn.Linear(b, c),
             nn.ReLU(),
             nn.Linear(c, d),
             nn.ReLU(),
-            nn.Linear(d, e), 
+            nn.Linear(d, e),
             nn.ReLU(),
-            nn.Linear(e, 1),  
+            nn.Linear(e, 1),
         ).to(device)
 
         # Data is already on GPU from get_training_data_mlp
@@ -534,7 +582,7 @@ def _(np, torch, training_data):
             # Validation metrics (for optimization)
             val_pred = model(data_val).squeeze()
             val_mae = torch.mean(torch.abs(val_pred - labels_val))
-            val_rmse = torch.sqrt(torch.mean((val_pred - labels_val)**2))
+            val_rmse = torch.sqrt(torch.mean((val_pred - labels_val) ** 2))
             ss_res_val = torch.sum((labels_val - val_pred) ** 2)
             ss_tot_val = torch.sum((labels_val - torch.mean(labels_val)) ** 2)
             val_r2_score = 1 - (ss_res_val / ss_tot_val)
@@ -542,19 +590,28 @@ def _(np, torch, training_data):
             # Test metrics (for final evaluation)
             test_pred = model(data_test).squeeze()
             test_mae = torch.mean(torch.abs(test_pred - labels_test))
-            test_rmse = torch.sqrt(torch.mean((test_pred - labels_test)**2))
+            test_rmse = torch.sqrt(torch.mean((test_pred - labels_test) ** 2))
             ss_res_test = torch.sum((labels_test - test_pred) ** 2)
-            ss_tot_test = torch.sum((labels_test - torch.mean(labels_test)) ** 2)
+            ss_tot_test = torch.sum(
+                (labels_test - torch.mean(labels_test)) ** 2
+            )
             test_r2_score = 1 - (ss_res_test / ss_tot_test)
 
         # Return validation metrics for optimization and test metrics for final evaluation
-        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score
+        return (
+            val_mae,
+            val_rmse,
+            val_r2_score,
+            test_mae,
+            test_rmse,
+            test_r2_score,
+        )
 
     # Get device info from training data
     device_info = training_data['data_train'].device
-    gpu_name = ""
+    gpu_name = ''
     if torch.cuda.is_available():
-        gpu_name = f" ({torch.cuda.get_device_name(0)})"
+        gpu_name = f' ({torch.cuda.get_device_name(0)})'
     return device_info, gpu_name, train_mlp_model
 
 
@@ -631,7 +688,14 @@ def _(train_mlp_model, training_data, val_r22):
     trials = 1000
 
     def objective(training_data, trial):
-        val_mae, val_rmse, val_r2, test_mae, test_rmse, test_r2 = train_mlp_model(training_data, trial)
+        (
+            val_mae,
+            val_rmse,
+            val_r2,
+            test_mae,
+            test_rmse,
+            test_r2,
+        ) = train_mlp_model(training_data, trial)
 
         # Store all metrics in the trial for later analysis
         trial.set_user_attr('val_mae', float(val_mae))
@@ -673,5 +737,5 @@ def _(train_mlp_model, training_data, val_r22):
     return optuna, study
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

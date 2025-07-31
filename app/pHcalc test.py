@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -11,6 +11,7 @@ def _():
     import phfork
     from chempy import electrolytes
     import numpy as np
+
     return electrolytes, mo, np, phfork
 
 
@@ -54,7 +55,9 @@ def _(electrolytes):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
+    mo.md(
+        r"""Define a function to simulate a ph graph at a concentration from pkas"""
+    )
     return
 
 
@@ -78,12 +81,15 @@ def _(phfork):
             )
 
         return ratios
+
     return (simulate_ph_graph,)
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
+    mo.md(
+        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
+    )
     return
 
 
@@ -101,11 +107,13 @@ def _(simulate_ph_graph):
         error = 0.0
         for known in known_values:
             closest_entry = min(
-                ratios, key=lambda d: abs(d['acid ratio'] - known['acid ratio'])
+                ratios,
+                key=lambda d: abs(d['acid ratio'] - known['acid ratio']),
             )
             error += (known['ph'] - closest_entry['pH']) ** 2
 
         return error
+
     return (evaluate_pka_error,)
 
 
@@ -219,12 +227,10 @@ def _(A_CONST, np):
         # For now, just return ionic strength proportional to conc.
         return conc * 0.1  # crude approximation; you can improve this!
 
-
     def debeye_huckel_log_gamma(z, I):
         """Davies equation log10 gamma"""
         sqrt_I = np.sqrt(I)
         return -A_CONST * z**2 * (sqrt_I / (1 + sqrt_I) - 0.3 * I)
-
 
     def correct_pkas(pkas, I_old, I_new, charges):
         """Adjust each pKa from old ionic strength to new ionic strength."""
@@ -239,6 +245,7 @@ def _(A_CONST, np):
             delta_pka = log_gamma_new - log_gamma_old
             corrected.append(pka + delta_pka)
         return corrected
+
     return correct_pkas, ionic_strength_from_conc
 
 
@@ -310,5 +317,5 @@ def _(corrected_pka, graph_molarity, np, phfork):
     return fracs, phs, plt
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

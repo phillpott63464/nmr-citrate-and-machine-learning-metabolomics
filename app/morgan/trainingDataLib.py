@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 from nmrsim.qm import qm_spinsystem
 
-def createLineshape(peaklist, points=65536, limits=None, function='lorentzian'):
+
+def createLineshape(
+    peaklist, points=65536, limits=None, function='lorentzian'
+):
     """
     Numpy Arrays of the simulated lineshape for a peaklist.
     Parameters
@@ -85,7 +88,7 @@ def lorentz(v, v0, I, w):
         the intensity (y coordinate) for the Lorentzian distribution
         evaluated at frequency `v`.
     """
-    return I * ((0.5 * w)**2 / ((0.5 * w)**2 + (v - v0)**2))
+    return I * ((0.5 * w) ** 2 / ((0.5 * w) ** 2 + (v - v0) ** 2))
 
 
 def add_lorentzians(linspace, peaklist):
@@ -116,7 +119,7 @@ def add_lorentzians(linspace, peaklist):
 
 def gauss(v, v0, I, w):
     wf = 0.4246609
-    return I * (math.e**((-(v - v0)**2) / (2 * ((w * wf)**2))))
+    return I * (math.e ** ((-((v - v0) ** 2)) / (2 * ((w * wf) ** 2))))
 
 
 def add_gaussians(linspace, peaklist, w):
@@ -124,6 +127,7 @@ def add_gaussians(linspace, peaklist, w):
     for v, i, w in peaklist[1:]:
         result += gauss(linspace, v, i, w)
     return result
+
 
 def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     """
@@ -147,13 +151,32 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     x, y : numpy.array
         Arrays for frequency (x) and intensity (y) for the simulated lineshape.
     """
-    breaks = [index + 1 for index in range(len(spinSystemMatrix) - 1) if not np.any(spinSystemMatrix[:index + 1, index + 1:] != 0)]
+    breaks = [
+        index + 1
+        for index in range(len(spinSystemMatrix) - 1)
+        if not np.any(spinSystemMatrix[: index + 1, index + 1 :] != 0)
+    ]
     breaks = [0] + breaks + [len(spinSystemMatrix)]
-    matrices = [spinSystemMatrix[breakpoint:breaks[index + 1], breakpoint:breaks[index + 1]] for index, breakpoint in enumerate(breaks[:-1])]
+    matrices = [
+        spinSystemMatrix[
+            breakpoint : breaks[index + 1], breakpoint : breaks[index + 1]
+        ]
+        for index, breakpoint in enumerate(breaks[:-1])
+    ]
     # Suppress the printing from qm
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
-    peaklist = [item for sublist in [qm_spinsystem([ssm[index][index] * frequency for index in range(len(ssm))], ssm) for ssm in matrices] for item in sublist]
+    peaklist = [
+        item
+        for sublist in [
+            qm_spinsystem(
+                [ssm[index][index] * frequency for index in range(len(ssm))],
+                ssm,
+            )
+            for ssm in matrices
+        ]
+        for item in sublist
+    ]
     sys.stdout = output
     peaklist_out = [(peak[0] / frequency, peak[1], width) for peak in peaklist]
     # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])
