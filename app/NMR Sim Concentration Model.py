@@ -58,6 +58,8 @@ def _(mo, spectrafigures, substanceDict):
 
 @app.cell
 def _():
+    # Data generation
+
     from morgan.createTrainingData import createTrainingData
     import numpy as np
 
@@ -69,7 +71,7 @@ def _():
     }
 
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
-    count = 1000
+    count = 10000
 
     # Use the built-in loop capability of createTrainingData
     batch_data = createTrainingData(
@@ -546,7 +548,7 @@ def _(np, torch, training_data):
             test_r2_score = 1 - (ss_res_test / ss_tot_test)
 
         # Return validation metrics for optimization and test metrics for final evaluation
-        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score, device
+        return val_mae, val_rmse, val_r2_score, test_mae, test_rmse, test_r2_score
 
     # Get device info from training data
     device_info = training_data['data_train'].device
@@ -576,62 +578,6 @@ def _(device_info, gpu_name, mo):
     """
     )
     return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""## Train the model""")
-    return
-
-
-@app.cell
-def _(train_mlp_model, training_data):
-    import optuna
-    from functools import partial
-
-    trials = 100
-
-    def objective(training_data, trial):
-        val_mae, val_rmse, val_r2, test_mae, test_rmse, test_r2 = train_mlp_model(training_data, trial)
-
-        # Store all metrics in the trial for later analysis
-        trial.set_user_attr('val_mae', float(val_mae))
-        trial.set_user_attr('val_rmse', float(val_rmse))
-        trial.set_user_attr('val_r2_score', float(val_r2))
-        trial.set_user_attr('test_mae', float(test_mae))
-        trial.set_user_attr('test_rmse', float(test_rmse))
-        trial.set_user_attr('test_r2_score', float(test_r2))
-
-        # Optimize for validation R² score (higher is better)
-        return val_r2
-
-    study = optuna.create_study(
-        direction='maximize',
-        study_name='mlp_study',
-        storage='sqlite:///mlp_study.db',
-        load_if_exists=True,
-    )
-
-    completed_trials = len(
-        [
-            t
-            for t in study.trials
-            if t.state == optuna.trial.TrialState.COMPLETE
-        ]
-    )
-
-    if trials - completed_trials > 0:
-        study.optimize(
-            partial(objective, training_data),
-            n_jobs=4,
-            callbacks=[
-                optuna.study.MaxTrialsCallback(
-                    trials, states=(optuna.trial.TrialState.COMPLETE,)
-                )
-            ],
-        )
-
-    return optuna, study
 
 
 @app.cell(hide_code=True)
@@ -673,6 +619,58 @@ def _(mo, optuna, study):
     """
     )
     return
+
+
+@app.cell
+def _(train_mlp_model, training_data, val_r22):
+    # Hyperparameter optimisation loop
+
+    import optuna
+    from functools import partial
+
+    trials = 1000
+
+    def objective(training_data, trial):
+        val_mae, val_rmse, val_r2, test_mae, test_rmse, test_r2 = train_mlp_model(training_data, trial)
+
+        # Store all metrics in the trial for later analysis
+        trial.set_user_attr('val_mae', float(val_mae))
+        trial.set_user_attr('val_rmse', float(val_rmse))
+        trial.set_user_attr('val_r2_score', float(val_r2))
+        trial.set_user_attr('test_mae', float(test_mae))
+        trial.set_user_attr('test_rmse', float(test_rmse))
+        trial.set_user_attr('test_r2_score', float(test_r2))
+
+        # Optimize for validation R² score (higher is better)
+        return val_r22
+
+    study = optuna.create_study(
+        direction='maximize',
+        study_name='mlp_study',
+        storage='sqlite:///mlp_study.db',
+        load_if_exists=True,
+    )
+
+    completed_trials = len(
+        [
+            t
+            for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ]
+    )
+
+    if trials - completed_trials > 0:
+        study.optimize(
+            partial(objective, training_data),
+            n_jobs=4,
+            callbacks=[
+                optuna.study.MaxTrialsCallback(
+                    trials, states=(optuna.trial.TrialState.COMPLETE,)
+                )
+            ],
+        )
+
+    return optuna, study
 
 
 if __name__ == "__main__":
