@@ -68,7 +68,7 @@ def _():
     }
 
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
-    count = 1000
+    count = 10
 
     # Use the built-in loop capability of createTrainingData
     batch_data = createTrainingData(
@@ -109,6 +109,7 @@ def _():
     return (
         components_shape,
         count,
+        createTrainingData,
         intensities_shape,
         labels,
         np,
@@ -116,6 +117,7 @@ def _():
         sample_scales_preview,
         spectra,
         substanceDict,
+        substanceSpectrumIds,
     )
 
 
@@ -207,9 +209,16 @@ def _(mo, referencefigure):
 
 
 @app.cell
-def _(plt, spectra, substanceDict):
+def _(createTrainingData, plt, spectra, substanceDict, substanceSpectrumIds):
+    reference_spectra_raw = createTrainingData(
+        substanceSpectrumIds=substanceSpectrumIds,
+        sampleNumber=1,  # This creates 1000 samples in one call
+        rondomlyScaleSubstances=False,
+        # referenceSubstanceSpectrumId='dss',
+    )
+
     reference_spectra = {
-        substanceDict[substance][0]: spectra[0]['components'][index]
+        substanceDict[substance][0]: reference_spectra_raw['components'][index]
         for index, substance in enumerate(substanceDict)
     }
 
@@ -220,11 +229,11 @@ def _(plt, spectra, substanceDict):
 
     referencefigure = plt.gca()
 
-    return (referencefigure,)
+    return reference_spectra, referencefigure
 
 
 @app.cell
-def _(mo, preprocessedfigure):
+def _(mo, preprocessedfigure, preprocessedreferencefigure):
     mo.md(
         rf"""
     ## Spectra Preprocessing
@@ -233,17 +242,19 @@ def _(mo, preprocessedfigure):
     - Extract ratio of citrate to reference
 
     {mo.as_html(preprocessedfigure)}
+
+    {mo.as_html(preprocessedreferencefigure)}
     """
     )
     return
 
 
 @app.cell
-def _(np, spectra, substanceDict):
+def _(np, plt, reference_spectra, spectra, substanceDict):
     from scipy.signal import resample
     from scipy.interpolate import interp1d
 
-    def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False, downsample=0):
+    def preprocess_peaks(intensities, positions, ranges=[[-100, 100]], baseline_distortion=False, downsample=0):
         indices_range = []
         for range_item in ranges:  # Changed from 'range' to 'range_item'
             indices_range.append(np.where(
@@ -252,10 +263,10 @@ def _(np, spectra, substanceDict):
 
         new_intensities = []
         new_positions = []
-
+    
         for range_indices in indices_range:  # Changed from 'range' to 'range_indices'
             # Fix: properly extract intensities - flatten the 2D array for this range
-            temp_intensities = intensities[0, range_indices]  # Take first row and specified indices
+            temp_intensities = intensities[range_indices]  # Take first row and specified indices
             temp_positions = positions[range_indices]  # Direct indexing for positions
 
             # Add baseline distortion if enabled
@@ -303,34 +314,67 @@ def _(np, spectra, substanceDict):
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        ratio = scales['SP:3368'][0]/scales['tsp'][0]
-        return ratio
+        ratios = {
+            substanceDict[substance][0]: scales[substanceDict[substance][0]][0] / scales['tsp'][0]
+            for substance in substanceDict
+        }
+
+        return ratios
+
 
     def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False, downsample=0):
-        new_positions, new_intensities = preprocess_peaks(intensities=spectra['intensities'], positions=spectra['positions'], ranges=ranges, baseline_distortion=baseline_distortion, downsample=downsample)
+        new_positions, new_intensities = preprocess_peaks(intensities=spectra['intensities'][0], positions=spectra['positions'], ranges=ranges, baseline_distortion=baseline_distortion, downsample=downsample)
 
-        ratio = preprocess_ratio(spectra['scales'], substanceDict)
+        ratios = preprocess_ratio(spectra['scales'], substanceDict)
 
         return {
             'intensities': new_intensities,
             'positions': new_positions,
             'scales': spectra['scales'],
             'components': spectra['components'],
-            'ratio': ratio,
+            'ratios': ratios,
         }
 
     ranges = [[-100, 100]]
     baseline_distortion = True
     downsample = int(2048)
 
-    def _(spectra):
+    def process_spectra(spectra):
         preprocessed_spectra = []
         for spectrum in spectra:
             preprocessed_spectra.append(preprocess_spectra(spectra=spectrum, ranges=ranges, substanceDict=substanceDict, baseline_distortion=baseline_distortion, downsample=downsample))
 
         return preprocessed_spectra
 
-    preprocessed_spectra = _(spectra)
+    def process_references(reference_spectra):
+        temp = [preprocess_peaks(
+                positions=spectra[0]['positions'],
+                intensities=reference_spectra[spectrum],
+                downsample=2048,) for spectrum in reference_spectra]
+    
+        preprocessed_reference_spectra = {
+            spectrum: temp[i][1]
+            for i, spectrum in enumerate(reference_spectra)
+        }
+    
+        return preprocessed_reference_spectra
+
+    preprocessed_spectra = process_spectra(spectra)
+
+    preprocessed_reference_spectra = process_references(reference_spectra)
+
+    def generate_figure():
+
+        plt.figure(figsize=(8, 4))
+        for substance in substanceDict:
+            plt.subplot(1, 2, 1)
+            plt.plot(spectra[0]['positions'], reference_spectra[substanceDict[substance][0]])
+            plt.subplot(1, 2, 2)
+            plt.plot(preprocessed_spectra[0]['positions'], preprocessed_reference_spectra[substanceDict[substance][0]])
+    
+        return plt.gca()
+
+    preprocessedreferencefigure = generate_figure()
 
     print(len(preprocessed_spectra[0]['positions']))
     print(len(preprocessed_spectra[0]['intensities']))
@@ -341,7 +385,9 @@ def _(np, spectra, substanceDict):
         baseline_distortion,
         intensities_count,
         positions_count,
+        preprocessed_reference_spectra,
         preprocessed_spectra,
+        preprocessedreferencefigure,
         ranges,
     )
 
@@ -386,7 +432,7 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
 
 
 @app.cell
-def _(np, preprocessed_spectra, torch):
+def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
     from sklearn.model_selection import train_test_split
 
     # Add device detection and setup
@@ -395,7 +441,7 @@ def _(np, preprocessed_spectra, torch):
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    def get_training_data_mlp(spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
+    def get_training_data_mlp(spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
         """
         Input:
             data = [
@@ -427,10 +473,9 @@ def _(np, preprocessed_spectra, torch):
         labels = []
 
         for spectrum in spectra:
-            data.append(np.concatenate([spectrum['intensities'], spectrum['positions']]))
-            labels.append(spectrum['ratio'])
-
-        print(spectra[0]['ratio'])
+                for substance in reference_spectra:
+                    data.append(np.concatenate([spectrum['intensities'], spectrum['positions'], reference_spectra[substance]]))
+                    labels.append(spectrum['ratios'][substance])
 
         data = np.array(data)
 
@@ -464,13 +509,13 @@ def _(np, preprocessed_spectra, torch):
             'labels_test': labels_test
         }
 
-    training_data = get_training_data_mlp(spectra=preprocessed_spectra)
+    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=preprocessed_reference_spectra)
 
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
 
     # Get sample ratio for display
-    sample_ratio = preprocessed_spectra[0]['ratio']
+    sample_ratio = preprocessed_spectra[0]['ratios']
     data_length = len(training_data['data_train'][0])
 
     return data_length, device, sample_ratio, training_data
@@ -488,7 +533,7 @@ def _(data_length, device, mo, sample_ratio, training_data):
 
     **Sample Information:**
 
-    - **Sample Ratio (first spectrum):** {sample_ratio:.6f}
+    - **Sample Ratios (first spectrum):** {sample_ratio:}
 
     - **Feature Vector Length:** {data_length}
 
