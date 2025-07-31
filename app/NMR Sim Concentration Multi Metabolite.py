@@ -119,6 +119,16 @@ def _():
     )
 
 
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
 @app.cell(hide_code=True)
 def _(
     components_shape,
@@ -181,6 +191,36 @@ def _(mo, spectra):
     """
     )
     return
+
+
+@app.cell
+def _(mo, referencefigure):
+    mo.md(
+        rf"""
+    ## Extract Reference Spectra
+    Extract spectra of individual components as a reference for the model
+
+    {mo.as_html(referencefigure)}
+    """
+    )
+    return
+
+
+@app.cell
+def _(plt, spectra, substanceDict):
+    reference_spectra = {
+        substanceDict[substance][0]: spectra[0]['components'][index]
+        for index, substance in enumerate(substanceDict)
+    }
+
+    print(reference_spectra)
+
+    for substance in substanceDict:
+        plt.plot(spectra[0]['positions'], reference_spectra[substanceDict[substance][0]])
+
+    referencefigure = plt.gca()
+
+    return (referencefigure,)
 
 
 @app.cell
