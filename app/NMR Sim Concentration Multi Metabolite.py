@@ -68,7 +68,7 @@ def _():
     }
 
     substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
-    count = 100
+    count = 1000
 
     # Use the built-in loop capability of createTrainingData
     batch_data = createTrainingData(
@@ -199,63 +199,71 @@ def _(mo, preprocessedfigure):
 
 
 @app.cell
-def _(downsampled_y, np, spectra, substanceDict):
+def _(np, spectra, substanceDict):
     from scipy.signal import resample
     from scipy.interpolate import interp1d
 
     def preprocess_peaks(intensities, positions, ranges, baseline_distortion=False, downsample=0):
         indices_range = []
-        for range in ranges:
+        for range_item in ranges:  # Changed from 'range' to 'range_item'
             indices_range.append(np.where(
-                (positions >= range[0]) & (positions <= range[1])
+                (positions >= range_item[0]) & (positions <= range_item[1])
             )[0])
 
         new_intensities = []
         new_positions = []
 
-        for range in indices_range:
-            temp_intensities = np.hstack(intensities[:, range])
-            temp_positions = [positions[x] for x in range]
+        for range_indices in indices_range:  # Changed from 'range' to 'range_indices'
+            # Fix: properly extract intensities - flatten the 2D array for this range
+            temp_intensities = intensities[0, range_indices]  # Take first row and specified indices
+            temp_positions = positions[range_indices]  # Direct indexing for positions
 
             # Add baseline distortion if enabled
             if baseline_distortion:
                 # Normalize positions to [0, 1] for consistent baseline calculation
-                x_normalized = (np.array(temp_positions) - np.min(temp_positions)) / (np.max(temp_positions) - np.min(temp_positions))
-                baseline = 0.02 * np.sin(0.5 * np.pi * x_normalized)
-                temp_intensities = temp_intensities + baseline
+                if len(temp_positions) > 1:  # Avoid division by zero
+                    x_normalized = (temp_positions - np.min(temp_positions)) / (np.max(temp_positions) - np.min(temp_positions))
+                    baseline = 0.02 * np.sin(0.5 * np.pi * x_normalized)
+                    temp_intensities = temp_intensities + baseline
 
             new_intensities = np.concatenate([new_intensities, temp_intensities])
             new_positions = np.concatenate([new_positions, temp_positions])
 
         if downsample > 0:
-            min, max = new_positions.min(), new_positions.max()
-            bin_edges = np.linspace(min, max, downsample + 1)
+            # For NMR data, positions are typically in descending order
+            # Sort the data by position to ensure proper binning
+            sorted_indices = np.argsort(new_positions)
+            new_positions = new_positions[sorted_indices]
+            new_intensities = new_intensities[sorted_indices]
+
+            min_pos, max_pos = new_positions.min(), new_positions.max()
+            bin_edges = np.linspace(min_pos, max_pos, downsample + 1)
             bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             downsampled_intensities = np.zeros(downsample)
 
             for i in range(downsample):
                 mask = (new_positions >= bin_edges[i]) & (new_positions < bin_edges[i+1])
                 if np.any(mask):
-                    downsampled_y[i] = np.trapz(new_intensities[mask], new_positions[mask]) / (bin_edges[i+1] - bin_edges[i])
+                    # Use interpolation to better preserve peak shapes
+                    # This approach maintains area while giving better peak representation
+                    bin_width = bin_edges[i+1] - bin_edges[i]
+                    if len(new_positions[mask]) > 1:
+                        # Use trapezoidal integration but normalize by actual data spacing
+                        area = np.trapz(new_intensities[mask], new_positions[mask])
+                        downsampled_intensities[i] = area / bin_width
+                    else:
+                        # Single point - just use the intensity value
+                        downsampled_intensities[i] = new_intensities[mask][0]
                 else:
-                    downsampled_y[i] = 0.0
+                    downsampled_intensities[i] = 0.0
 
-            new_intensities = downsampled_y
+            new_intensities = downsampled_intensities
             new_positions = bin_centers
 
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        # referenceScale = scales['tsp'][0]
-
-        # substanceIds = [substanceDict[id][0] for id in substanceDict]
-
-        # substanceScales = [scales[id][0] for id in substanceIds]
-
-        # ratio = [scale/referenceScale for scale in substanceScales]
-
         ratio = scales['SP:3368'][0]/scales['tsp'][0]
-
         return ratio
 
     def preprocess_spectra(spectra, ranges, substanceDict, baseline_distortion=False, downsample=0):
@@ -271,17 +279,9 @@ def _(downsampled_y, np, spectra, substanceDict):
             'ratio': ratio,
         }
 
-    # ranges = [
-    #     [2.2, 2.8],
-    #     [-0.1, 0.1],
-    # ]
-
     ranges = [[-100, 100]]
-
-    # Add baseline distortion flag
-    baseline_distortion = True  # Set to False to disable baseline distortion
+    baseline_distortion = True
     downsample = int(2048)
-
 
     def _(spectra):
         preprocessed_spectra = []
@@ -325,20 +325,6 @@ def _(baseline_distortion, intensities_count, mo, positions_count, ranges):
     - **Intensities Count:** {intensities_count}
     """
     )
-    return
-
-
-@app.cell
-def _():
-    return
-
-
-@app.cell
-def _(plt, pre):
-    plt.figure(12, 4)
-
-    plt.subplot(1, 2, 1)
-    plt.plot(pre)
     return
 
 
