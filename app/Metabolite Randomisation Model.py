@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -77,9 +77,13 @@ def _():
     substances = list(substanceDict.keys())
 
     combinations = []
-    for r in range(1, len(substances) + 1):  # r goes from 1 to the number of substances
+    for r in range(
+        1, len(substances) + 1
+    ):  # r goes from 1 to the number of substances
         for combo in itertools.combinations(substances, r):
-            combo_dict = {substance: substanceDict[substance] for substance in combo}
+            combo_dict = {
+                substance: substanceDict[substance] for substance in combo
+            }
             combinations.append(combo_dict)
 
     substanceSpectrumIds = [
@@ -103,18 +107,20 @@ def _():
 
     # Determine number of processes (use CPU count - 1 to leave one core free)
     num_processes = max(1, mp.cpu_count() - 1)
-    print(f"Using {num_processes} processes for data generation")
+    print(f'Using {num_processes} processes for data generation')
 
     # Generate data using multiprocessing
     batch_data = []
-    if len(mp_args) > 1:  # Only use multiprocessing if we have multiple batches
+    if (
+        len(mp_args) > 1
+    ):  # Only use multiprocessing if we have multiple batches
         with mp.Pool(processes=num_processes) as pool:
             batch_data = pool.map(create_batch_data, mp_args)
     else:
         # Single batch - no need for multiprocessing
         batch_data = [create_batch_data(mp_args[0])]
 
-    print(f"Generated {len(batch_data)} batches")
+    print(f'Generated {len(batch_data)} batches')
 
     # Extract data into your current format
     spectra = []
@@ -446,12 +452,15 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             intensities=reference_spectra[spectrum_key],
             downsample=2048,
         )
-        return (spectrum_key, pos_int[1])  # Return key and processed intensities
+        return (
+            spectrum_key,
+            pos_int[1],
+        )  # Return key and processed intensities
 
     def process_spectra(spectra):
         # Determine number of processes (use CPU count - 1 to leave one core free)
         num_processes = max(1, mp.cpu_count() - 1)
-        print(f"Using {num_processes} processes for spectra preprocessing")
+        print(f'Using {num_processes} processes for spectra preprocessing')
 
         # Process spectra in parallel
         with mp.Pool(processes=num_processes) as pool:
@@ -462,14 +471,18 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     def process_references(reference_spectra):
         # Determine number of processes (use CPU count - 1 to leave one core free)
         num_processes = max(1, mp.cpu_count() - 1)
-        print(f"Using {num_processes} processes for reference preprocessing")
+        print(f'Using {num_processes} processes for reference preprocessing')
 
         # Process references in parallel
         with mp.Pool(processes=num_processes) as pool:
-            results = pool.map(process_single_reference, reference_spectra.keys())
+            results = pool.map(
+                process_single_reference, reference_spectra.keys()
+            )
 
         # Convert results back to dictionary
-        preprocessed_reference_spectra = {key: intensities for key, intensities in results}
+        preprocessed_reference_spectra = {
+            key: intensities for key, intensities in results
+        }
 
         return preprocessed_reference_spectra
 
@@ -613,10 +626,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
                 )
 
                 if substance in spectrum['ratios']:
-                    labels.append([
-                        1,
-                        spectrum['ratios'][substance]
-                    ])
+                    labels.append([1, spectrum['ratios'][substance]])
                 else:
                     labels.append([0, 0])
 
@@ -746,8 +756,12 @@ def _(np, torch, training_data):
         batch_start = torch.arange(0, len(data_train), batch_size)
 
         # Define loss functions
-        bce_loss = nn.BCEWithLogitsLoss()  # For presence prediction (classification)
-        mse_loss = nn.MSELoss(reduction='none')  # For concentration prediction (regression)
+        bce_loss = (
+            nn.BCEWithLogitsLoss()
+        )  # For presence prediction (classification)
+        mse_loss = nn.MSELoss(
+            reduction='none'
+        )  # For concentration prediction (regression)
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         def compute_loss(predictions, targets):
@@ -762,12 +776,18 @@ def _(np, torch, training_data):
             classification_loss = bce_loss(presence_logits, presence_true)
 
             # Regression loss for concentration (only where substance is present)
-            concentration_loss = mse_loss(concentration_pred, concentration_true)
+            concentration_loss = mse_loss(
+                concentration_pred, concentration_true
+            )
             # Weight the concentration loss by the true presence
-            weighted_concentration_loss = torch.mean(concentration_loss * presence_true)
+            weighted_concentration_loss = torch.mean(
+                concentration_loss * presence_true
+            )
 
             # Combine losses
-            total_loss = classification_loss + loss_weight * weighted_concentration_loss
+            total_loss = (
+                classification_loss + loss_weight * weighted_concentration_loss
+            )
 
             return total_loss, classification_loss, weighted_concentration_loss
 
@@ -787,7 +807,9 @@ def _(np, torch, training_data):
                     labels_batch = labels_train[start : start + batch_size]
                     # forward pass
                     predictions = model(data_batch)
-                    total_loss, class_loss, conc_loss = compute_loss(predictions, labels_batch)
+                    total_loss, class_loss, conc_loss = compute_loss(
+                        predictions, labels_batch
+                    )
                     # backward pass
                     optimizer.zero_grad()
                     total_loss.backward()
@@ -797,7 +819,7 @@ def _(np, torch, training_data):
                     bar.set_postfix(
                         total_loss=float(total_loss),
                         class_loss=float(class_loss),
-                        conc_loss=float(conc_loss)
+                        conc_loss=float(conc_loss),
                     )
 
             # evaluate on validation set at end of each epoch
@@ -820,27 +842,52 @@ def _(np, torch, training_data):
             val_pred = model(data_val)
             val_presence_logits = val_pred[:, 0]
             val_concentration_pred = val_pred[:, 1]
-            val_presence_pred = torch.sigmoid(val_presence_logits)  # Convert to probabilities
+            val_presence_pred = torch.sigmoid(
+                val_presence_logits
+            )  # Convert to probabilities
 
             val_presence_true = labels_val[:, 0]
             val_concentration_true = labels_val[:, 1]
 
             # Classification metrics (presence)
             val_presence_binary = (val_presence_pred > 0.5).float()
-            val_accuracy = torch.mean((val_presence_binary == val_presence_true).float())
+            val_accuracy = torch.mean(
+                (val_presence_binary == val_presence_true).float()
+            )
 
             # Regression metrics (concentration, only for present substances)
             present_mask = val_presence_true == 1
             if present_mask.sum() > 0:
-                val_conc_mae = torch.mean(torch.abs(
-                    val_concentration_pred[present_mask] - val_concentration_true[present_mask]
-                ))
-                val_conc_rmse = torch.sqrt(torch.mean(
-                    (val_concentration_pred[present_mask] - val_concentration_true[present_mask]) ** 2
-                ))
+                val_conc_mae = torch.mean(
+                    torch.abs(
+                        val_concentration_pred[present_mask]
+                        - val_concentration_true[present_mask]
+                    )
+                )
+                val_conc_rmse = torch.sqrt(
+                    torch.mean(
+                        (
+                            val_concentration_pred[present_mask]
+                            - val_concentration_true[present_mask]
+                        )
+                        ** 2
+                    )
+                )
                 # R² for concentration
-                ss_res_val = torch.sum((val_concentration_true[present_mask] - val_concentration_pred[present_mask]) ** 2)
-                ss_tot_val = torch.sum((val_concentration_true[present_mask] - torch.mean(val_concentration_true[present_mask])) ** 2)
+                ss_res_val = torch.sum(
+                    (
+                        val_concentration_true[present_mask]
+                        - val_concentration_pred[present_mask]
+                    )
+                    ** 2
+                )
+                ss_tot_val = torch.sum(
+                    (
+                        val_concentration_true[present_mask]
+                        - torch.mean(val_concentration_true[present_mask])
+                    )
+                    ** 2
+                )
                 val_conc_r2 = 1 - (ss_res_val / ss_tot_val)
             else:
                 val_conc_mae = torch.tensor(0.0)
@@ -858,20 +905,45 @@ def _(np, torch, training_data):
 
             # Classification metrics (presence)
             test_presence_binary = (test_presence_pred > 0.5).float()
-            test_accuracy = torch.mean((test_presence_binary == test_presence_true).float())
+            test_accuracy = torch.mean(
+                (test_presence_binary == test_presence_true).float()
+            )
 
             # Regression metrics (concentration, only for present substances)
             test_present_mask = test_presence_true == 1
             if test_present_mask.sum() > 0:
-                test_conc_mae = torch.mean(torch.abs(
-                    test_concentration_pred[test_present_mask] - test_concentration_true[test_present_mask]
-                ))
-                test_conc_rmse = torch.sqrt(torch.mean(
-                    (test_concentration_pred[test_present_mask] - test_concentration_true[test_present_mask]) ** 2
-                ))
+                test_conc_mae = torch.mean(
+                    torch.abs(
+                        test_concentration_pred[test_present_mask]
+                        - test_concentration_true[test_present_mask]
+                    )
+                )
+                test_conc_rmse = torch.sqrt(
+                    torch.mean(
+                        (
+                            test_concentration_pred[test_present_mask]
+                            - test_concentration_true[test_present_mask]
+                        )
+                        ** 2
+                    )
+                )
                 # R² for concentration
-                ss_res_test = torch.sum((test_concentration_true[test_present_mask] - test_concentration_pred[test_present_mask]) ** 2)
-                ss_tot_test = torch.sum((test_concentration_true[test_present_mask] - torch.mean(test_concentration_true[test_present_mask])) ** 2)
+                ss_res_test = torch.sum(
+                    (
+                        test_concentration_true[test_present_mask]
+                        - test_concentration_pred[test_present_mask]
+                    )
+                    ** 2
+                )
+                ss_tot_test = torch.sum(
+                    (
+                        test_concentration_true[test_present_mask]
+                        - torch.mean(
+                            test_concentration_true[test_present_mask]
+                        )
+                    )
+                    ** 2
+                )
                 test_conc_r2 = 1 - (ss_res_test / ss_tot_test)
             else:
                 test_conc_mae = torch.tensor(0.0)
@@ -1023,22 +1095,25 @@ def _(tqdm, train_mlp_model, training_data):
     )
 
     if trials - completed_trials > 0:
-        with tqdm.tqdm(total=trials - completed_trials, desc="Optimizing") as pbar:
+        with tqdm.tqdm(
+            total=trials - completed_trials, desc='Optimizing'
+        ) as pbar:
+
             def callback(study, trial):
                 pbar.update(1)
-            
+
             study.optimize(
                 partial(objective, training_data),
                 callbacks=[
                     optuna.study.MaxTrialsCallback(
                         trials, states=(optuna.trial.TrialState.COMPLETE,)
                     ),
-                    callback
+                    callback,
                 ],
             )
 
     return optuna, study
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

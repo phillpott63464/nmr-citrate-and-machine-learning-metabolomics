@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.13"
-app = marimo.App(width="medium")
+__generated_with = '0.14.13'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -406,7 +406,7 @@ def _(np, plt, reference_spectra, spectra, substanceDict):
             ranges=ranges,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
-            downsample=downsample
+            downsample=downsample,
         )
 
         with Pool(processes=n_processes) as pool:
@@ -521,30 +521,42 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
 
     # Add device detection and setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    print(f'Using device: {device}')
     if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f'GPU: {torch.cuda.get_device_name(0)}')
 
     # Add this before your training data creation to debug shapes:
-    print("Debugging shapes:")
-    print(f"First spectrum intensities shape: {np.array(preprocessed_spectra[0]['intensities']).shape}")
-    print(f"First spectrum positions shape: {np.array(preprocessed_spectra[0]['positions']).shape}")
-    print(f"Reference spectra shapes:")
+    print('Debugging shapes:')
+    print(
+        f"First spectrum intensities shape: {np.array(preprocessed_spectra[0]['intensities']).shape}"
+    )
+    print(
+        f"First spectrum positions shape: {np.array(preprocessed_spectra[0]['positions']).shape}"
+    )
+    print(f'Reference spectra shapes:')
     for substance2 in preprocessed_reference_spectra:
-        print(f"  {substance2}: {np.array(preprocessed_reference_spectra[substance2]).shape}")
+        print(
+            f'  {substance2}: {np.array(preprocessed_reference_spectra[substance2]).shape}'
+        )
 
     # Then check if concatenation works:
     try:
-        test_concat = np.concatenate([
-            preprocessed_spectra[0]['intensities'],
-            preprocessed_spectra[0]['positions'],
-            preprocessed_reference_spectra[list(preprocessed_reference_spectra.keys())[0]]
-        ])
-        print(f"Test concatenation successful, shape: {test_concat.shape}")
+        test_concat = np.concatenate(
+            [
+                preprocessed_spectra[0]['intensities'],
+                preprocessed_spectra[0]['positions'],
+                preprocessed_reference_spectra[
+                    list(preprocessed_reference_spectra.keys())[0]
+                ],
+            ]
+        )
+        print(f'Test concatenation successful, shape: {test_concat.shape}')
     except Exception as e:
-        print(f"Concatenation failed: {e}")
+        print(f'Concatenation failed: {e}')
 
-    def get_training_data_mlp(spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
+    def get_training_data_mlp(
+        spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0
+    ):
         """
         Input:
             data = [
@@ -576,9 +588,17 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         labels = []
 
         for spectrum in spectra:
-                for substance in reference_spectra:
-                    data.append(np.concatenate([spectrum['intensities'], spectrum['positions'], reference_spectra[substance]]))
-                    labels.append(spectrum['ratios'][substance])
+            for substance in reference_spectra:
+                data.append(
+                    np.concatenate(
+                        [
+                            spectrum['intensities'],
+                            spectrum['positions'],
+                            reference_spectra[substance],
+                        ]
+                    )
+                )
+                labels.append(spectrum['ratios'][substance])
 
         data = np.array(data)
 
@@ -592,12 +612,18 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         # Calculate validation ratio relative to the remaining data
         val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
         data_train, data_val, labels_train, labels_val = train_test_split(
-            data_temp, labels_temp, test_size=val_ratio_adjusted, shuffle=True, random_state=42
+            data_temp,
+            labels_temp,
+            test_size=val_ratio_adjusted,
+            shuffle=True,
+            random_state=42,
         )
 
         # Move tensors to GPU
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
+            device
+        )
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
         labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
@@ -609,10 +635,13 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
             'data_test': data_test,
             'labels_train': labels_train,
             'labels_val': labels_val,
-            'labels_test': labels_test
+            'labels_test': labels_test,
         }
 
-    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=preprocessed_reference_spectra)
+    training_data = get_training_data_mlp(
+        spectra=preprocessed_spectra,
+        reference_spectra=preprocessed_reference_spectra,
+    )
 
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
@@ -624,5 +653,5 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
