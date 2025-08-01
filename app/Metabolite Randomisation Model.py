@@ -87,7 +87,7 @@ def _():
         for combination in combinations
     ]
 
-    count = 10
+    count = 1000
 
     def create_batch_data(substances_and_count):
         """Worker function for multiprocessing"""
@@ -164,6 +164,7 @@ def _():
         createTrainingData,
         intensities_shape,
         labels,
+        mp,
         np,
         positions_shape,
         referenceSpectrumIds,
@@ -308,7 +309,7 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
 
 
 @app.cell
-def _(np, plt, reference_spectra, spectra, substanceDict):
+def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     from scipy.signal import resample
     from scipy.interpolate import interp1d
 
@@ -428,35 +429,47 @@ def _(np, plt, reference_spectra, spectra, substanceDict):
     baseline_distortion = True
     downsample = int(2048)
 
+    # Helper function for multiprocessing spectrum processing
+    def process_single_spectrum(spectrum):
+        return preprocess_spectra(
+            spectra=spectrum,
+            ranges=ranges,
+            substanceDict=substanceDict,
+            baseline_distortion=baseline_distortion,
+            downsample=downsample,
+        )
+
+    # Helper function for multiprocessing reference processing
+    def process_single_reference(spectrum_key):
+        pos_int = preprocess_peaks(
+            positions=spectra[0]['positions'],
+            intensities=reference_spectra[spectrum_key],
+            downsample=2048,
+        )
+        return (spectrum_key, pos_int[1])  # Return key and processed intensities
+
     def process_spectra(spectra):
-        preprocessed_spectra = []
-        for spectrum in spectra:
-            preprocessed_spectra.append(
-                preprocess_spectra(
-                    spectra=spectrum,
-                    ranges=ranges,
-                    substanceDict=substanceDict,
-                    baseline_distortion=baseline_distortion,
-                    downsample=downsample,
-                )
-            )
+        # Determine number of processes (use CPU count - 1 to leave one core free)
+        num_processes = max(1, mp.cpu_count() - 1)
+        print(f"Using {num_processes} processes for spectra preprocessing")
+
+        # Process spectra in parallel
+        with mp.Pool(processes=num_processes) as pool:
+            preprocessed_spectra = pool.map(process_single_spectrum, spectra)
 
         return preprocessed_spectra
 
     def process_references(reference_spectra):
-        temp = [
-            preprocess_peaks(
-                positions=spectra[0]['positions'],
-                intensities=reference_spectra[spectrum],
-                downsample=2048,
-            )
-            for spectrum in reference_spectra
-        ]
+        # Determine number of processes (use CPU count - 1 to leave one core free)
+        num_processes = max(1, mp.cpu_count() - 1)
+        print(f"Using {num_processes} processes for reference preprocessing")
 
-        preprocessed_reference_spectra = {
-            spectrum: temp[i][1]
-            for i, spectrum in enumerate(reference_spectra)
-        }
+        # Process references in parallel
+        with mp.Pool(processes=num_processes) as pool:
+            results = pool.map(process_single_reference, reference_spectra.keys())
+
+        # Convert results back to dictionary
+        preprocessed_reference_spectra = {key: intensities for key, intensities in results}
 
         return preprocessed_reference_spectra
 
@@ -598,8 +611,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
                         ]
                     )
                 )
-                print(substance)
-                print(spectrum['ratios'])
+            
                 if substance in spectrum['ratios']:
                     labels.append([
                         1,
@@ -966,7 +978,7 @@ def _(train_mlp_model, training_data):
     import optuna
     from functools import partial
 
-    trials = 10
+    trials = 1000
 
     def objective(training_data, trial):
         (
