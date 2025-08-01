@@ -55,11 +55,13 @@ def _(mo, spectrafigures, substanceDict):
 
 @app.cell
 def _():
-    # Data generation
+    # Data generation with multiprocessing
 
     from morgan.createTrainingData import createTrainingData
     import numpy as np
     import itertools
+    import multiprocessing as mp
+    import os
 
     substanceDict = {
         'Citric acid': ['SP:3368'],
@@ -87,18 +89,32 @@ def _():
 
     count = 10
 
-    batch_data = []
-
-    for substances in substanceSpectrumIds:
-        # Use the built-in loop capability of createTrainingData
-        batch_data.append(createTrainingData(
+    def create_batch_data(substances_and_count):
+        """Worker function for multiprocessing"""
+        substances, sample_count = substances_and_count
+        return createTrainingData(
             substanceSpectrumIds=substances,
-            sampleNumber=count,  # This creates 1000 samples in one call
+            sampleNumber=sample_count,
             rondomlyScaleSubstances=True,
-            # referenceSubstanceSpectrumId='dss',
-        ))
+        )
 
-    print(batch_data)
+    # Prepare arguments for multiprocessing
+    mp_args = [(substances, count) for substances in substanceSpectrumIds]
+
+    # Determine number of processes (use CPU count - 1 to leave one core free)
+    num_processes = max(1, mp.cpu_count() - 1)
+    print(f"Using {num_processes} processes for data generation")
+
+    # Generate data using multiprocessing
+    batch_data = []
+    if len(mp_args) > 1:  # Only use multiprocessing if we have multiple batches
+        with mp.Pool(processes=num_processes) as pool:
+            batch_data = pool.map(create_batch_data, mp_args)
+    else:
+        # Single batch - no need for multiprocessing
+        batch_data = [create_batch_data(mp_args[0])]
+
+    print(f"Generated {len(batch_data)} batches")
 
     # Extract data into your current format
     spectra = []
