@@ -21,6 +21,9 @@ def _():
     import pandas as pd
     out_dir='experimental'
 
+    acid_molecular_weight = 192.12   # g/mol
+    base_molecular_weight = 258.07   # g/mol
+    dss_molecular_weight = 224.36   # g/mol
 
     imported = pd.read_csv(f'{out_dir}/eppendorfs.csv')
     # imported = imported.to_dict(orient='split', index=False)
@@ -28,27 +31,38 @@ def _():
     acid_vol = [round(x - y, 2) for x, y in zip(imported['acid'], imported['weight'])]
     base_vol = [round(x - y, 2) for x, y in zip(imported['base'], imported['acid'])]
 
-    print(acid_vol)
-    print(base_vol)
-
     total_vol = [round(x + y, 2) for x, y in zip(acid_vol, base_vol)]
-
-    print(total_vol)
 
     stocks = {
         'base': {
             'D2O': 2.5,
-            'DSS': 22.64/2,
+            'DSSweight': 22.64/2,
             'weight': 129.60,
+            'volume': 50,
             'water': 44.78,
+            'molecular_weight': 258.07,
         },
         'acid': {
             'D2O': 2.5,
-            'DSS': 22.64/2,
+            'DSSweight': 22.64/2,
             'weight': 95.95,
+            'volume': 50,
             'water': 40.37,
+            'molecular_weight': 192.12,
         }
     }
+
+    # Loop through each stock type (base and acid)
+    for stock_type in stocks:
+        stocks[stock_type]['molarity'] = (
+            (stocks[stock_type]['weight'] / 1000)  # g
+            / stocks[stock_type]['molecular_weight']  # g/mol
+            / (stocks[stock_type]['volume'] / 1000)  # L
+        )
+
+    # Now you can access the molarity for both base and acid
+    print("Base Molarity:", stocks['base']['molarity'])   
+    print("Acid Molarity:", stocks['acid']['molarity'])
     return
 
 
