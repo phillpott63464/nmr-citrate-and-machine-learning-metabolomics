@@ -37,6 +37,17 @@ def _(mo):
     return
 
 
+@app.cell
+def _():
+    # global variables
+
+    count = 100
+    trials = 1000
+    notebook_name = 'randomisation_hold_back'
+    cache_dir = f"./data_cache/{notebook_name}"
+    return cache_dir, count, notebook_name, trials
+
+
 @app.cell(hide_code=True)
 def _(mo, spectrafigures, substanceDict):
     mo.md(
@@ -54,7 +65,7 @@ def _(mo, spectrafigures, substanceDict):
 
 
 @app.cell
-def _():
+def _(cache_dir, count):
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -62,6 +73,8 @@ def _():
     import itertools
     import multiprocessing as mp
     import os
+    import pickle
+    from pathlib import Path
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -105,63 +118,102 @@ def _():
         for combination in combinations
     ]
 
-    count = 100  # Number of samples per combination
+    # Save/load functions for data persistence
+    def save_spectra_data(spectra, filename):
+        """Save generated spectra data to pickle file"""
+        os.makedirs(cache_dir, exist_ok=True)
+        filepath = f"{cache_dir}/{filename}.pkl"
 
-    def create_batch_data(substances_and_count):
-        """Generate training data batch for specific substance combination with random scarandom_key = random.choice(list(my_dict.keys()))
-    ling"""
-        substances, sample_count = substances_and_count
-        return createTrainingData(
-            substanceSpectrumIds=substances,
-            sampleNumber=sample_count,
-            rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
-            referenceSubstanceSpectrumId='tsp',
-        )
+        with open(filepath, 'wb') as f:
+            pickle.dump(spectra, f)
+        print(f"Saved {len(spectra)} spectra to {filepath}")
 
-    # Prepare multiprocessing arguments - one batch per substance combination
-    mp_args = [(substances, count) for substances in substanceSpectrumIds]
+    def load_spectra_data(filename):
+        """Load generated spectra data from pickle file"""
+        filepath = f"{cache_dir}/{filename}.pkl"
 
-    # Use multiprocessing to parallelize data generation across CPU cores
-    num_processes = max(1, mp.cpu_count() - 1)
-    print(f'Using {num_processes} processes for data generation')
+        if os.path.exists(filepath):
+            with open(filepath, 'rb') as f:
+                spectra = pickle.load(f)
+            print(f"Loaded {len(spectra)} spectra from {filepath}")
+            return spectra
+        return None
 
-    batch_data = []
-    if len(mp_args) > 1:
-        with mp.Pool(processes=num_processes) as pool:
-            batch_data = list(
-                tqdm.tqdm(pool.imap_unordered(create_batch_data, mp_args), total=len(mp_args))
+    def generate_cache_key(substanceDict, combinations, count):
+        """Generate unique cache key based on parameters"""
+        substance_key = "_".join(sorted(substanceDict.keys()))
+        combo_key = f"combos_{len(combinations)}"
+        count_key = f"count_{count}"
+        return f"spectra_{substance_key}_{combo_key}_{count_key}"
+
+    # Generate cache key for current configuration
+    cache_key = generate_cache_key(substanceDict, combinations, count)
+
+    # Try to load existing data first
+    spectra = load_spectra_data(cache_key)
+
+    if spectra is None:
+        print("No cached data found. Generating new spectra...")
+
+        def create_batch_data(substances_and_count):
+            """Generate training data batch for specific substance combination with random scaling"""
+            substances, sample_count = substances_and_count
+            return createTrainingData(
+                substanceSpectrumIds=substances,
+                sampleNumber=sample_count,
+                rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
+                referenceSubstanceSpectrumId='tsp',
             )
+
+        # Prepare multiprocessing arguments - one batch per substance combination
+        mp_args = [(substances, count) for substances in substanceSpectrumIds]
+
+        # Use multiprocessing to parallelize data generation across CPU cores
+        num_processes = max(1, mp.cpu_count() - 1)
+        print(f'Using {num_processes} processes for data generation')
+
+        batch_data = []
+        if len(mp_args) > 1:
+            with mp.Pool(processes=num_processes) as pool:
+                batch_data = list(
+                    tqdm.tqdm(pool.imap_unordered(create_batch_data, mp_args), total=len(mp_args))
+                )
+        else:
+            batch_data = [create_batch_data(mp_args[0])]
+
+        print(f'Generated {len(batch_data)} batches')
+
+        # Reshape batch data into individual spectrum samples
+        # Each spectrum contains intensities, positions, scales, and component information
+        spectra = []
+        labels = []
+
+        for batch in batch_data:
+            for i in range(count):
+                # Extract individual sample scales (concentrations) from batch
+                sample_scales = {
+                    key: [values[i]] for key, values in batch['scales'].items()
+                }
+
+                # Create individual spectrum dictionary
+                spectrum = {
+                    'scales': sample_scales,
+                    'intensities': batch['intensities'][
+                        i : i + 1
+                    ],  # Keep 2D structure
+                    'positions': batch[
+                        'positions'
+                    ],  # Chemical shift positions (ppm)
+                    'components': batch[
+                        'components'
+                    ],  # Individual component spectra
+                }
+                spectra.append(spectrum)
+
+        # Save generated data for future use
+        save_spectra_data(spectra, cache_key)
     else:
-        batch_data = [create_batch_data(mp_args[0])]
-
-    print(f'Generated {len(batch_data)} batches')
-
-    # Reshape batch data into individual spectrum samples
-    # Each spectrum contains intensities, positions, scales, and component information
-    spectra = []
-    labels = []
-
-    for batch in batch_data:
-        for i in range(count):
-            # Extract individual sample scales (concentrations) from batch
-            sample_scales = {
-                key: [values[i]] for key, values in batch['scales'].items()
-            }
-
-            # Create individual spectrum dictionary
-            spectrum = {
-                'scales': sample_scales,
-                'intensities': batch['intensities'][
-                    i : i + 1
-                ],  # Keep 2D structure
-                'positions': batch[
-                    'positions'
-                ],  # Chemical shift positions (ppm)
-                'components': batch[
-                    'components'
-                ],  # Individual component spectra
-            }
-            spectra.append(spectrum)
+        print("Using cached spectra data.")
 
     # Display sample information for verification
     print(''.join(f"{x['scales']}\n'" for x in spectra[:5]))
@@ -183,10 +235,8 @@ def _():
     return (
         combinations,
         components_shape,
-        count,
         createTrainingData,
         intensities_shape,
-        labels,
         mp,
         np,
         positions_shape,
@@ -232,12 +282,10 @@ def _(
 
 
 @app.cell
-def _(labels, spectra):
+def _(spectra):
     import matplotlib.pyplot as plt
 
     print(len(spectra))
-    print(len(labels))
-
     graph_count = 3
 
     # Create visualization grid showing sample spectra
@@ -562,9 +610,8 @@ def _(baseline_distortion, intensities_count, mo, positions_count, ranges):
 
 
 @app.cell
-def _(graph_count, labels, plt, preprocessed_spectra, spectra):
+def _(graph_count, plt, preprocessed_spectra, spectra):
     print(len(spectra))
-    print(len(labels))
 
     # Compare original vs preprocessed spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
@@ -847,7 +894,7 @@ def _(np, torch, tqdm, training_data):
                     total_loss.backward()
                     optimizer.step()
 
-                    bar.sessm_indicest_postfix(
+                    bar.set_postfix(
                         total_loss=float(total_loss),
                         class_loss=float(class_loss),
                         conc_loss=float(conc_loss),
@@ -1073,11 +1120,9 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(tqdm, train_mlp_model, training_data):
+def _(cache_dir, notebook_name, tqdm, train_mlp_model, training_data, trials):
     import optuna
     from functools import partial
-
-    trials = 1000  # Total number of hyperparameter optimization trials
 
     def objective(training_data, trial):
         """
@@ -1121,8 +1166,8 @@ def _(tqdm, train_mlp_model, training_data):
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
         direction='maximize',  # Maximize the combined score
-        study_name='metabolite_randomisation_holdback',
-        storage='sqlite:///model_database/metabolite_randomisation_holdback.db',
+        study_name=f'{notebook_name}',
+        storage=f'sqlite:///{cache_dir}/{notebook_name}.db',
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
