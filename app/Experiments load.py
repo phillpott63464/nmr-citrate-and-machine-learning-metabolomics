@@ -17,7 +17,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo, stocks, total_vol):
+def _(mo, stocks, volumes):
     mo.md(
         rf"""
     ## Stocks:
@@ -25,8 +25,7 @@ def _(mo, stocks, total_vol):
     - Acid concentration: {round(stocks['acid']['molarity'], 5)}, target = 0.001
 
     ## Total volume eppendorfs:
-
-    {[x for x in total_vol]}
+    {volumes}
     """
     )
     return
@@ -48,8 +47,6 @@ def _():
     base_vol = [round((x - y) / 1000, 6) for x, y in zip(imported['base'], imported['acid'])]
 
     total_vol = [round(x + y, 6) for x, y in zip(acid_vol, base_vol)]
-
-    print(acid_vol)
 
     stocks = {
         'base': {
@@ -78,10 +75,13 @@ def _():
             / (stocks[stock_type]['volume'] / 1000)  # L
         )
 
+    volumes = '\n\n'.join([f"{round(x * 1000, 2)} ml" for x in total_vol])
 
-    print(total_vol)
+    print(acid_vol[4]*1000)
+    print(base_vol[4]*1000)
+    print(total_vol[4]*1000)
 
-    return stocks, total_vol
+    return stocks, volumes
 
 
 if __name__ == "__main__":

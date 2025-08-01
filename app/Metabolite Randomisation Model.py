@@ -611,7 +611,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
                         ]
                     )
                 )
-            
+
                 if substance in spectrum['ratios']:
                     labels.append([
                         1,
@@ -895,7 +895,7 @@ def _(np, torch, training_data):
     gpu_name = ''
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
-    return device_info, gpu_name, train_mlp_model
+    return device_info, gpu_name, tqdm, train_mlp_model
 
 
 @app.cell(hide_code=True)
@@ -972,7 +972,7 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(train_mlp_model, training_data):
+def _(tqdm, train_mlp_model, training_data):
     # Hyperparameter optimisation loop
 
     import optuna
@@ -1023,14 +1023,19 @@ def _(train_mlp_model, training_data):
     )
 
     if trials - completed_trials > 0:
-        study.optimize(
-            partial(objective, training_data),
-            callbacks=[
-                optuna.study.MaxTrialsCallback(
-                    trials, states=(optuna.trial.TrialState.COMPLETE,)
-                )
-            ],
-        )
+        with tqdm.tqdm(total=trials - completed_trials, desc="Optimizing") as pbar:
+            def callback(study, trial):
+                pbar.update(1)
+            
+            study.optimize(
+                partial(objective, training_data),
+                callbacks=[
+                    optuna.study.MaxTrialsCallback(
+                        trials, states=(optuna.trial.TrialState.COMPLETE,)
+                    ),
+                    callback
+                ],
+            )
 
     return optuna, study
 
