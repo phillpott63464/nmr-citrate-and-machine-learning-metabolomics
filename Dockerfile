@@ -49,4 +49,4 @@ WORKDIR /usr/src/app
 
 SHELL ["conda", "run", "-n", "ml", "/bin/bash", "-c"]
 
-CMD ["conda", "run", "-n", "ml", "marimo", "edit", "--host", "0.0.0.0", "--port", "2718", "--no-token"]
+CMD ["conda", "run", "-n", "ml", "marimo", "edit", "--host", "0.0.0.0", "--port", "2718", "--token", "--token-password='BrukerTopspin14'"]"
