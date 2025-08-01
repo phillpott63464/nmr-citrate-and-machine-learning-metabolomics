@@ -14,7 +14,7 @@ def _():
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
 
-    return cuda_built, gpu_count, hip_version, mo
+    return cuda_built, gpu_count, hip_version, mo, torch
 
 
 @app.cell(hide_code=True)
@@ -463,6 +463,7 @@ def _(np, plt, reference_spectra, spectra, substanceDict):
         baseline_distortion,
         intensities_count,
         positions_count,
+        preprocessed_reference_spectra,
         preprocessed_spectra,
         preprocessedreferencefigure,
         ranges,
@@ -512,6 +513,115 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
 
     preprocessedfigure = plt.gca()
     return (preprocessedfigure,)
+
+
+@app.cell
+def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
+    from sklearn.model_selection import train_test_split
+
+    # Add device detection and setup
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+
+    # Add this before your training data creation to debug shapes:
+    print("Debugging shapes:")
+    print(f"First spectrum intensities shape: {np.array(preprocessed_spectra[0]['intensities']).shape}")
+    print(f"First spectrum positions shape: {np.array(preprocessed_spectra[0]['positions']).shape}")
+    print(f"Reference spectra shapes:")
+    for substance2 in preprocessed_reference_spectra:
+        print(f"  {substance2}: {np.array(preprocessed_reference_spectra[substance2]).shape}")
+
+    # Then check if concatenation works:
+    try:
+        test_concat = np.concatenate([
+            preprocessed_spectra[0]['intensities'],
+            preprocessed_spectra[0]['positions'],
+            preprocessed_reference_spectra[list(preprocessed_reference_spectra.keys())[0]]
+        ])
+        print(f"Test concatenation successful, shape: {test_concat.shape}")
+    except Exception as e:
+        print(f"Concatenation failed: {e}")
+
+    def get_training_data_mlp(spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0):
+        """
+        Input:
+            data = [
+                data instances, (float32)
+                axes, (x/y)
+                points along each axis (float32)
+            ]
+
+            labels = array of labels (float32)
+
+            train_ratio = ratio of data to be trained. Defaults 0.7, 70% data used for training
+            val_ratio = ratio of data for validation. Defaults 0.15, 15% data used for validation
+            # test_ratio = 1 - train_ratio - val_ratio (automatically calculated)
+
+            axes = number of axes to remove. Defaults to 0 (no transformation). Use negative numbers
+
+        Output:
+            data_train = [
+                data instances, (float32)
+                points along both axes in single vector, (float32)
+            ]
+            data_val = identical
+            data_test = identical
+            labels_train = array of labels (float32)
+            labels_val = identical
+            labels_test = identical
+        """
+        data = []
+        labels = []
+
+        for spectrum in spectra:
+                for substance in reference_spectra:
+                    data.append(np.concatenate([spectrum['intensities'], spectrum['positions'], reference_spectra[substance]]))
+                    labels.append(spectrum['ratios'][substance])
+
+        data = np.array(data)
+
+        # First split: separate out test data
+        test_ratio = 1 - train_ratio - val_ratio
+        data_temp, data_test, labels_temp, labels_test = train_test_split(
+            data, labels, test_size=test_ratio, shuffle=True, random_state=42
+        )
+
+        # Second split: divide remaining data into train and validation
+        # Calculate validation ratio relative to the remaining data
+        val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
+        data_train, data_val, labels_train, labels_val = train_test_split(
+            data_temp, labels_temp, test_size=val_ratio_adjusted, shuffle=True, random_state=42
+        )
+
+        # Move tensors to GPU
+        data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
+        labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
+        data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32).to(device)
+
+        return {
+            'data_train': data_train,
+            'data_val': data_val,
+            'data_test': data_test,
+            'labels_train': labels_train,
+            'labels_val': labels_val,
+            'labels_test': labels_test
+        }
+
+    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=preprocessed_reference_spectra)
+
+    print([training_data[x].shape for x in training_data])
+    print(len(training_data['data_train'][0]))
+
+    # Get sample ratio for display
+    sample_ratio = preprocessed_spectra[0]['ratios']
+    data_length = len(training_data['data_train'][0])
+
+    return
 
 
 if __name__ == "__main__":
