@@ -17,6 +17,22 @@ def _(mo):
 
 
 @app.cell
+def _(mo, stocks, total_vol):
+    mo.md(
+        rf"""
+    ## Stocks:
+    - Base concentration: {round(stocks['base']['molarity'], 5)}, target = 0.001
+    - Acid concentration: {round(stocks['acid']['molarity'], 5)}, target = 0.001
+
+    ## Total volume eppendorfs:
+
+    {[x for x in total_vol]}
+    """
+    )
+    return
+
+
+@app.cell
 def _():
     import pandas as pd
     out_dir='experimental'
@@ -28,10 +44,12 @@ def _():
     imported = pd.read_csv(f'{out_dir}/eppendorfs.csv')
     # imported = imported.to_dict(orient='split', index=False)
 
-    acid_vol = [round(x - y, 2) for x, y in zip(imported['acid'], imported['weight'])]
-    base_vol = [round(x - y, 2) for x, y in zip(imported['base'], imported['acid'])]
+    acid_vol = [round((x - y) / 1000, 6) for x, y in zip(imported['acid'], imported['weight'])]
+    base_vol = [round((x - y) / 1000, 6) for x, y in zip(imported['base'], imported['acid'])]
 
-    total_vol = [round(x + y, 2) for x, y in zip(acid_vol, base_vol)]
+    total_vol = [round(x + y, 6) for x, y in zip(acid_vol, base_vol)]
+
+    print(acid_vol)
 
     stocks = {
         'base': {
@@ -60,10 +78,10 @@ def _():
             / (stocks[stock_type]['volume'] / 1000)  # L
         )
 
-    # Now you can access the molarity for both base and acid
-    print("Base Molarity:", stocks['base']['molarity'])   
-    print("Acid Molarity:", stocks['acid']['molarity'])
-    return
+
+    print(total_vol)
+
+    return stocks, total_vol
 
 
 if __name__ == "__main__":
