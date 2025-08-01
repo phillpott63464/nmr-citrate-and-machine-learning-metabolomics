@@ -12,7 +12,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r""" """)
+    mo.md(rf"""# Experimental Procedure Notes""")
     return
 
 
@@ -23,12 +23,17 @@ def _():
 
 
     imported = pd.read_csv(f'{out_dir}/eppendorfs.csv')
-    imported = imported.to_dict(orient='split', index=False)
+    # imported = imported.to_dict(orient='split', index=False)
 
-    eppendorfs = {
-        imported['columns'][i]: {row[i] for row in imported['data']}
-        for i in range(len(imported['columns']))
-    }
+    acid_vol = [round(x - y, 2) for x, y in zip(imported['acid'], imported['weight'])]
+    base_vol = [round(x - y, 2) for x, y in zip(imported['base'], imported['acid'])]
+
+    print(acid_vol)
+    print(base_vol)
+
+    total_vol = [round(x + y, 2) for x, y in zip(acid_vol, base_vol)]
+
+    print(total_vol)
 
     stocks = {
         'base': {
@@ -44,7 +49,6 @@ def _():
             'water': 40.37,
         }
     }
-
     return
 
 
