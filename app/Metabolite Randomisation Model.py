@@ -9,7 +9,7 @@ def _():
     import marimo as mo
     import torch
 
-    # Store device info for markdown display
+    # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
@@ -55,14 +55,13 @@ def _(mo, spectrafigures, substanceDict):
 
 @app.cell
 def _():
-    # Data generation with multiprocessing
-
     from morgan.createTrainingData import createTrainingData
     import numpy as np
     import itertools
     import multiprocessing as mp
     import os
 
+    # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
         'Citric acid': ['SP:3368'],
         'Succinic acid': ['SP:3211'],
@@ -70,90 +69,90 @@ def _():
         'Lactic acid': ['SP:3675'],
     }
 
+    # Extract spectrum IDs for reference spectra generation
     referenceSpectrumIds = [
         substanceDict[substance][-1] for substance in substanceDict
     ]
 
     substances = list(substanceDict.keys())
 
+    # Generate all possible combinations of substances (1 to n substances)
+    # This creates training data for different metabolite mixtures
     combinations = []
-    for r in range(
-        1, len(substances) + 1
-    ):  # r goes from 1 to the number of substances
+    for r in range(1, len(substances) + 1):
         for combo in itertools.combinations(substances, r):
             combo_dict = {
                 substance: substanceDict[substance] for substance in combo
             }
             combinations.append(combo_dict)
 
+    # Extract spectrum IDs for each combination
     substanceSpectrumIds = [
         [combination[substance][-1] for substance in combination]
         for combination in combinations
     ]
 
-    count = 1000
+    count = 1000  # Number of samples per combination
 
     def create_batch_data(substances_and_count):
-        """Worker function for multiprocessing"""
+        """Generate training data batch for specific substance combination with random scaling"""
         substances, sample_count = substances_and_count
         return createTrainingData(
             substanceSpectrumIds=substances,
             sampleNumber=sample_count,
-            rondomlyScaleSubstances=True,
+            rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
         )
 
-    # Prepare arguments for multiprocessing
+    # Prepare multiprocessing arguments - one batch per substance combination
     mp_args = [(substances, count) for substances in substanceSpectrumIds]
 
-    # Determine number of processes (use CPU count - 1 to leave one core free)
+    # Use multiprocessing to parallelize data generation across CPU cores
     num_processes = max(1, mp.cpu_count() - 1)
     print(f'Using {num_processes} processes for data generation')
 
-    # Generate data using multiprocessing
     batch_data = []
-    if (
-        len(mp_args) > 1
-    ):  # Only use multiprocessing if we have multiple batches
+    if len(mp_args) > 1:
         with mp.Pool(processes=num_processes) as pool:
             batch_data = pool.map(create_batch_data, mp_args)
     else:
-        # Single batch - no need for multiprocessing
         batch_data = [create_batch_data(mp_args[0])]
 
     print(f'Generated {len(batch_data)} batches')
 
-    # Extract data into your current format
+    # Reshape batch data into individual spectrum samples
+    # Each spectrum contains intensities, positions, scales, and component information
     spectra = []
     labels = []
 
     for batch in batch_data:
         for i in range(count):
-            # Extract scales for this sample
+            # Extract individual sample scales (concentrations) from batch
             sample_scales = {
                 key: [values[i]] for key, values in batch['scales'].items()
             }
 
-            # Create spectrum dict in your current format
+            # Create individual spectrum dictionary
             spectrum = {
                 'scales': sample_scales,
                 'intensities': batch['intensities'][
                     i : i + 1
-                ],  # Keep 2D shape
-                'positions': batch['positions'],
+                ],  # Keep 2D structure
+                'positions': batch[
+                    'positions'
+                ],  # Chemical shift positions (ppm)
                 'components': batch[
                     'components'
-                ],  # This is shared across all samples
+                ],  # Individual component spectra
             }
             spectra.append(spectrum)
 
-    print(
-        ''.join(f"{x['scales']}\n'" for x in spectra[:5])
-    )   # Show first 5 only
-    print(spectra[0]['intensities'].shape)   # Y axis
-    print(spectra[0]['positions'].shape)   # X axis
-    print(spectra[0]['components'].shape)   # Peaks of all separate components
+    # Display sample information for verification
+    print(''.join(f"{x['scales']}\n'" for x in spectra[:5]))
+    print(spectra[0]['intensities'].shape)
+    print(spectra[0]['positions'].shape)
+    print(spectra[0]['components'].shape)
 
-    # Get sample information for markdown display
+    # Prepare data for markdown display
     sample_scales_preview = '\n'.join(
         [
             f"Sample {i+1}: {spectrum['scales']}"
@@ -178,16 +177,6 @@ def _():
         spectra,
         substanceDict,
     )
-
-
-@app.cell
-def _():
-    return
-
-
-@app.cell
-def _():
-    return
 
 
 @app.cell(hide_code=True)
@@ -231,11 +220,11 @@ def _(labels, spectra):
 
     graph_count = 3
 
+    # Create visualization grid showing sample spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
     for graphcounter in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter)
-        # plt.title(f'{round(labels[graphcounter], 3)}M')
         plt.plot(
             spectra[graphcounter]['positions'],
             spectra[graphcounter]['intensities'][0],
@@ -272,13 +261,15 @@ def _(mo, referencefigure):
 
 @app.cell
 def _(createTrainingData, plt, referenceSpectrumIds, spectra, substanceDict):
+    # Generate pure component reference spectra (no random scaling)
+    # These serve as templates for identifying substances in mixtures
     reference_spectra_raw = createTrainingData(
         substanceSpectrumIds=referenceSpectrumIds,
-        sampleNumber=1,  # This creates 1000 samples in one call
-        rondomlyScaleSubstances=False,
-        # referenceSubstanceSpectrumId='dss',
+        sampleNumber=1,
+        rondomlyScaleSubstances=False,  # Keep original intensities for references
     )
 
+    # Map substance names to their reference spectra
     reference_spectra = {
         substanceDict[substance][0]: reference_spectra_raw['components'][index]
         for index, substance in enumerate(substanceDict)
@@ -286,6 +277,7 @@ def _(createTrainingData, plt, referenceSpectrumIds, spectra, substanceDict):
 
     print(reference_spectra)
 
+    # Visualize reference spectra for each substance
     for substance in substanceDict:
         plt.plot(
             spectra[0]['positions'],
@@ -326,8 +318,19 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         baseline_distortion=False,
         downsample=0,
     ):
+        """
+        Extract and preprocess spectral regions of interest.
+
+        Args:
+            intensities: Spectral intensity data
+            positions: Chemical shift positions (ppm)
+            ranges: List of [min, max] ppm ranges to extract
+            baseline_distortion: Add realistic baseline drift
+            downsample: Target number of points for downsampling
+        """
+        # Extract data points within specified ppm ranges
         indices_range = []
-        for range_item in ranges:  # Changed from 'range' to 'range_item'
+        for range_item in ranges:
             indices_range.append(
                 np.where(
                     (positions >= range_item[0]) & (positions <= range_item[1])
@@ -337,24 +340,18 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         new_intensities = []
         new_positions = []
 
-        for (
-            range_indices
-        ) in indices_range:  # Changed from 'range' to 'range_indices'
-            # Fix: properly extract intensities - flatten the 2D array for this range
-            temp_intensities = intensities[
-                range_indices
-            ]  # Take first row and specified indices
-            temp_positions = positions[
-                range_indices
-            ]  # Direct indexing for positions
+        for range_indices in indices_range:
+            temp_intensities = intensities[range_indices]
+            temp_positions = positions[range_indices]
 
-            # Add baseline distortion if enabled
+            # Add realistic baseline distortion to simulate experimental conditions
             if baseline_distortion:
-                # Normalize positions to [0, 1] for consistent baseline calculation
-                if len(temp_positions) > 1:  # Avoid division by zero
+                if len(temp_positions) > 1:
+                    # Normalize positions for consistent baseline calculation
                     x_normalized = (
                         temp_positions - np.min(temp_positions)
                     ) / (np.max(temp_positions) - np.min(temp_positions))
+                    # Sinusoidal baseline with 2% amplitude
                     baseline = 0.02 * np.sin(0.5 * np.pi * x_normalized)
                     temp_intensities = temp_intensities + baseline
 
@@ -363,34 +360,33 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             )
             new_positions = np.concatenate([new_positions, temp_positions])
 
+        # Downsample data to reduce computational complexity while preserving peak shapes
         if downsample > 0:
-            # For NMR data, positions are typically in descending order
-            # Sort the data by position to ensure proper binning
+            # Sort by position to ensure proper binning
             sorted_indices = np.argsort(new_positions)
             new_positions = new_positions[sorted_indices]
             new_intensities = new_intensities[sorted_indices]
 
+            # Create uniform grid for downsampling
             min_pos, max_pos = new_positions.min(), new_positions.max()
             bin_edges = np.linspace(min_pos, max_pos, downsample + 1)
             bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
             downsampled_intensities = np.zeros(downsample)
 
+            # Integrate intensities within each bin to preserve peak areas
             for i in range(downsample):
                 mask = (new_positions >= bin_edges[i]) & (
                     new_positions < bin_edges[i + 1]
                 )
                 if np.any(mask):
-                    # Use interpolation to better preserve peak shapes
-                    # This approach maintains area while giving better peak representation
                     bin_width = bin_edges[i + 1] - bin_edges[i]
                     if len(new_positions[mask]) > 1:
-                        # Use trapezoidal integration but normalize by actual data spacing
+                        # Use trapezoidal integration normalized by bin width
                         area = np.trapz(
                             new_intensities[mask], new_positions[mask]
                         )
                         downsampled_intensities[i] = area / bin_width
                     else:
-                        # Single point - just use the intensity value
                         downsampled_intensities[i] = new_intensities[mask][0]
                 else:
                     downsampled_intensities[i] = 0.0
@@ -401,10 +397,9 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
+        """Calculate concentration ratios relative to internal standard (tsp)"""
         ratios = {
-            substance: scales[substance][0]
-            # substanceDict[substance][0]: scales[substanceDict[substance][0]][0]
-            / scales['tsp'][0]
+            substance: scales[substance][0] / scales['tsp'][0]
             for substance in scales
         }
 
@@ -413,6 +408,10 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     def preprocess_spectra(
         spectra, ranges, substanceDict, baseline_distortion=False, downsample=0
     ):
+        """
+        Complete preprocessing pipeline for a single spectrum.
+        Extracts regions, adds distortion, calculates ratios.
+        """
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'][0],
             positions=spectra['positions'],
@@ -431,12 +430,13 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             'ratios': ratios,
         }
 
-    ranges = [[-100, 100]]
-    baseline_distortion = True
-    downsample = int(2048)
+    # Preprocessing configuration
+    ranges = [[-100, 100]]  # Full spectral range in ppm
+    baseline_distortion = True  # Add realistic experimental artifacts
+    downsample = int(2048)  # Target resolution for ML model
 
-    # Helper function for multiprocessing spectrum processing
     def process_single_spectrum(spectrum):
+        """Worker function for parallel spectrum preprocessing"""
         return preprocess_spectra(
             spectra=spectrum,
             ranges=ranges,
@@ -445,53 +445,47 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             downsample=downsample,
         )
 
-    # Helper function for multiprocessing reference processing
     def process_single_reference(spectrum_key):
+        """Worker function for parallel reference preprocessing"""
         pos_int = preprocess_peaks(
             positions=spectra[0]['positions'],
             intensities=reference_spectra[spectrum_key],
             downsample=2048,
         )
-        return (
-            spectrum_key,
-            pos_int[1],
-        )  # Return key and processed intensities
+        return (spectrum_key, pos_int[1])
 
     def process_spectra(spectra):
-        # Determine number of processes (use CPU count - 1 to leave one core free)
+        """Parallel preprocessing of all training spectra"""
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for spectra preprocessing')
 
-        # Process spectra in parallel
         with mp.Pool(processes=num_processes) as pool:
             preprocessed_spectra = pool.map(process_single_spectrum, spectra)
 
         return preprocessed_spectra
 
     def process_references(reference_spectra):
-        # Determine number of processes (use CPU count - 1 to leave one core free)
+        """Parallel preprocessing of reference spectra"""
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for reference preprocessing')
 
-        # Process references in parallel
         with mp.Pool(processes=num_processes) as pool:
             results = pool.map(
                 process_single_reference, reference_spectra.keys()
             )
 
-        # Convert results back to dictionary
         preprocessed_reference_spectra = {
             key: intensities for key, intensities in results
         }
 
         return preprocessed_reference_spectra
 
+    # Execute preprocessing pipelines
     preprocessed_spectra = process_spectra(spectra)
-
     preprocessed_reference_spectra = process_references(reference_spectra)
 
     def generate_figure():
-
+        """Create before/after preprocessing comparison plots"""
         plt.figure(figsize=(8, 4))
         for substance in substanceDict:
             plt.subplot(1, 2, 1)
@@ -552,15 +546,17 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
     print(len(spectra))
     print(len(labels))
 
+    # Compare original vs preprocessed spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
     for graphcounter2 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter2)
-        # plt.title(f'{round(labels[graphcounter], 3)}M')
+        # Original spectrum
         plt.plot(
             spectra[graphcounter2]['positions'],
             spectra[graphcounter2]['intensities'][0],
         )
+        # Preprocessed spectrum (downsampled + baseline corrected)
         plt.plot(
             preprocessed_spectra[graphcounter2]['positions'],
             preprocessed_spectra[graphcounter2]['intensities'],
@@ -574,7 +570,7 @@ def _(graph_count, labels, plt, preprocessed_spectra, spectra):
 def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
     from sklearn.model_selection import train_test_split
 
-    # Add device detection and setup
+    # Configure device for GPU acceleration if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
     if torch.cuda.is_available():
@@ -584,62 +580,61 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0
     ):
         """
-        Input:
-            data = [
-                data instances, (float32)
-                axes, (x/y)
-                points along each axis (float32)
-            ]
+        Prepare training data for multi-task learning model.
 
-            labels = array of labels (float32)
+        Creates paired examples of (mixed spectrum + reference) -> (presence, concentration)
+        Each training example consists of:
+        - Mixed spectrum intensities and positions
+        - Pure component reference spectrum
+        - Labels: [presence (0/1), concentration ratio]
 
-            train_ratio = ratio of data to be trained. Defaults 0.7, 70% data used for training
-            val_ratio = ratio of data for validation. Defaults 0.15, 15% data used for validation
-            # test_ratio = 1 - train_ratio - val_ratio (automatically calculated)
+        Args:
+            spectra: List of mixed spectrum dictionaries
+            reference_spectra: Dictionary of pure component references
+            train_ratio: Training set fraction
+            val_ratio: Validation set fraction
+            axes: Unused parameter (legacy)
 
-            axes = number of axes to remove. Defaults to 0 (no transformation). Use negative numbers
-
-        Output:
-            data_train = [
-                data instances, (float32)
-                points along both axes in single vector, (float32)
-            ]
-            data_val = identical
-            data_test = identical
-            labels_train = array of labels (float32)
-            labels_val = identical
-            labels_test = identical
+        Returns:
+            Dictionary with train/val/test splits for features and labels
         """
         data = []
         labels = []
 
+        # Create training pairs: (mixed_spectrum + reference) -> (presence, concentration)
         for spectrum in spectra:
             for substance in reference_spectra:
+                # Concatenate mixed spectrum with reference for comparison
                 data.append(
                     np.concatenate(
                         [
-                            spectrum['intensities'],
-                            spectrum['positions'],
-                            reference_spectra[substance],
+                            spectrum[
+                                'intensities'
+                            ],  # Mixed spectrum intensities
+                            spectrum['positions'],  # Chemical shift positions
+                            reference_spectra[
+                                substance
+                            ],  # Pure reference spectrum
                         ]
                     )
                 )
 
+                # Multi-task labels: presence detection + concentration estimation
                 if substance in spectrum['ratios']:
-                    labels.append([1, spectrum['ratios'][substance]])
+                    labels.append(
+                        [1, spectrum['ratios'][substance]]
+                    )  # Present with ratio
                 else:
-                    labels.append([0, 0])
+                    labels.append([0, 0])  # Absent
 
         data = np.array(data)
 
-        # First split: separate out test data
+        # Three-way split: train/validation/test
         test_ratio = 1 - train_ratio - val_ratio
         data_temp, data_test, labels_temp, labels_test = train_test_split(
             data, labels, test_size=test_ratio, shuffle=True, random_state=42
         )
 
-        # Second split: divide remaining data into train and validation
-        # Calculate validation ratio relative to the remaining data
         val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
         data_train, data_val, labels_train, labels_val = train_test_split(
             data_temp,
@@ -649,7 +644,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
             random_state=42,
         )
 
-        # Move tensors to GPU
+        # Convert to GPU tensors for efficient training
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
         labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
             device
@@ -676,7 +671,6 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
 
-    # Get sample ratio for display
     sample_ratio = preprocessed_spectra[0]['ratios']
     data_length = len(training_data['data_train'][0])
 
@@ -715,24 +709,38 @@ def _(np, torch, training_data):
     import torch.nn as nn
 
     def train_mlp_model(training_data, trial):
-        # Get device from training data tensors
+        """
+        Train a multi-task neural network for metabolite presence detection and concentration estimation.
+
+        Architecture: Multi-layer perceptron with progressively smaller layers
+        Tasks:
+        1. Binary classification for metabolite presence
+        2. Regression for concentration estimation
+
+        Args:
+            training_data: Dictionary with train/val/test splits
+            trial: Optuna trial object for hyperparameter optimization
+
+        Returns:
+            Tuple of validation and test metrics
+        """
         device = training_data['data_train'].device
 
+        # Hyperparameter suggestions from Optuna
         n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
         div_size = trial.suggest_float('div_size', 2, 10, step=1)
-
-        # Add hyperparameter for loss weighting
         loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
 
-        a = len(training_data['data_train'][0])
+        # Progressive layer size reduction based on division factor
+        a = len(training_data['data_train'][0])  # Input feature dimension
         b = int(a / div_size)
         c = int(b / div_size)
         d = int(c / div_size)
         e = int(d / div_size)
 
-        # Define the model and move to GPU
+        # Multi-layer perceptron with ReLU activations
         model = nn.Sequential(
             nn.Linear(a, b),
             nn.ReLU(),
@@ -745,7 +753,7 @@ def _(np, torch, training_data):
             nn.Linear(e, 2),  # Output: [presence_logit, concentration]
         ).to(device)
 
-        # Data is already on GPU from get_training_data_mlp
+        # Extract data tensors (already on GPU)
         data_train = training_data['data_train']
         data_val = training_data['data_val']
         data_test = training_data['data_test']
@@ -755,42 +763,50 @@ def _(np, torch, training_data):
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
-        # Define loss functions
-        bce_loss = (
-            nn.BCEWithLogitsLoss()
-        )  # For presence prediction (classification)
+        # Multi-task loss functions
+        bce_loss = nn.BCEWithLogitsLoss()  # Binary cross-entropy for presence
         mse_loss = nn.MSELoss(
             reduction='none'
-        )  # For concentration prediction (regression)
+        )  # Mean squared error for concentration
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         def compute_loss(predictions, targets):
-            # Split predictions and targets
-            presence_logits = predictions[:, 0]  # Raw logits for presence
+            """
+            Compute weighted multi-task loss combining classification and regression.
+
+            Returns:
+                total_loss: Combined weighted loss
+                classification_loss: BCE loss for presence prediction
+                weighted_concentration_loss: MSE loss for concentration (weighted by presence)
+            """
+            presence_logits = predictions[
+                :, 0
+            ]    # Raw logits for binary classification
             concentration_pred = predictions[:, 1]  # Concentration predictions
 
-            presence_true = targets[:, 0]  # True presence (0 or 1)
-            concentration_true = targets[:, 1]  # True concentration
+            presence_true = targets[:, 0]      # Ground truth presence (0 or 1)
+            concentration_true = targets[:, 1]   # Ground truth concentration
 
-            # Classification loss for presence
+            # Classification loss for presence detection
             classification_loss = bce_loss(presence_logits, presence_true)
 
-            # Regression loss for concentration (only where substance is present)
+            # Regression loss for concentration (only when substance is present)
             concentration_loss = mse_loss(
                 concentration_pred, concentration_true
             )
-            # Weight the concentration loss by the true presence
+            # Weight by presence to avoid penalizing concentration errors when absent
             weighted_concentration_loss = torch.mean(
                 concentration_loss * presence_true
             )
 
-            # Combine losses
+            # Combine losses with learnable weighting
             total_loss = (
                 classification_loss + loss_weight * weighted_concentration_loss
             )
 
             return total_loss, classification_loss, weighted_concentration_loss
 
+        # Training loop with early stopping based on validation loss
         best_loss = np.inf
         best_weights = None
         history = []
@@ -802,27 +818,26 @@ def _(np, torch, training_data):
             ) as bar:
                 bar.set_description(f'Epoch {epoch}')
                 for start in bar:
-                    # take a batch
+                    # Mini-batch training
                     data_batch = data_train[start : start + batch_size]
                     labels_batch = labels_train[start : start + batch_size]
-                    # forward pass
                     predictions = model(data_batch)
                     total_loss, class_loss, conc_loss = compute_loss(
                         predictions, labels_batch
                     )
-                    # backward pass
+
+                    # Backpropagation
                     optimizer.zero_grad()
                     total_loss.backward()
-                    # update weights
                     optimizer.step()
-                    # print progress
+
                     bar.set_postfix(
                         total_loss=float(total_loss),
                         class_loss=float(class_loss),
                         conc_loss=float(conc_loss),
                     )
 
-            # evaluate on validation set at end of each epoch
+            # Validation evaluation for early stopping
             model.eval()
             with torch.no_grad():
                 predictions = model(data_val)
@@ -830,15 +845,16 @@ def _(np, torch, training_data):
                 val_loss = float(val_loss)
                 history.append(val_loss)
 
+                # Save best model weights
                 if val_loss < best_loss:
                     best_loss = val_loss
                     best_weights = copy.deepcopy(model.state_dict())
 
-        # Load best weights and evaluate on test set for final metrics
+        # Load best weights for final evaluation
         model.load_state_dict(best_weights)
         model.eval()
         with torch.no_grad():
-            # Validation metrics
+            # Validation metrics computation
             val_pred = model(data_val)
             val_presence_logits = val_pred[:, 0]
             val_concentration_pred = val_pred[:, 1]
@@ -849,13 +865,13 @@ def _(np, torch, training_data):
             val_presence_true = labels_val[:, 0]
             val_concentration_true = labels_val[:, 1]
 
-            # Classification metrics (presence)
+            # Classification metrics (presence detection)
             val_presence_binary = (val_presence_pred > 0.5).float()
             val_accuracy = torch.mean(
                 (val_presence_binary == val_presence_true).float()
             )
 
-            # Regression metrics (concentration, only for present substances)
+            # Regression metrics (concentration estimation, only for present substances)
             present_mask = val_presence_true == 1
             if present_mask.sum() > 0:
                 val_conc_mae = torch.mean(
@@ -873,7 +889,7 @@ def _(np, torch, training_data):
                         ** 2
                     )
                 )
-                # R² for concentration
+                # R-squared coefficient of determination
                 ss_res_val = torch.sum(
                     (
                         val_concentration_true[present_mask]
@@ -894,7 +910,7 @@ def _(np, torch, training_data):
                 val_conc_rmse = torch.tensor(0.0)
                 val_conc_r2 = torch.tensor(0.0)
 
-            # Test metrics
+            # Test metrics computation (same structure as validation)
             test_pred = model(data_test)
             test_presence_logits = test_pred[:, 0]
             test_concentration_pred = test_pred[:, 1]
@@ -903,13 +919,11 @@ def _(np, torch, training_data):
             test_presence_true = labels_test[:, 0]
             test_concentration_true = labels_test[:, 1]
 
-            # Classification metrics (presence)
             test_presence_binary = (test_presence_pred > 0.5).float()
             test_accuracy = torch.mean(
                 (test_presence_binary == test_presence_true).float()
             )
 
-            # Regression metrics (concentration, only for present substances)
             test_present_mask = test_presence_true == 1
             if test_present_mask.sum() > 0:
                 test_conc_mae = torch.mean(
@@ -927,7 +941,6 @@ def _(np, torch, training_data):
                         ** 2
                     )
                 )
-                # R² for concentration
                 ss_res_test = torch.sum(
                     (
                         test_concentration_true[test_present_mask]
@@ -952,17 +965,17 @@ def _(np, torch, training_data):
 
         # Return validation metrics for optimization and test metrics for final evaluation
         return (
-            float(val_accuracy),  # Primary metric for optimization
+            float(val_accuracy),  # Primary metric for Optuna optimization
             float(val_conc_r2),
             float(val_conc_mae),
             float(val_conc_rmse),
-            float(test_accuracy),
+            float(test_accuracy),  # Final test performance
             float(test_conc_r2),
             float(test_conc_mae),
             float(test_conc_rmse),
         )
 
-    # Get device info from training data
+    # Store device info for display
     device_info = training_data['data_train'].device
     gpu_name = ''
     if torch.cuda.is_available():
@@ -1044,15 +1057,26 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(tqdm, train_mlp_model, training_data):
-    # Hyperparameter optimisation loop
-
+def _(train_mlp_model):
     import optuna
     from functools import partial
 
-    trials = 1000
+    trials = 1000  # Total number of hyperparameter optimization trials
 
     def objective(training_data, trial):
+        """
+        Optuna objective function for hyperparameter optimization.
+
+        Optimizes a weighted combination of classification accuracy and regression R².
+        This balances performance on both tasks in the multi-task learning setup.
+
+        Args:
+            training_data: Training/validation/test splits
+            trial: Optuna trial object for hyperparameter suggestions
+
+        Returns:
+            Combined score for optimization (higher is better)
+        """
         (
             val_accuracy,
             val_conc_r2,
@@ -1064,7 +1088,7 @@ def _(tqdm, train_mlp_model, training_data):
             test_conc_rmse,
         ) = train_mlp_model(training_data, trial)
 
-        # Store all metrics
+        # Store all metrics in trial for later analysis
         trial.set_user_attr('val_accuracy', val_accuracy)
         trial.set_user_attr('val_conc_r2', val_conc_r2)
         trial.set_user_attr('val_conc_mae', val_conc_mae)
@@ -1074,18 +1098,19 @@ def _(tqdm, train_mlp_model, training_data):
         trial.set_user_attr('test_conc_mae', test_conc_mae)
         trial.set_user_attr('test_conc_rmse', test_conc_rmse)
 
-        # Optimize for a combination of both tasks
-        # You can adjust these weights based on which task is more important
+        # Optimize weighted combination of both tasks (equal weighting)
         combined_score = 0.5 * val_accuracy + 0.5 * val_conc_r2
         return combined_score
 
+    # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
-        direction='maximize',
+        direction='maximize',  # Maximize the combined score
         study_name='metabolite_randomisation',
         storage='sqlite:///model_database/metabolite_randomisation.db',
-        load_if_exists=True,
+        load_if_exists=True,  # Resume previous optimization if study exists
     )
 
+    # Count completed trials for progress tracking
     completed_trials = len(
         [
             t
@@ -1093,15 +1118,31 @@ def _(tqdm, train_mlp_model, training_data):
             if t.state == optuna.trial.TrialState.COMPLETE
         ]
     )
+    return completed_trials, objective, optuna, partial, study, trials
 
+
+@app.cell
+def _(
+    completed_trials,
+    objective,
+    optuna,
+    partial,
+    study,
+    tqdm,
+    training_data,
+    trials,
+):
+    # Run hyperparameter optimization if more trials are needed
     if trials - completed_trials > 0:
         with tqdm.tqdm(
             total=trials - completed_trials, desc='Optimizing'
         ) as pbar:
 
             def callback(study, trial):
+                """Progress callback for Optuna optimization"""
                 pbar.update(1)
 
+            # Resume or start hyperparameter optimization
             study.optimize(
                 partial(objective, training_data),
                 callbacks=[
@@ -1111,8 +1152,7 @@ def _(tqdm, train_mlp_model, training_data):
                     callback,
                 ],
             )
-
-    return optuna, study
+    return
 
 
 if __name__ == '__main__':
