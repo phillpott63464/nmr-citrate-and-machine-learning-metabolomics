@@ -711,7 +711,7 @@ def _(train_mlp_model, training_data, val_r22):
     study = optuna.create_study(
         direction='maximize',
         study_name='mlp_study',
-        storage='sqlite:///mlp_study.db',
+        storage='sqlite:///model_database/mlp_study.db',
         load_if_exists=True,
     )
 
