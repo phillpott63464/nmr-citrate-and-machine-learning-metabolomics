@@ -85,7 +85,7 @@ def _():
         for combination in combinations
     ]
 
-    count = 1
+    count = 10
 
     batch_data = []
 
@@ -110,7 +110,7 @@ def _():
             sample_scales = {
                 key: [values[i]] for key, values in batch['scales'].items()
             }
-    
+
             # Create spectrum dict in your current format
             spectrum = {
                 'scales': sample_scales,
@@ -685,6 +685,9 @@ def _(np, torch, training_data):
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
         div_size = trial.suggest_float('div_size', 2, 10, step=1)
 
+        # Add hyperparameter for loss weighting
+        loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
+
         a = len(training_data['data_train'][0])
         b = int(a / div_size)
         c = int(b / div_size)
@@ -701,7 +704,7 @@ def _(np, torch, training_data):
             nn.ReLU(),
             nn.Linear(d, e),
             nn.ReLU(),
-            nn.Linear(e, 2),
+            nn.Linear(e, 2),  # Output: [presence_logit, concentration]
         ).to(device)
 
         # Data is already on GPU from get_training_data_mlp
@@ -714,9 +717,31 @@ def _(np, torch, training_data):
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
-        # loss function and optimizer
-        loss_fn = nn.MSELoss()
+        # Define loss functions
+        bce_loss = nn.BCEWithLogitsLoss()  # For presence prediction (classification)
+        mse_loss = nn.MSELoss(reduction='none')  # For concentration prediction (regression)
         optimizer = optim.Adam(model.parameters(), lr=lr)
+
+        def compute_loss(predictions, targets):
+            # Split predictions and targets
+            presence_logits = predictions[:, 0]  # Raw logits for presence
+            concentration_pred = predictions[:, 1]  # Concentration predictions
+
+            presence_true = targets[:, 0]  # True presence (0 or 1)
+            concentration_true = targets[:, 1]  # True concentration
+
+            # Classification loss for presence
+            classification_loss = bce_loss(presence_logits, presence_true)
+
+            # Regression loss for concentration (only where substance is present)
+            concentration_loss = mse_loss(concentration_pred, concentration_true)
+            # Weight the concentration loss by the true presence
+            weighted_concentration_loss = torch.mean(concentration_loss * presence_true)
+
+            # Combine losses
+            total_loss = classification_loss + loss_weight * weighted_concentration_loss
+
+            return total_loss, classification_loss, weighted_concentration_loss
 
         best_loss = np.inf
         best_weights = None
@@ -733,21 +758,25 @@ def _(np, torch, training_data):
                     data_batch = data_train[start : start + batch_size]
                     labels_batch = labels_train[start : start + batch_size]
                     # forward pass
-                    labels_pred = model(data_batch)
-                    loss = loss_fn(labels_pred.squeeze(), labels_batch)
+                    predictions = model(data_batch)
+                    total_loss, class_loss, conc_loss = compute_loss(predictions, labels_batch)
                     # backward pass
                     optimizer.zero_grad()
-                    loss.backward()
+                    total_loss.backward()
                     # update weights
                     optimizer.step()
                     # print progress
-                    bar.set_postfix(loss=float(loss))
+                    bar.set_postfix(
+                        total_loss=float(total_loss),
+                        class_loss=float(class_loss),
+                        conc_loss=float(conc_loss)
+                    )
 
             # evaluate on validation set at end of each epoch
             model.eval()
             with torch.no_grad():
-                labels_pred = model(data_val)
-                val_loss = loss_fn(labels_pred.squeeze(), labels_val)
+                predictions = model(data_val)
+                val_loss, _, _ = compute_loss(predictions, labels_val)
                 val_loss = float(val_loss)
                 history.append(val_loss)
 
@@ -759,32 +788,78 @@ def _(np, torch, training_data):
         model.load_state_dict(best_weights)
         model.eval()
         with torch.no_grad():
-            # Validation metrics (for optimization)
-            val_pred = model(data_val).squeeze()
-            val_mae = torch.mean(torch.abs(val_pred - labels_val))
-            val_rmse = torch.sqrt(torch.mean((val_pred - labels_val) ** 2))
-            ss_res_val = torch.sum((labels_val - val_pred) ** 2)
-            ss_tot_val = torch.sum((labels_val - torch.mean(labels_val)) ** 2)
-            val_r2_score = 1 - (ss_res_val / ss_tot_val)
+            # Validation metrics
+            val_pred = model(data_val)
+            val_presence_logits = val_pred[:, 0]
+            val_concentration_pred = val_pred[:, 1]
+            val_presence_pred = torch.sigmoid(val_presence_logits)  # Convert to probabilities
 
-            # Test metrics (for final evaluation)
-            test_pred = model(data_test).squeeze()
-            test_mae = torch.mean(torch.abs(test_pred - labels_test))
-            test_rmse = torch.sqrt(torch.mean((test_pred - labels_test) ** 2))
-            ss_res_test = torch.sum((labels_test - test_pred) ** 2)
-            ss_tot_test = torch.sum(
-                (labels_test - torch.mean(labels_test)) ** 2
-            )
-            test_r2_score = 1 - (ss_res_test / ss_tot_test)
+            val_presence_true = labels_val[:, 0]
+            val_concentration_true = labels_val[:, 1]
+
+            # Classification metrics (presence)
+            val_presence_binary = (val_presence_pred > 0.5).float()
+            val_accuracy = torch.mean((val_presence_binary == val_presence_true).float())
+
+            # Regression metrics (concentration, only for present substances)
+            present_mask = val_presence_true == 1
+            if present_mask.sum() > 0:
+                val_conc_mae = torch.mean(torch.abs(
+                    val_concentration_pred[present_mask] - val_concentration_true[present_mask]
+                ))
+                val_conc_rmse = torch.sqrt(torch.mean(
+                    (val_concentration_pred[present_mask] - val_concentration_true[present_mask]) ** 2
+                ))
+                # R² for concentration
+                ss_res_val = torch.sum((val_concentration_true[present_mask] - val_concentration_pred[present_mask]) ** 2)
+                ss_tot_val = torch.sum((val_concentration_true[present_mask] - torch.mean(val_concentration_true[present_mask])) ** 2)
+                val_conc_r2 = 1 - (ss_res_val / ss_tot_val)
+            else:
+                val_conc_mae = torch.tensor(0.0)
+                val_conc_rmse = torch.tensor(0.0)
+                val_conc_r2 = torch.tensor(0.0)
+
+            # Test metrics
+            test_pred = model(data_test)
+            test_presence_logits = test_pred[:, 0]
+            test_concentration_pred = test_pred[:, 1]
+            test_presence_pred = torch.sigmoid(test_presence_logits)
+
+            test_presence_true = labels_test[:, 0]
+            test_concentration_true = labels_test[:, 1]
+
+            # Classification metrics (presence)
+            test_presence_binary = (test_presence_pred > 0.5).float()
+            test_accuracy = torch.mean((test_presence_binary == test_presence_true).float())
+
+            # Regression metrics (concentration, only for present substances)
+            test_present_mask = test_presence_true == 1
+            if test_present_mask.sum() > 0:
+                test_conc_mae = torch.mean(torch.abs(
+                    test_concentration_pred[test_present_mask] - test_concentration_true[test_present_mask]
+                ))
+                test_conc_rmse = torch.sqrt(torch.mean(
+                    (test_concentration_pred[test_present_mask] - test_concentration_true[test_present_mask]) ** 2
+                ))
+                # R² for concentration
+                ss_res_test = torch.sum((test_concentration_true[test_present_mask] - test_concentration_pred[test_present_mask]) ** 2)
+                ss_tot_test = torch.sum((test_concentration_true[test_present_mask] - torch.mean(test_concentration_true[test_present_mask])) ** 2)
+                test_conc_r2 = 1 - (ss_res_test / ss_tot_test)
+            else:
+                test_conc_mae = torch.tensor(0.0)
+                test_conc_rmse = torch.tensor(0.0)
+                test_conc_r2 = torch.tensor(0.0)
 
         # Return validation metrics for optimization and test metrics for final evaluation
         return (
-            val_mae,
-            val_rmse,
-            val_r2_score,
-            test_mae,
-            test_rmse,
-            test_r2_score,
+            float(val_accuracy),  # Primary metric for optimization
+            float(val_conc_r2),
+            float(val_conc_mae),
+            float(val_conc_rmse),
+            float(test_accuracy),
+            float(test_conc_r2),
+            float(test_conc_mae),
+            float(test_conc_rmse),
         )
 
     # Get device info from training data
@@ -825,15 +900,18 @@ def _(mo, optuna, study):
 
     **Best Trial Performance (Validation Set):**
 
-    - **R² Score: {study.best_trial.value:.4f}** (Coefficient of determination - measures how well the model explains variance in the data. Range: 0-1, higher is better)
-    - **MAE: {study.best_trial.user_attrs['val_mae']:.6f}** (Mean Absolute Error - average absolute difference between predictions and true values. Lower is better)
-    - **RMSE: {study.best_trial.user_attrs['val_rmse']:.6f}** (Root Mean Square Error - penalizes larger errors more heavily than MAE. Lower is better)
+    - **Combined Score: {study.best_trial.value:.4f}** (0.5 * Accuracy + 0.5 * R², optimized metric)
+    - **Classification Accuracy: {study.best_trial.user_attrs['val_accuracy']:.4f}** (Presence prediction accuracy - higher is better)
+    - **Concentration R²: {study.best_trial.user_attrs['val_conc_r2']:.4f}** (Coefficient of determination for concentration - higher is better)
+    - **Concentration MAE: {study.best_trial.user_attrs['val_conc_mae']:.6f}** (Mean Absolute Error for concentration - lower is better)
+    - **Concentration RMSE: {study.best_trial.user_attrs['val_conc_rmse']:.6f}** (Root Mean Square Error for concentration - lower is better)
 
     **Final Test Set Performance:**
 
-    - **R² Score: {study.best_trial.user_attrs['test_r2_score']:.4f}**
-    - **MAE: {study.best_trial.user_attrs['test_mae']:.6f}**
-    - **RMSE: {study.best_trial.user_attrs['test_rmse']:.6f}**
+    - **Classification Accuracy: {study.best_trial.user_attrs['test_accuracy']:.4f}**
+    - **Concentration R²: {study.best_trial.user_attrs['test_conc_r2']:.4f}**
+    - **Concentration MAE: {study.best_trial.user_attrs['test_conc_mae']:.6f}**
+    - **Concentration RMSE: {study.best_trial.user_attrs['test_conc_rmse']:.6f}**
 
     **Best Hyperparameters:**
 
@@ -841,10 +919,17 @@ def _(mo, optuna, study):
     - **Batch Size:** {study.best_trial.params['batch_size']:.0f}
     - **Learning Rate:** {study.best_trial.params['lr']:.2e}
     - **Division Size:** {study.best_trial.params['div_size']:.0f} (controls network width - smaller values = wider layers)
+    - **Loss Weight:** {study.best_trial.params['loss_weight']:.2f} (weighting for concentration vs presence loss)
 
     **Model Architecture:**
 
-    Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 1 output
+    Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 2 outputs (presence + concentration)
+
+    **Multi-Task Learning:**
+
+    - **Task 1:** Binary classification for substance presence (BCEWithLogitsLoss)
+    - **Task 2:** Regression for concentration prediction (MSE, weighted by presence)
+    - **Combined Loss:** Classification + {study.best_trial.params['loss_weight']:.2f} × Concentration Loss
 
     **Data Split:**
 
@@ -865,28 +950,34 @@ def _(train_mlp_model, training_data):
     import optuna
     from functools import partial
 
-    trials = 1000
+    trials = 10
 
     def objective(training_data, trial):
         (
-            val_mae,
-            val_rmse,
-            val_r2,
-            test_mae,
-            test_rmse,
-            test_r2,
+            val_accuracy,
+            val_conc_r2,
+            val_conc_mae,
+            val_conc_rmse,
+            test_accuracy,
+            test_conc_r2,
+            test_conc_mae,
+            test_conc_rmse,
         ) = train_mlp_model(training_data, trial)
 
-        # Store all metrics in the trial for later analysis
-        trial.set_user_attr('val_mae', float(val_mae))
-        trial.set_user_attr('val_rmse', float(val_rmse))
-        trial.set_user_attr('val_r2_score', float(val_r2))
-        trial.set_user_attr('test_mae', float(test_mae))
-        trial.set_user_attr('test_rmse', float(test_rmse))
-        trial.set_user_attr('test_r2_score', float(test_r2))
+        # Store all metrics
+        trial.set_user_attr('val_accuracy', val_accuracy)
+        trial.set_user_attr('val_conc_r2', val_conc_r2)
+        trial.set_user_attr('val_conc_mae', val_conc_mae)
+        trial.set_user_attr('val_conc_rmse', val_conc_rmse)
+        trial.set_user_attr('test_accuracy', test_accuracy)
+        trial.set_user_attr('test_conc_r2', test_conc_r2)
+        trial.set_user_attr('test_conc_mae', test_conc_mae)
+        trial.set_user_attr('test_conc_rmse', test_conc_rmse)
 
-        # Optimize for validation R² score (higher is better)
-        return val_r2
+        # Optimize for a combination of both tasks
+        # You can adjust these weights based on which task is more important
+        combined_score = 0.5 * val_accuracy + 0.5 * val_conc_r2
+        return combined_score
 
     study = optuna.create_study(
         direction='maximize',
