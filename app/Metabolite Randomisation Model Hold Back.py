@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.13"
+__generated_with = "0.14.16"
 app = marimo.App(width="medium")
 
 
@@ -45,7 +45,7 @@ def _():
     trials = 1000
     notebook_name = 'randomisation_hold_back'
     cache_dir = f"./data_cache/{notebook_name}"
-    return cache_dir, count, notebook_name, trials
+    return cache_dir, count, trials
 
 
 @app.cell(hide_code=True)
@@ -75,6 +75,7 @@ def _(cache_dir, count):
     import os
     import pickle
     from pathlib import Path
+    import random
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -119,25 +120,40 @@ def _(cache_dir, count):
     ]
 
     # Save/load functions for data persistence
-    def save_spectra_data(spectra, filename):
-        """Save generated spectra data to pickle file"""
+    def save_spectra_data(spectra, held_back_metabolite, filename):
+        """Save generated spectra data and held-back metabolite to pickle file"""
         os.makedirs(cache_dir, exist_ok=True)
         filepath = f"{cache_dir}/{filename}.pkl"
 
+        data_to_save = {
+            'spectra': spectra,
+            'held_back_metabolite': held_back_metabolite
+        }
+
         with open(filepath, 'wb') as f:
-            pickle.dump(spectra, f)
-        print(f"Saved {len(spectra)} spectra to {filepath}")
+            pickle.dump(data_to_save, f)
+        print(f"Saved {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' to {filepath}")
 
     def load_spectra_data(filename):
-        """Load generated spectra data from pickle file"""
+        """Load generated spectra data and held-back metabolite from pickle file"""
         filepath = f"{cache_dir}/{filename}.pkl"
 
         if os.path.exists(filepath):
             with open(filepath, 'rb') as f:
-                spectra = pickle.load(f)
-            print(f"Loaded {len(spectra)} spectra from {filepath}")
-            return spectra
-        return None
+                data = pickle.load(f)
+
+            # Handle both old and new cache formats
+            if isinstance(data, list):
+                # Old format - just spectra
+                print(f"Loaded {len(data)} spectra from {filepath} (old format)")
+                return data, None
+            else:
+                # New format - spectra + held_back_metabolite
+                spectra = data['spectra']
+                held_back_metabolite = data['held_back_metabolite']
+                print(f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath}")
+                return spectra, held_back_metabolite
+        return None, None
 
     def generate_cache_key(substanceDict, combinations, count):
         """Generate unique cache key based on parameters"""
@@ -150,10 +166,14 @@ def _(cache_dir, count):
     cache_key = generate_cache_key(substanceDict, combinations, count)
 
     # Try to load existing data first
-    spectra = load_spectra_data(cache_key)
+    spectra, held_back_metabolite = load_spectra_data(cache_key)
 
     if spectra is None:
         print("No cached data found. Generating new spectra...")
+
+        # Select random metabolite to hold back for testing
+        held_back_metabolite = random.choice(list(substanceDict.keys()))
+        print(f"Selected '{held_back_metabolite}' as held-back metabolite for testing")
 
         def create_batch_data(substances_and_count):
             """Generate training data batch for specific substance combination with random scaling"""
@@ -211,9 +231,14 @@ def _(cache_dir, count):
                 spectra.append(spectrum)
 
         # Save generated data for future use
-        save_spectra_data(spectra, cache_key)
+        save_spectra_data(spectra, held_back_metabolite, cache_key)
     else:
         print("Using cached spectra data.")
+        if held_back_metabolite is None:
+            # If old cache format, select and save new held-back metabolite
+            held_back_metabolite = random.choice(list(substanceDict.keys()))
+            print(f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache...")
+            save_spectra_data(spectra, held_back_metabolite, cache_key)
 
     # Display sample information for verification
     print(''.join(f"{x['scales']}\n'" for x in spectra[:5]))
@@ -233,9 +258,11 @@ def _(cache_dir, count):
     components_shape = spectra[0]['components'].shape
 
     return (
+        cache_key,
         combinations,
         components_shape,
         createTrainingData,
+        held_back_metabolite,
         intensities_shape,
         mp,
         np,
@@ -634,9 +661,15 @@ def _(graph_count, plt, preprocessed_spectra, spectra):
 
 
 @app.cell
-def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
+def _(
+    held_back_metabolite,
+    np,
+    preprocessed_reference_spectra,
+    preprocessed_spectra,
+    substanceDict,
+    torch,
+):
     from sklearn.model_selection import train_test_split
-    import random
 
     # Configure device for GPU acceleration if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -645,7 +678,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         print(f'GPU: {torch.cuda.get_device_name(0)}')
 
     def get_training_data_mlp(
-        spectra, reference_spectra, train_ratio=0.7, val_ratio=0.15, axes=0
+        spectra, reference_spectra, held_back_metabolite, train_ratio=0.7, val_ratio=0.15, axes=0
     ):
         """
         Prepare training data for multi-task learning model.
@@ -659,6 +692,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         Args:
             spectra: List of mixed spectrum dictionaries
             reference_spectra: Dictionary of pure component references
+            held_back_metabolite: Specific metabolite to hold back for testing
             train_ratio: Training set fraction
             val_ratio: Validation set fraction
             axes: Unused parameter (legacy)
@@ -671,8 +705,9 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
         data_test = []
         labels_test = []
 
-        # Choose a random substance from the reference list
-        random_key = random.choice(list(reference_spectra.keys()))
+        # Use the consistently cached held-back metabolite
+        held_back_key = substanceDict[held_back_metabolite][0]
+        print(f"Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})")
 
         # Create training pairs: (mixed_spectrum + reference) -> (presence, concentration)
         for spectrum in spectra:
@@ -696,13 +731,12 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
                 else:
                     temp_label = [0, 0]  # Absent
 
-                if substance == random_key: #If the spectrum contains the randomly selected substance, add it to test data
+                if substance == held_back_key: # Use the cached held-back metabolite
                     data_test.append(temp_data)
                     labels_test.append(temp_label)
-                else: #Otherwise, it's training/validation data
+                else: # Otherwise, it's training/validation data
                     data.append(temp_data)
                     labels.append(temp_label)
-
 
         data = np.array(data)
 
@@ -730,6 +764,7 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra, torch):
     training_data = get_training_data_mlp(
         spectra=preprocessed_spectra,
         reference_spectra=preprocessed_reference_spectra,
+        held_back_metabolite=held_back_metabolite,
     )
 
     print([training_data[x].shape for x in training_data])
@@ -1120,7 +1155,7 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(cache_dir, notebook_name, tqdm, train_mlp_model, training_data, trials):
+def _(cache_dir, cache_key, tqdm, train_mlp_model, training_data, trials):
     import optuna
     from functools import partial
 
@@ -1166,8 +1201,8 @@ def _(cache_dir, notebook_name, tqdm, train_mlp_model, training_data, trials):
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
         direction='maximize',  # Maximize the combined score
-        study_name=f'{notebook_name}',
-        storage=f'sqlite:///{cache_dir}/{notebook_name}.db',
+        study_name=cache_key,  # Use cache key for unique study identification
+        storage=f'sqlite:///{cache_dir}/{cache_key}.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
