@@ -16,7 +16,7 @@ def _(os):
     # global variables
 
     count = 1000
-    trials = 100
+    trials = 10
     combo_number = None
     notebook_name = 'hilbert_transform_single_metabolite'
     cache_dir = f"./data_cache/{notebook_name}"
@@ -153,7 +153,7 @@ def _(spectra):
     from scipy.signal import hilbert
     import matplotlib.pyplot as plt
 
-    graph_count = 3
+    graph_count = 1
 
     hilberts = []
     for index, spectrum2 in enumerate(spectra):  # Corrected 'ennumerate' to 'enumerate'
@@ -163,7 +163,7 @@ def _(spectra):
             ))
         )
 
-        if index > 10:  # Changed 'i' to 'index' to use the correct loop variable
+        if index > graph_count**2:  # Changed 'i' to 'index' to use the correct loop variable
             break
 
 
@@ -204,7 +204,7 @@ def _(graph_count, hilberts, np, plt):
         inverses.append(
             ifft(
                 hilbertarray
-            ).astype(np.float32)
+            )
         )
 
     # for inverse in inverses:
@@ -216,7 +216,7 @@ def _(graph_count, hilberts, np, plt):
     for graphcounter3 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter3)
         plt.plot(
-            inverses[graphcounter3],
+            inverses[graphcounter3].astype(np.float32),
         )
 
     inversefigures = plt.gca()
@@ -244,7 +244,7 @@ def _(graph_count, inverses, np, plt, spectra):
         uninversed.append(
             fft(
                 inverse
-            ).astype(np.float32)
+            )
         )
 
     # for inverse in inverses:
@@ -256,10 +256,12 @@ def _(graph_count, inverses, np, plt, spectra):
     for graphcounter4 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter4)
         plt.plot(
-            uninversed[graphcounter4],
+            uninversed[graphcounter4].astype(np.float32), 
+            label='Uninversed'
         )
         plt.plot(
-            spectra[graphcounter4]['intensities']
+            spectra[graphcounter4]['intensities'].astype(np.float32), 
+            label='Original'
         )
 
     uninversedfigures = plt.gca()
@@ -383,7 +385,6 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
             new_intensities = (ifft(hilbert(intensities))).astype(np.float32)
             new_positions = [0, 0]
 
-            #still completely broken
             if len(new_intensities) > downsample:
                 new_len = len(new_intensities) // int(log2(downsample))
                 new_nyquist = new_len // 2 + 1
@@ -516,7 +517,11 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
-    return preprocessed_spectra, preprocessedreferencefigure
+    return (
+        preprocessed_reference_spectra,
+        preprocessed_spectra,
+        preprocessedreferencefigure,
+    )
 
 
 @app.cell(hide_code=True)
@@ -526,7 +531,7 @@ def _(mo):
 
 
 @app.cell
-def _(np, preprocessed_spectra, reference_spectra):
+def _(np, preprocessed_reference_spectra, preprocessed_spectra):
     from sklearn.model_selection import train_test_split
     import torch
 
@@ -620,7 +625,7 @@ def _(np, preprocessed_spectra, reference_spectra):
             'labels_test': labels_test,
         }
 
-    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=reference_spectra)
+    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=preprocessed_reference_spectra)
 
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
@@ -648,11 +653,12 @@ def _(np, torch, training_data):
     def train_model(training_data, trial):
         # Get device from training data tensors
         device = training_data['data_train'].device
+        torch.cuda.empty_cache()
 
-        n_epochs = int(trial.suggest_float('n_epochs', 10, 200, step=10))
-        batch_size = int(trial.suggest_float('batch_size', 10, 200, step=10))
+        n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
+        batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
-        div_size = trial.suggest_float('div_size', 2, 20, step=1)
+        div_size = trial.suggest_float('div_size', 2, 10, step=1)
 
         a = len(training_data['data_train'][0])
         b = int(a / div_size)
@@ -765,8 +771,15 @@ def _(np, torch, training_data):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""## Hyperparameter Optimisation""")
+def _(mo, training_data):
+    mo.md(
+        rf"""
+    ## Hyperparameter Optimisation
+
+    {training_data['data_train'].shape}
+    {training_data['data_train'].dtype}
+    """
+    )
     return
 
 
