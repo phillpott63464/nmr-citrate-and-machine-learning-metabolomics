@@ -253,6 +253,23 @@ Clearly, overfitting is a major issue. Two ways to improve this:
 - Using something smarter than an MLP
 - Have the training, testing, and validation data be entirely separate spectra from each other
 
+### Hilbert Transform (FID data) single metabolite
+Validation Set (Optimization Target):
+
+    R² Score: 0.999527
+    MAE: 0.025928
+    RMSE: 0.037472
+
+Test Set (Final Evaluation):
+
+    R² Score: 0.998627
+    MAE: 0.031865
+    RMSE: 0.051972
+
+Best Parameters: - n_epochs: 100.0 - batch_size: 90.0 - lr: 0.003714545902240392 - div_size: 2.0
+
+It definetly works on FID data at least as well as it does on frequency data
+
 
 ## CNN
 ### Metabolite Randomisation with holdout 10 trials:
