@@ -134,3 +134,24 @@ And the exchange point:
 
 So that's 8/24. So for the rest... guess?
 
+---
+
+MLP after training for an entire weekend:
+
+Best Trial Performance (Validation Set):
+Combined Score: 0.9788 (0.5 * Accuracy + 0.5 * R², optimized metric)
+Classification Accuracy: 0.9821 (Presence prediction accuracy - higher is better)
+Concentration R²: 0.9755 (Coefficient of determination for concentration - higher is better)
+Concentration MAE: 0.148405 (Mean Absolute Error for concentration - lower is better)
+Concentration RMSE: 0.232599 (Root Mean Square Error for concentration - lower is better)
+
+Final Test Set Performance:
+Classification Accuracy: 0.4764
+Concentration R²: -0.2529
+Concentration MAE: 1.110174
+Concentration RMSE: 1.665682
+
+Clearly, overfitting is a major issue. Two ways to improve this:
+- Using something smarter than an MLP
+- Have the training, testing, and validation data be entirely separate spectra from each other
+
