@@ -235,7 +235,7 @@ def _(cache_dir, combo_number, count, substanceDict):
     
             print(f"Using {len(combinations)} combinations from cache")
 
-            return spectra, held_back_metabolite, combinations
+        return spectra, held_back_metabolite, combinations
         
 
 
@@ -368,9 +368,13 @@ def _(mo, referencefigure):
 
 
 @app.cell
-def _(createTrainingData, plt, referenceSpectrumIds, spectra, substanceDict):
+def _(createTrainingData, plt, spectra, substanceDict):
     # Generate pure component reference spectra (no random scaling)
     # These serve as templates for identifying substances in mixtures
+    referenceSpectrumIds = [
+        substanceDict[substance][-1] for substance in substanceDict
+    ]
+
     reference_spectra_raw = createTrainingData(
         substanceSpectrumIds=referenceSpectrumIds,
         sampleNumber=1,
@@ -1141,13 +1145,11 @@ def _(device_info, gpu_name, mo):
 
     - **Training Device:** {device_info} / {gpu_name}
 
-    **Model Architecture:** Multi-Layer Perceptron (MLP)
+    **Model Architecture:** 1D CNN
 
     - Sequential neural network with ReLU activations
 
-    - Variable width controlled by division size hyperparameter
-
-    - Final output: Single regression value
+    - Final output: Classification Logits and concentration regression 
     """
     )
     return
