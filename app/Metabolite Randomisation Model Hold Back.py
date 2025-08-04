@@ -41,8 +41,8 @@ def _(mo):
 def _():
     # global variables
 
-    count = 100
-    trials = 1000
+    count = 10
+    trials = 10
     notebook_name = 'randomisation_hold_back'
     cache_dir = f"./data_cache/{notebook_name}"
     return cache_dir, count, trials
