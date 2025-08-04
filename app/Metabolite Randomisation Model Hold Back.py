@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.13"
+__generated_with = "0.14.16"
 app = marimo.App(width="medium")
 
 
@@ -43,9 +43,27 @@ def _():
 
     count = 10
     trials = 100
+    combo_number = 10
     notebook_name = 'randomisation_hold_back-cnn'
     cache_dir = f"./data_cache/{notebook_name}"
-    return cache_dir, combo_number, count, trials
+
+    # Define metabolites and their spectrum IDs for NMR simulation
+    substanceDict = {
+        'Citric acid': ['SP:3368'],
+        'Succinic acid': ['SP:3211'],
+        'Maleic acid': ['SP:3110'],
+        'Lactic acid': ['SP:3675'],
+        'L-Methionine': ['SP:3509'],
+        'L-Proline': ['SP:3406'],
+        'L-Phenylalanine': ['SP:3507'],
+        'L-Serine': ['SP:3732'],
+        'L-Threonine': ['SP:3437'],
+        'L-Tryptophan': ['SP:3455'],
+        'L-Tyrosine': ['SP:3464'],
+        'L-Valine': ['SP:3490'],
+        'Glycine': ['SP:3682'],
+    }
+    return cache_dir, combo_number, count, substanceDict, trials
 
 
 @app.cell(hide_code=True)
@@ -65,7 +83,7 @@ def _(mo, spectrafigures, substanceDict):
 
 
 @app.cell
-def _(cache_dir, combo_number, count):
+def _(cache_dir, combo_number, count, substanceDict):
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -77,67 +95,26 @@ def _(cache_dir, combo_number, count):
     from pathlib import Path
     import random
 
-    # Define metabolites and their spectrum IDs for NMR simulation
-    substanceDict = {
-        'Citric acid': ['SP:3368'],
-        'Succinic acid': ['SP:3211'],
-        'Maleic acid': ['SP:3110'],
-        'Lactic acid': ['SP:3675'],
-        'L-Methionine': ['SP:3509'],
-        'L-Proline': ['SP:3406'],
-        'L-Phenylalanine': ['SP:3507'],
-        'L-Serine': ['SP:3732'],
-        'L-Threonine': ['SP:3437'],
-        'L-Tryptophan': ['SP:3455'],
-        'L-Tyrosine': ['SP:3464'],
-        'L-Valine': ['SP:3490'],
-        'Glycine': ['SP:3682'],
-    }
-
-    # Extract spectrum IDs for reference spectra generation
-    referenceSpectrumIds = [
-        substanceDict[substance][-1] for substance in substanceDict
-    ]
-
     substances = list(substanceDict.keys())
 
-    # Generate all possible combinations of substances (1 to n substances)
-    # This creates training data for different metabolite mixtures
-    combinations = []
-    for r in range(4, len(substances) + 1):
-        for combo in itertools.combinations(substances, r):
-            combo_dict = {
-                substance: substanceDict[substance] for substance in combo
-            }
-            combinations.append(combo_dict)
-
-    combinations = random.sample(combinations, combo_number)
-
-    print(len(combinations))
-
-    # Extract spectrum IDs for each combination
-    substanceSpectrumIds = [
-        [combination[substance][-1] for substance in combination]
-        for combination in combinations
-    ]
-
     # Save/load functions for data persistence
-    def save_spectra_data(spectra, held_back_metabolite, filename):
-        """Save generated spectra data and held-back metabolite to pickle file"""
+    def save_spectra_data(spectra, held_back_metabolite, combinations, filename):
+        """Save generated spectra data, held-back metabolite, and combinations to pickle file"""
         os.makedirs(cache_dir, exist_ok=True)
         filepath = f"{cache_dir}/{filename}.pkl"
 
         data_to_save = {
             'spectra': spectra,
-            'held_back_metabolite': held_back_metabolite
+            'held_back_metabolite': held_back_metabolite,
+            'combinations': combinations
         }
 
         with open(filepath, 'wb') as f:
             pickle.dump(data_to_save, f)
-        print(f"Saved {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' to {filepath}")
+        print(f"Saved {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations to {filepath}")
 
     def load_spectra_data(filename):
-        """Load generated spectra data and held-back metabolite from pickle file"""
+        """Load generated spectra data, held-back metabolite, and combinations from pickle file"""
         filepath = f"{cache_dir}/{filename}.pkl"
 
         if os.path.exists(filepath):
@@ -148,105 +125,141 @@ def _(cache_dir, combo_number, count):
             if isinstance(data, list):
                 # Old format - just spectra
                 print(f"Loaded {len(data)} spectra from {filepath} (old format)")
-                return data, None
-            else:
-                # New format - spectra + held_back_metabolite
+                return data, None, None
+            elif 'combinations' not in data:
+                # Medium format - spectra + held_back_metabolite
                 spectra = data['spectra']
                 held_back_metabolite = data['held_back_metabolite']
-                print(f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath}")
-                return spectra, held_back_metabolite
-        return None, None
+                print(f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath} (medium format)")
+                return spectra, held_back_metabolite, None
+            else:
+                # New format - spectra + held_back_metabolite + combinations
+                spectra = data['spectra']
+                held_back_metabolite = data['held_back_metabolite']
+                combinations = data['combinations']
+                print(f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations from {filepath}")
+                return spectra, held_back_metabolite, combinations
+        return None, None, None
 
-    def generate_cache_key(substanceDict, combinations, count):
+    def generate_cache_key(substanceDict, combo_number, count):
         """Generate unique cache key based on parameters"""
         substance_key = "_".join(sorted(substanceDict.keys()))
-        combo_key = f"combos_{len(combinations)}"
+        combo_key = f"combos_{combo_number}"
         count_key = f"count_{count}"
         return f"spectra_{substance_key}_{combo_key}_{count_key}"
 
+    def create_batch_data(substances_and_count):
+        """Generate training data batch for specific substance combination with random scaling"""
+        substances, sample_count = substances_and_count
+        return createTrainingData(
+            substanceSpectrumIds=substances,
+            sampleNumber=sample_count,
+            rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
+            referenceSubstanceSpectrumId='tsp',
+        )
+
+    def check_loaded_data(spectra, held_back_metabolite, combinations):
+        if spectra is None:
+            print("No cached data found. Generating new spectra...")
+    
+            # Generate all possible combinations of substances (4 to n substances)
+            # This creates training data for different metabolite mixtures
+            all_combinations = []
+            for r in range(4, len(substances) + 1):
+                for combo in itertools.combinations(substances, r):
+                    combo_dict = {
+                        substance: substanceDict[substance] for substance in combo
+                    }
+                    all_combinations.append(combo_dict)
+    
+            combinations = random.sample(all_combinations, combo_number)
+            print(f"Generated {len(combinations)} random combinations")
+    
+            # Select random metabolite to hold back for testing
+            held_back_metabolite = random.choice(list(substanceDict.keys()))
+            print(f"Selected '{held_back_metabolite}' as held-back metabolite for testing")
+    
+            # Extract spectrum IDs for each combination
+            substanceSpectrumIds = [
+                [combination[substance][-1] for substance in combination]
+                for combination in combinations
+            ]
+    
+            # Prepare multiprocessing arguments - one batch per substance combination
+            mp_args = [(substances, count) for substances in substanceSpectrumIds]
+    
+            # Use multiprocessing to parallelize data generation across CPU cores
+            num_processes = max(1, mp.cpu_count() - 1)
+            print(f'Using {num_processes} processes for data generation')
+    
+            batch_data = []
+            if len(mp_args) > 1:
+                with mp.Pool(processes=num_processes) as pool:
+                    batch_data = list(
+                        tqdm.tqdm(pool.imap_unordered(create_batch_data, mp_args), total=len(mp_args))
+                    )
+            else:
+                batch_data = [create_batch_data(mp_args[0])]
+    
+            print(f'Generated {len(batch_data)} batches')
+    
+            # Reshape batch data into individual spectrum samples
+            # Each spectrum contains intensities, positions, scales, and component information
+            spectra = []
+    
+            for batch in batch_data:
+                for i in range(count):
+                    # Extract individual sample scales (concentrations) from batch
+                    sample_scales = {
+                        key: [values[i]] for key, values in batch['scales'].items()
+                    }
+    
+                    # Create individual spectrum dictionary
+                    spectrum = {
+                        'scales': sample_scales,
+                        'intensities': batch['intensities'][i : i + 1],  # Keep 2D structure
+                        'positions': batch['positions'],  # Chemical shift positions (ppm)
+                        'components': batch['components'],  # Individual component spectra
+                    }
+                    spectra.append(spectrum)
+    
+            # Save generated data for future use
+            save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
+        else:
+            print("Using cached spectra data.")
+            if held_back_metabolite is None:
+                # If old cache format, select and save new held-back metabolite
+                held_back_metabolite = random.choice(list(substanceDict.keys()))
+                print(f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache...")
+                save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
+    
+            print(f"Using {len(combinations)} combinations from cache")
+
+            return spectra, held_back_metabolite, combinations
+        
+
+
     # Generate cache key for current configuration
-    cache_key = generate_cache_key(substanceDict, combinations, count)
+    cache_key = generate_cache_key(substanceDict, combo_number, count)
 
     # Try to load existing data first
-    spectra, held_back_metabolite = load_spectra_data(cache_key)
+    spectra, held_back_metabolite, combinations = load_spectra_data(cache_key)
+    spectra, held_back_metabolite, combinations = check_loaded_data(spectra, held_back_metabolite, combinations)
 
-    if spectra is None:
-        print("No cached data found. Generating new spectra...")
+    # Extract spectrum IDs for each combination (needed for later processing)
+    substanceSpectrumIds = [
+        [combination[substance][-1] for substance in combination]
+        for combination in combinations
+    ]
 
-        # Select random metabolite to hold back for testing
-        held_back_metabolite = random.choice(list(substanceDict.keys()))
-        print(f"Selected '{held_back_metabolite}' as held-back metabolite for testing")
-
-        def create_batch_data(substances_and_count):
-            """Generate training data batch for specific substance combination with random scaling"""
-            substances, sample_count = substances_and_count
-            return createTrainingData(
-                substanceSpectrumIds=substances,
-                sampleNumber=sample_count,
-                rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
-                referenceSubstanceSpectrumId='tsp',
-            )
-
-        # Prepare multiprocessing arguments - one batch per substance combination
-        mp_args = [(substances, count) for substances in substanceSpectrumIds]
-
-        # Use multiprocessing to parallelize data generation across CPU cores
-        num_processes = max(1, mp.cpu_count() - 1)
-        print(f'Using {num_processes} processes for data generation')
-
-        batch_data = []
-        if len(mp_args) > 1:
-            with mp.Pool(processes=num_processes) as pool:
-                batch_data = list(
-                    tqdm.tqdm(pool.imap_unordered(create_batch_data, mp_args), total=len(mp_args))
-                )
-        else:
-            batch_data = [create_batch_data(mp_args[0])]
-
-        print(f'Generated {len(batch_data)} batches')
-
-        # Reshape batch data into individual spectrum samples
-        # Each spectrum contains intensities, positions, scales, and component information
-        spectra = []
-        labels = []
-
-        for batch in batch_data:
-            for i in range(count):
-                # Extract individual sample scales (concentrations) from batch
-                sample_scales = {
-                    key: [values[i]] for key, values in batch['scales'].items()
-                }
-
-                # Create individual spectrum dictionary
-                spectrum = {
-                    'scales': sample_scales,
-                    'intensities': batch['intensities'][
-                        i : i + 1
-                    ],  # Keep 2D structure
-                    'positions': batch[
-                        'positions'
-                    ],  # Chemical shift positions (ppm)
-                    'components': batch[
-                        'components'
-                    ],  # Individual component spectra
-                }
-                spectra.append(spectrum)
-
-        # Save generated data for future use
-        save_spectra_data(spectra, held_back_metabolite, cache_key)
-    else:
-        print("Using cached spectra data.")
-        if held_back_metabolite is None:
-            # If old cache format, select and save new held-back metabolite
-            held_back_metabolite = random.choice(list(substanceDict.keys()))
-            print(f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache...")
-            save_spectra_data(spectra, held_back_metabolite, cache_key)
+    print(f"Total combinations: {len(combinations)}")
 
     # Display sample information for verification
-    print(''.join(f"{x['scales']}\n'" for x in spectra[:5]))
-    print(spectra[0]['intensities'].shape)
-    print(spectra[0]['positions'].shape)
-    print(spectra[0]['components'].shape)
+    print('Sample scales preview:')
+    print(''.join(f"{x['scales']}\n" for x in spectra[:5]))
+    print(f"Intensities shape: {spectra[0]['intensities'].shape}")
+    print(f"Positions shape: {spectra[0]['positions'].shape}")
+    print(f"Components shape: {spectra[0]['components'].shape}")
 
     # Prepare data for markdown display
     sample_scales_preview = '\n'.join(
@@ -269,10 +282,8 @@ def _(cache_dir, combo_number, count):
         mp,
         np,
         positions_shape,
-        referenceSpectrumIds,
         sample_scales_preview,
         spectra,
-        substanceDict,
         tqdm,
     )
 
