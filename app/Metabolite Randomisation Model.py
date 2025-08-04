@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -92,7 +92,7 @@ def _():
         for combination in combinations
     ]
 
-    count = 1000  # Number of samples per combination
+    count = 10  # Number of samples per combination
 
     def create_batch_data(substances_and_count):
         """Generate training data batch for specific substance combination with random scaling"""
@@ -1061,7 +1061,7 @@ def _(train_mlp_model):
     import optuna
     from functools import partial
 
-    trials = 1000  # Total number of hyperparameter optimization trials
+    trials = 10  # Total number of hyperparameter optimization trials
 
     def objective(training_data, trial):
         """
@@ -1155,5 +1155,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

@@ -43,7 +43,7 @@ def _():
 
     count = 10
     trials = 100
-    combo_number = 10
+    combo_number = 30
     notebook_name = 'randomisation_hold_back-cnn'
     cache_dir = f"./data_cache/{notebook_name}"
 
@@ -161,7 +161,7 @@ def _(cache_dir, combo_number, count, substanceDict):
     def check_loaded_data(spectra, held_back_metabolite, combinations):
         if spectra is None:
             print("No cached data found. Generating new spectra...")
-    
+
             # Generate all possible combinations of substances (4 to n substances)
             # This creates training data for different metabolite mixtures
             all_combinations = []
@@ -171,27 +171,28 @@ def _(cache_dir, combo_number, count, substanceDict):
                         substance: substanceDict[substance] for substance in combo
                     }
                     all_combinations.append(combo_dict)
-    
-            combinations = random.sample(all_combinations, combo_number)
+
+            if combo_number is not None:
+                combinations = random.sample(all_combinations, combo_number)
             print(f"Generated {len(combinations)} random combinations")
-    
+
             # Select random metabolite to hold back for testing
             held_back_metabolite = random.choice(list(substanceDict.keys()))
             print(f"Selected '{held_back_metabolite}' as held-back metabolite for testing")
-    
+
             # Extract spectrum IDs for each combination
             substanceSpectrumIds = [
                 [combination[substance][-1] for substance in combination]
                 for combination in combinations
             ]
-    
+
             # Prepare multiprocessing arguments - one batch per substance combination
             mp_args = [(substances, count) for substances in substanceSpectrumIds]
-    
+
             # Use multiprocessing to parallelize data generation across CPU cores
             num_processes = max(1, mp.cpu_count() - 1)
             print(f'Using {num_processes} processes for data generation')
-    
+
             batch_data = []
             if len(mp_args) > 1:
                 with mp.Pool(processes=num_processes) as pool:
@@ -200,20 +201,20 @@ def _(cache_dir, combo_number, count, substanceDict):
                     )
             else:
                 batch_data = [create_batch_data(mp_args[0])]
-    
+
             print(f'Generated {len(batch_data)} batches')
-    
+
             # Reshape batch data into individual spectrum samples
             # Each spectrum contains intensities, positions, scales, and component information
             spectra = []
-    
+
             for batch in batch_data:
                 for i in range(count):
                     # Extract individual sample scales (concentrations) from batch
                     sample_scales = {
                         key: [values[i]] for key, values in batch['scales'].items()
                     }
-    
+
                     # Create individual spectrum dictionary
                     spectrum = {
                         'scales': sample_scales,
@@ -222,7 +223,7 @@ def _(cache_dir, combo_number, count, substanceDict):
                         'components': batch['components'],  # Individual component spectra
                     }
                     spectra.append(spectrum)
-    
+
             # Save generated data for future use
             save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
         else:
@@ -232,11 +233,11 @@ def _(cache_dir, combo_number, count, substanceDict):
                 held_back_metabolite = random.choice(list(substanceDict.keys()))
                 print(f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache...")
                 save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
-    
+
             print(f"Using {len(combinations)} combinations from cache")
 
         return spectra, held_back_metabolite, combinations
-        
+
 
 
     # Generate cache key for current configuration
@@ -279,7 +280,6 @@ def _(cache_dir, combo_number, count, substanceDict):
         createTrainingData,
         held_back_metabolite,
         intensities_shape,
-        mp,
         np,
         positions_shape,
         sample_scales_preview,
@@ -398,7 +398,7 @@ def _(createTrainingData, plt, spectra, substanceDict):
 
     referencefigure = plt.gca()
 
-    return reference_spectra, referencefigure
+    return (referencefigure,)
 
 
 @app.cell
@@ -418,8 +418,8 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
     return
 
 
-@app.cell
-def _(mp, np, plt, reference_spectra, spectra, substanceDict):
+app._unparsable_cell(
+    r"""
     from scipy.signal import resample
     from scipy.interpolate import interp1d
 
@@ -430,7 +430,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         baseline_distortion=False,
         downsample=0,
     ):
-        """
+        \"\"\"
         Extract and preprocess spectral regions of interest.
 
         Args:
@@ -439,7 +439,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             ranges: List of [min, max] ppm ranges to extract
             baseline_distortion: Add realistic baseline drift
             downsample: Target number of points for downsampling
-        """
+        \"\"\"
         # Extract data points within specified ppm ranges
         indices_range = []
         for range_item in ranges:
@@ -509,21 +509,21 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        """Calculate concentration ratios relative to internal standard (tsp)"""
+        \"\"\"Calculate concentration ratios relative to internal standard (tsp)\"\"\"
         ratios = {
             substance: scales[substance][0] / scales['tsp'][0]
             for substance in scales
         }
 
-        return ratios
+        return)} ratios
 
     def preprocess_spectra(
         spectra, ranges, substanceDict, baseline_distortion=False, downsample=0
     ):
-        """
+        \"\"\"
         Complete preprocessing pipeline for a single spectrum.
         Extracts regions, adds distortion, calculates ratios.
-        """
+        \"\"\"
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'][0],
             positions=spectra['positions'],
@@ -548,7 +548,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     downsample = int(2048)  # Target resolution for ML model
 
     def process_single_spectrum(spectrum):
-        """Worker function for parallel spectrum preprocessing"""
+        \"\"\"Worker function for parallel spectrum preprocessing\"\"\"
         return preprocess_spectra(
             spectra=spectrum,
             ranges=ranges,
@@ -558,7 +558,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         )
 
     def process_single_reference(spectrum_key):
-        """Worker function for parallel reference preprocessing"""
+        \"\"\"Worker function for parallel reference preprocessing\"\"\"
         pos_int = preprocess_peaks(
             positions=spectra[0]['positions'],
             intensities=reference_spectra[spectrum_key],
@@ -567,7 +567,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         return (spectrum_key, pos_int[1])
 
     def process_spectra(spectra):
-        """Parallel preprocessing of all training spectra"""
+        \"\"\"Parallel preprocessing of all training spectra\"\"\"
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for spectra preprocessing')
 
@@ -577,7 +577,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         return preprocessed_spectra
 
     def process_references(reference_spectra):
-        """Parallel preprocessing of reference spectra"""
+        \"\"\"Parallel preprocessing of reference spectra\"\"\"
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for reference preprocessing')
 
@@ -597,7 +597,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     preprocessed_reference_spectra = process_references(reference_spectra)
 
     def generate_figure():
-        """Create before/after preprocessing comparison plots"""
+        \"\"\"Create before/after preprocessing comparison plots\"\"\"
         plt.figure(figsize=(8, 4))
         for substance in substanceDict:
             plt.subplot(1, 2, 1)
@@ -620,15 +620,9 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
 
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
-    return (
-        baseline_distortion,
-        intensities_count,
-        positions_count,
-        preprocessed_reference_spectra,
-        preprocessed_spectra,
-        preprocessedreferencefigure,
-        ranges,
-    )
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)
@@ -698,70 +692,68 @@ def _(
         spectra, reference_spectra, held_back_metabolite, train_ratio=0.7, val_ratio=0.15, axes=0
     ):
         """
-        Prepare training data for multi-task learning model.
-
-        Creates paired examples of (mixed spectrum + reference) -> (presence, concentration)
-        Each training example consists of:
-        - Mixed spectrum intensities and positions
-        - Pure component reference spectrum
-        - Labels: [presence (0/1), concentration ratio]
-
-        Args:
-            spectra: List of mixed spectrum dictionaries
-            reference_spectra: Dictionary of pure component references
-            held_back_metabolite: Specific metabolite to hold back for testing
-            train_ratio: Training set fraction
-            val_ratio: Validation set fraction
-            axes: Unused parameter (legacy)
-
-        Returns:
-            Dictionary with train/val/test splits for features and labels
+        Improved data splitting to prevent data leakage and overfitting.
         """
         data = []
         labels = []
         data_test = []
         labels_test = []
 
-        # Use the consistently cached held-back metabolite
         held_back_key = substanceDict[held_back_metabolite][0]
         print(f"Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})")
 
-        # Create training pairs: (mixed_spectrum + reference) -> (presence, concentration)
+        # CRITICAL FIX: Filter out spectra containing the held-back metabolite
+        train_spectra = []
+        test_spectra = []
+
         for spectrum in spectra:
+            if held_back_key in spectrum['ratios']:
+                # This spectrum contains the held-back metabolite - use for testing only
+                test_spectra.append(spectrum)
+            else:
+                # This spectrum doesn't contain held-back metabolite - safe for training
+                train_spectra.append(spectrum)
+
+        print(f"Training spectra (without {held_back_metabolite}): {len(train_spectra)}")
+        print(f"Test spectra (with {held_back_metabolite}): {len(test_spectra)}")
+
+        # Create training data from spectra without held-back metabolite
+        for spectrum in train_spectra:
             for substance in reference_spectra:
-                # Concatenate mixed spectrum with reference for comparison
-                temp_data = np.concatenate(
-                        [
-                            spectrum[
-                                'intensities'
-                            ],  # Mixed spectrum intensities
-                            spectrum['positions'],  # Chemical shift positions
-                            reference_spectra[
-                                substance
-                            ],  # Pure reference spectrum
-                        ]
-                    )
+                if substance != held_back_key:  # Skip held-back substance in training
+                    temp_data = np.concatenate([
+                        spectrum['intensities'],
+                        spectrum['positions'],
+                        reference_spectra[substance],
+                    ])
 
-                # Multi-task labels: presence detection + concentration estimation
-                if substance in spectrum['ratios']:
-                    temp_label = [1, spectrum['ratios'][substance]]  # Present with ratio
-                else:
-                    temp_label = [0, 0]  # Absent
+                    if substance in spectrum['ratios']:
+                        temp_label = [1, spectrum['ratios'][substance]]
+                    else:
+                        temp_label = [0, 0]
 
-                if substance == held_back_key: # Use the cached held-back metabolite
-                    data_test.append(temp_data)
-                    labels_test.append(temp_label)
-                else: # Otherwise, it's training/validation data
                     data.append(temp_data)
                     labels.append(temp_label)
 
-        data = np.array(data)
+        # Create test data from spectra containing held-back metabolite
+        for spectrum in test_spectra:
+            temp_data = np.concatenate([
+                spectrum['intensities'],
+                spectrum['positions'],
+                reference_spectra[held_back_key],
+            ])
 
+            temp_label = [1, spectrum['ratios'][held_back_key]]
+            data_test.append(temp_data)
+            labels_test.append(temp_label)
+
+        # Split training data into train/validation
+        data = np.array(data)
         data_train, data_val, labels_train, labels_val = train_test_split(
             data, labels, train_size=train_ratio, shuffle=True, random_state=42
         )
 
-        # Convert to GPU tensors for efficient training
+        # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
         labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
@@ -824,37 +816,66 @@ def _(np, torch, tqdm, training_data):
     import torch.nn as nn
 
     class CNN1DModel(nn.Module):
-        def __init__(self, input_length, loss_weight=1.0):
+        def __init__(self, input_length, trial, loss_weight=1.0):
             super().__init__()
-            self.feature_extractor = nn.Sequential(
-                nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, padding=2),
-                nn.BatchNorm1d(32),
-                nn.ReLU(),
-                nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, padding=2),
-                nn.BatchNorm1d(64),
-                nn.ReLU(),
-                nn.MaxPool1d(kernel_size=2),
 
-                nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-                nn.BatchNorm1d(128),
+            # Suggest CNN architecture hyperparameters
+            conv1_channels = trial.suggest_int('conv1_channels', 16, 64, step=16)
+            conv2_channels = trial.suggest_int('conv2_channels', 32, 128, step=16)
+            conv3_channels = trial.suggest_int('conv3_channels', 64, 256, step=32)
+
+            conv1_kernel = trial.suggest_int('conv1_kernel', 3, 7, step=2)
+            conv2_kernel = trial.suggest_int('conv2_kernel', 3, 7, step=2)
+            conv3_kernel = trial.suggest_int('conv3_kernel', 3, 5, step=2)
+
+            dropout_conv = trial.suggest_float('dropout_conv', 0.1, 0.5)
+            dropout_dense1 = trial.suggest_float('dropout_dense1', 0.2, 0.6)
+            dropout_dense2 = trial.suggest_float('dropout_dense2', 0.1, 0.5)
+
+            # Suggest dense layer sizes
+            dense1_size = trial.suggest_int('dense1_size', 64, 256, step=32)
+            dense2_size = trial.suggest_int('dense2_size', 32, 128, step=16)
+
+            # Suggest pooling kernel size
+            pool_kernel = trial.suggest_int('pool_kernel', 2, 4)
+
+            self.feature_extractor = nn.Sequential(
+                nn.Conv1d(in_channels=1, out_channels=conv1_channels, 
+                         kernel_size=conv1_kernel, padding=conv1_kernel//2),
+                nn.BatchNorm1d(conv1_channels),
                 nn.ReLU(),
-                nn.MaxPool1d(kernel_size=2),
+                nn.Dropout(dropout_conv),
+
+                nn.Conv1d(in_channels=conv1_channels, out_channels=conv2_channels, 
+                         kernel_size=conv2_kernel, padding=conv2_kernel//2),
+                nn.BatchNorm1d(conv2_channels),
+                nn.ReLU(),
+                nn.Dropout(dropout_conv),
+                nn.MaxPool1d(kernel_size=pool_kernel),
+
+                nn.Conv1d(in_channels=conv2_channels, out_channels=conv3_channels, 
+                         kernel_size=conv3_kernel, padding=conv3_kernel//2),
+                nn.BatchNorm1d(conv3_channels),
+                nn.ReLU(),
+                nn.Dropout(dropout_conv),
+                nn.MaxPool1d(kernel_size=pool_kernel),
             )
 
-            reduced_length = input_length // 4  # 2 maxpools of size 2
+            reduced_length = input_length // (pool_kernel ** 2)
             self.head = nn.Sequential(
-                nn.Linear(128 * reduced_length, 128),
+                nn.Linear(conv3_channels * reduced_length, dense1_size),
                 nn.ReLU(),
-                nn.Linear(128, 64),
+                nn.Dropout(dropout_dense1),
+                nn.Linear(dense1_size, dense2_size),
                 nn.ReLU(),
-                nn.Linear(64, 2)  # [presence_logit, concentration]
+                nn.Dropout(dropout_dense2),
+                nn.Linear(dense2_size, 2)
             )
 
         def forward(self, x):
-            # Expected input shape: [batch_size, input_length]
-            x = x.unsqueeze(1)  # [batch_size, 1, input_length]
-            x = self.feature_extractor(x)  # [batch_size, 128, reduced_length]
-            x = x.flatten(1)  # Flatten to [batch_size, 128 * reduced_length]
+            x = x.unsqueeze(1)
+            x = self.feature_extractor(x)
+            x = x.flatten(1)
             return self.head(x)
 
     def train_model(training_data, trial):
@@ -879,11 +900,11 @@ def _(np, torch, tqdm, training_data):
         n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
-        div_size = trial.suggest_float('div_size', 2, 10, step=1)
+        # div_size = trial.suggest_float('div_size', 2, 10, step=1)
         loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
-
         input_length = len(training_data['data_train'][0])
-        model = CNN1DModel(input_length=input_length, loss_weight=loss_weight).to(device)
+
+        model = CNN1DModel(input_length=input_length, loss_weight=loss_weight, trial=trial).to(device)
 
         # Progressive layer size reduction based on division factor
         # a = len(training_data['data_train'][0])  # Input feature dimension
@@ -1149,7 +1170,7 @@ def _(device_info, gpu_name, mo):
 
     - Sequential neural network with ReLU activations
 
-    - Final output: Classification Logits and concentration regression 
+    - Final output: Classification Logits and concentration regression
     """
     )
     return
@@ -1178,15 +1199,30 @@ def _(mo, optuna, study):
 
     **Best Hyperparameters:**
 
+    **Training Parameters:**
     - **Number of Epochs:** {study.best_trial.params['n_epochs']:.0f}
     - **Batch Size:** {study.best_trial.params['batch_size']:.0f}
     - **Learning Rate:** {study.best_trial.params['lr']:.2e}
-    - **Division Size:** {study.best_trial.params['div_size']:.0f} (controls network width - smaller values = wider layers)
     - **Loss Weight:** {study.best_trial.params['loss_weight']:.2f} (weighting for concentration vs presence loss)
+
+    **CNN Architecture:**
+    - **Conv1 Channels:** {study.best_trial.params['conv1_channels']} (kernel: {study.best_trial.params['conv1_kernel']})
+    - **Conv2 Channels:** {study.best_trial.params['conv2_channels']} (kernel: {study.best_trial.params['conv2_kernel']})
+    - **Conv3 Channels:** {study.best_trial.params['conv3_channels']} (kernel: {study.best_trial.params['conv3_kernel']})
+    - **Pool Kernel Size:** {study.best_trial.params['pool_kernel']}
+
+    **Dense Layers:**
+    - **Dense1 Size:** {study.best_trial.params['dense1_size']}
+    - **Dense2 Size:** {study.best_trial.params['dense2_size']}
+
+    **Dropout Rates:**
+    - **Convolutional Dropout:** {study.best_trial.params['dropout_conv']:.3f}
+    - **Dense1 Dropout:** {study.best_trial.params['dropout_dense1']:.3f}
+    - **Dense2 Dropout:** {study.best_trial.params['dropout_dense2']:.3f}
 
     **Model Architecture:**
 
-    Input size → {int(study.best_trial.params['div_size'])} divisions → ... → 2 outputs (presence + concentration)
+    1D CNN → BatchNorm → ReLU → Dropout → MaxPool → Dense Layers
 
     **Multi-Task Learning:**
 

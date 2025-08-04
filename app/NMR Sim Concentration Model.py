@@ -1,10 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(
-    width='medium',
-    layout_file='layouts/NMR Sim Concentration Model.slides.json',
-)
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -73,7 +70,7 @@ def _():
     substanceSpectrumIds = [
         substanceDict[substance][-1] for substance in substanceDict
     ]
-    count = 10000
+    count = 10
 
     # Use the built-in loop capability of createTrainingData
     batch_data = createTrainingData(
@@ -219,8 +216,8 @@ def _(mo, preprocessedfigure):
     return
 
 
-@app.cell
-def _(np, spectra, substanceDict):
+app._unparsable_cell(
+    r"""
     def preprocess_peaks(
         intensities, positions, ranges, baseline_distortion=False
     ):
@@ -231,7 +228,7 @@ def _(np, spectra, substanceDict):
             )
 
         new_intensities = []
-        new_positions = []
+        new_positions = []22
 
         for range in indices_range:
             temp_intensities = np.hstack(intensities[:, range])
@@ -312,13 +309,9 @@ def _(np, spectra, substanceDict):
 
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
-    return (
-        baseline_distortion,
-        intensities_count,
-        positions_count,
-        preprocessed_spectra,
-        ranges,
-    )
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)
@@ -489,8 +482,8 @@ def _(data_length, device, mo, sample_ratio, training_data):
     return
 
 
-@app.cell
-def _(np, torch, training_data):
+app._unparsable_cell(
+    r"""
     import tqdm
     import copy
     import torch.optim as optim
@@ -557,7 +550,7 @@ def _(np, torch, training_data):
                     loss = loss_fn(labels_pred.squeeze(), labels_batch)
                     # backward pass
                     optimizer.zero_grad()
-                    loss.backward()
+                    loss.backward()2
                     # update weights
                     optimizer.step()
                     # print progress
@@ -612,7 +605,9 @@ def _(np, torch, training_data):
     gpu_name = ''
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
-    return device_info, gpu_name, train_mlp_model
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)
@@ -737,5 +732,5 @@ def _(train_mlp_model, training_data, val_r22):
     return optuna, study
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

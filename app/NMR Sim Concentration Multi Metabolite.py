@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -70,7 +70,7 @@ def _():
     substanceSpectrumIds = [
         substanceDict[substance][-1] for substance in substanceDict
     ]
-    count = 10000
+    count = 10
 
     # Use the built-in loop capability of createTrainingData
     batch_data = createTrainingData(
@@ -835,7 +835,7 @@ def _(train_mlp_model, training_data):
     import optuna
     from functools import partial
 
-    trials = 1000
+    trials = 10
 
     def objective(training_data, trial):
         (
@@ -886,5 +886,5 @@ def _(train_mlp_model, training_data):
     return optuna, study
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
