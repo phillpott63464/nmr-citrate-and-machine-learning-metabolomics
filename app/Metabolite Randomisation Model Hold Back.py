@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.16"
+__generated_with = "0.14.13"
 app = marimo.App(width="medium")
 
 
@@ -43,9 +43,10 @@ def _():
 
     count = 10
     trials = 10
+    combo_number = 10
     notebook_name = 'randomisation_hold_back'
     cache_dir = f"./data_cache/{notebook_name}"
-    return cache_dir, count, trials
+    return cache_dir, combo_number, count, trials
 
 
 @app.cell(hide_code=True)
@@ -65,7 +66,7 @@ def _(mo, spectrafigures, substanceDict):
 
 
 @app.cell
-def _(cache_dir, count):
+def _(cache_dir, combo_number, count):
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -86,12 +87,12 @@ def _(cache_dir, count):
         'L-Methionine': ['SP:3509'],
         'L-Proline': ['SP:3406'],
         'L-Phenylalanine': ['SP:3507'],
-        # 'L-Serine': ['SP:3732'],
-        # 'L-Threonine': ['SP:3437'],
-        # 'L-Tryptophan': ['SP:3455'],
-        # 'L-Tyrosine': ['SP:3464'],
-        # 'L-Valine': ['SP:3490'],
-        # 'Glycine': ['SP:3682'],
+        'L-Serine': ['SP:3732'],
+        'L-Threonine': ['SP:3437'],
+        'L-Tryptophan': ['SP:3455'],
+        'L-Tyrosine': ['SP:3464'],
+        'L-Valine': ['SP:3490'],
+        'Glycine': ['SP:3682'],
     }
 
     # Extract spectrum IDs for reference spectra generation
@@ -110,6 +111,8 @@ def _(cache_dir, count):
                 substance: substanceDict[substance] for substance in combo
             }
             combinations.append(combo_dict)
+
+    combinations = random.sample(combinations, combo_number)
 
     print(len(combinations))
 
