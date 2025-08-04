@@ -867,7 +867,7 @@ def _(np, torch, tqdm, training_data):
 
         input_length = len(training_data['data_train'][0])
         model = CNN1DModel(input_length=input_length, loss_weight=loss_weight).to(device)
-    
+
         # Progressive layer size reduction based on division factor
         # a = len(training_data['data_train'][0])  # Input feature dimension
         # b = int(a / div_size)
@@ -1115,7 +1115,7 @@ def _(np, torch, tqdm, training_data):
     gpu_name = ''
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
-    return device_info, gpu_name
+    return device_info, gpu_name, train_model
 
 
 @app.cell(hide_code=True)
@@ -1192,7 +1192,7 @@ def _(mo, optuna, study):
 
 
 @app.cell
-def _(cache_dir, cache_key, tqdm, train_mlp_model, training_data, trials):
+def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     import optuna
     from functools import partial
 
@@ -1219,7 +1219,7 @@ def _(cache_dir, cache_key, tqdm, train_mlp_model, training_data, trials):
             test_conc_r2,
             test_conc_mae,
             test_conc_rmse,
-        ) = train_mlp_model(training_data, trial)
+        ) = train_model(training_data, trial)
 
         # Store all metrics in trial for later analysis
         trial.set_user_attr('val_accuracy', val_accuracy)
