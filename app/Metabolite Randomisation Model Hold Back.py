@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -45,7 +45,7 @@ def _():
     trials = 100
     combo_number = 30
     notebook_name = 'randomisation_hold_back-cnn'
-    cache_dir = f"./data_cache/{notebook_name}"
+    cache_dir = f'./data_cache/{notebook_name}'
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -98,24 +98,28 @@ def _(cache_dir, combo_number, count, substanceDict):
     substances = list(substanceDict.keys())
 
     # Save/load functions for data persistence
-    def save_spectra_data(spectra, held_back_metabolite, combinations, filename):
+    def save_spectra_data(
+        spectra, held_back_metabolite, combinations, filename
+    ):
         """Save generated spectra data, held-back metabolite, and combinations to pickle file"""
         os.makedirs(cache_dir, exist_ok=True)
-        filepath = f"{cache_dir}/{filename}.pkl"
+        filepath = f'{cache_dir}/{filename}.pkl'
 
         data_to_save = {
             'spectra': spectra,
             'held_back_metabolite': held_back_metabolite,
-            'combinations': combinations
+            'combinations': combinations,
         }
 
         with open(filepath, 'wb') as f:
             pickle.dump(data_to_save, f)
-        print(f"Saved {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations to {filepath}")
+        print(
+            f"Saved {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations to {filepath}"
+        )
 
     def load_spectra_data(filename):
         """Load generated spectra data, held-back metabolite, and combinations from pickle file"""
-        filepath = f"{cache_dir}/{filename}.pkl"
+        filepath = f'{cache_dir}/{filename}.pkl'
 
         if os.path.exists(filepath):
             with open(filepath, 'rb') as f:
@@ -124,29 +128,35 @@ def _(cache_dir, combo_number, count, substanceDict):
             # Handle both old and new cache formats
             if isinstance(data, list):
                 # Old format - just spectra
-                print(f"Loaded {len(data)} spectra from {filepath} (old format)")
+                print(
+                    f'Loaded {len(data)} spectra from {filepath} (old format)'
+                )
                 return data, None, None
             elif 'combinations' not in data:
                 # Medium format - spectra + held_back_metabolite
                 spectra = data['spectra']
                 held_back_metabolite = data['held_back_metabolite']
-                print(f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath} (medium format)")
+                print(
+                    f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath} (medium format)"
+                )
                 return spectra, held_back_metabolite, None
             else:
                 # New format - spectra + held_back_metabolite + combinations
                 spectra = data['spectra']
                 held_back_metabolite = data['held_back_metabolite']
                 combinations = data['combinations']
-                print(f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations from {filepath}")
+                print(
+                    f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations from {filepath}"
+                )
                 return spectra, held_back_metabolite, combinations
         return None, None, None
 
     def generate_cache_key(substanceDict, combo_number, count):
         """Generate unique cache key based on parameters"""
-        substance_key = "_".join(sorted(substanceDict.keys()))
-        combo_key = f"combos_{combo_number}"
-        count_key = f"count_{count}"
-        return f"spectra_{substance_key}_{combo_key}_{count_key}"
+        substance_key = '_'.join(sorted(substanceDict.keys()))
+        combo_key = f'combos_{combo_number}'
+        count_key = f'count_{count}'
+        return f'spectra_{substance_key}_{combo_key}_{count_key}'
 
     def create_batch_data(substances_and_count):
         """Generate training data batch for specific substance combination with random scaling"""
@@ -160,7 +170,7 @@ def _(cache_dir, combo_number, count, substanceDict):
 
     def check_loaded_data(spectra, held_back_metabolite, combinations):
         if spectra is None:
-            print("No cached data found. Generating new spectra...")
+            print('No cached data found. Generating new spectra...')
 
             # Generate all possible combinations of substances (4 to n substances)
             # This creates training data for different metabolite mixtures
@@ -168,17 +178,20 @@ def _(cache_dir, combo_number, count, substanceDict):
             for r in range(4, len(substances) + 1):
                 for combo in itertools.combinations(substances, r):
                     combo_dict = {
-                        substance: substanceDict[substance] for substance in combo
+                        substance: substanceDict[substance]
+                        for substance in combo
                     }
                     all_combinations.append(combo_dict)
 
             if combo_number is not None:
                 combinations = random.sample(all_combinations, combo_number)
-            print(f"Generated {len(combinations)} random combinations")
+            print(f'Generated {len(combinations)} random combinations')
 
             # Select random metabolite to hold back for testing
             held_back_metabolite = random.choice(list(substanceDict.keys()))
-            print(f"Selected '{held_back_metabolite}' as held-back metabolite for testing")
+            print(
+                f"Selected '{held_back_metabolite}' as held-back metabolite for testing"
+            )
 
             # Extract spectrum IDs for each combination
             substanceSpectrumIds = [
@@ -187,7 +200,9 @@ def _(cache_dir, combo_number, count, substanceDict):
             ]
 
             # Prepare multiprocessing arguments - one batch per substance combination
-            mp_args = [(substances, count) for substances in substanceSpectrumIds]
+            mp_args = [
+                (substances, count) for substances in substanceSpectrumIds
+            ]
 
             # Use multiprocessing to parallelize data generation across CPU cores
             num_processes = max(1, mp.cpu_count() - 1)
@@ -197,7 +212,10 @@ def _(cache_dir, combo_number, count, substanceDict):
             if len(mp_args) > 1:
                 with mp.Pool(processes=num_processes) as pool:
                     batch_data = list(
-                        tqdm.tqdm(pool.imap_unordered(create_batch_data, mp_args), total=len(mp_args))
+                        tqdm.tqdm(
+                            pool.imap_unordered(create_batch_data, mp_args),
+                            total=len(mp_args),
+                        )
                     )
             else:
                 batch_data = [create_batch_data(mp_args[0])]
@@ -212,40 +230,55 @@ def _(cache_dir, combo_number, count, substanceDict):
                 for i in range(count):
                     # Extract individual sample scales (concentrations) from batch
                     sample_scales = {
-                        key: [values[i]] for key, values in batch['scales'].items()
+                        key: [values[i]]
+                        for key, values in batch['scales'].items()
                     }
 
                     # Create individual spectrum dictionary
                     spectrum = {
                         'scales': sample_scales,
-                        'intensities': batch['intensities'][i : i + 1],  # Keep 2D structure
-                        'positions': batch['positions'],  # Chemical shift positions (ppm)
-                        'components': batch['components'],  # Individual component spectra
+                        'intensities': batch['intensities'][
+                            i : i + 1
+                        ],  # Keep 2D structure
+                        'positions': batch[
+                            'positions'
+                        ],  # Chemical shift positions (ppm)
+                        'components': batch[
+                            'components'
+                        ],  # Individual component spectra
                     }
                     spectra.append(spectrum)
 
             # Save generated data for future use
-            save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
+            save_spectra_data(
+                spectra, held_back_metabolite, combinations, cache_key
+            )
         else:
-            print("Using cached spectra data.")
+            print('Using cached spectra data.')
             if held_back_metabolite is None:
                 # If old cache format, select and save new held-back metabolite
-                held_back_metabolite = random.choice(list(substanceDict.keys()))
-                print(f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache...")
-                save_spectra_data(spectra, held_back_metabolite, combinations, cache_key)
+                held_back_metabolite = random.choice(
+                    list(substanceDict.keys())
+                )
+                print(
+                    f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache..."
+                )
+                save_spectra_data(
+                    spectra, held_back_metabolite, combinations, cache_key
+                )
 
-            print(f"Using {len(combinations)} combinations from cache")
+            print(f'Using {len(combinations)} combinations from cache')
 
         return spectra, held_back_metabolite, combinations
-
-
 
     # Generate cache key for current configuration
     cache_key = generate_cache_key(substanceDict, combo_number, count)
 
     # Try to load existing data first
     spectra, held_back_metabolite, combinations = load_spectra_data(cache_key)
-    spectra, held_back_metabolite, combinations = check_loaded_data(spectra, held_back_metabolite, combinations)
+    spectra, held_back_metabolite, combinations = check_loaded_data(
+        spectra, held_back_metabolite, combinations
+    )
 
     # Extract spectrum IDs for each combination (needed for later processing)
     substanceSpectrumIds = [
@@ -253,7 +286,7 @@ def _(cache_dir, combo_number, count, substanceDict):
         for combination in combinations
     ]
 
-    print(f"Total combinations: {len(combinations)}")
+    print(f'Total combinations: {len(combinations)}')
 
     # Display sample information for verification
     print('Sample scales preview:')
@@ -621,7 +654,7 @@ app._unparsable_cell(
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
     """,
-    name="_"
+    name='_',
 )
 
 
@@ -689,7 +722,12 @@ def _(
         print(f'GPU: {torch.cuda.get_device_name(0)}')
 
     def get_training_data_mlp(
-        spectra, reference_spectra, held_back_metabolite, train_ratio=0.7, val_ratio=0.15, axes=0
+        spectra,
+        reference_spectra,
+        held_back_metabolite,
+        train_ratio=0.7,
+        val_ratio=0.15,
+        axes=0,
     ):
         """
         Improved data splitting to prevent data leakage and overfitting.
@@ -700,7 +738,9 @@ def _(
         labels_test = []
 
         held_back_key = substanceDict[held_back_metabolite][0]
-        print(f"Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})")
+        print(
+            f'Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})'
+        )
 
         # CRITICAL FIX: Filter out spectra containing the held-back metabolite
         train_spectra = []
@@ -714,18 +754,26 @@ def _(
                 # This spectrum doesn't contain held-back metabolite - safe for training
                 train_spectra.append(spectrum)
 
-        print(f"Training spectra (without {held_back_metabolite}): {len(train_spectra)}")
-        print(f"Test spectra (with {held_back_metabolite}): {len(test_spectra)}")
+        print(
+            f'Training spectra (without {held_back_metabolite}): {len(train_spectra)}'
+        )
+        print(
+            f'Test spectra (with {held_back_metabolite}): {len(test_spectra)}'
+        )
 
         # Create training data from spectra without held-back metabolite
         for spectrum in train_spectra:
             for substance in reference_spectra:
-                if substance != held_back_key:  # Skip held-back substance in training
-                    temp_data = np.concatenate([
-                        spectrum['intensities'],
-                        spectrum['positions'],
-                        reference_spectra[substance],
-                    ])
+                if (
+                    substance != held_back_key
+                ):  # Skip held-back substance in training
+                    temp_data = np.concatenate(
+                        [
+                            spectrum['intensities'],
+                            spectrum['positions'],
+                            reference_spectra[substance],
+                        ]
+                    )
 
                     if substance in spectrum['ratios']:
                         temp_label = [1, spectrum['ratios'][substance]]
@@ -737,11 +785,13 @@ def _(
 
         # Create test data from spectra containing held-back metabolite
         for spectrum in test_spectra:
-            temp_data = np.concatenate([
-                spectrum['intensities'],
-                spectrum['positions'],
-                reference_spectra[held_back_key],
-            ])
+            temp_data = np.concatenate(
+                [
+                    spectrum['intensities'],
+                    spectrum['positions'],
+                    reference_spectra[held_back_key],
+                ]
+            )
 
             temp_label = [1, spectrum['ratios'][held_back_key]]
             data_test.append(temp_data)
@@ -755,7 +805,9 @@ def _(
 
         # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
+            device
+        )
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
         labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
@@ -820,9 +872,15 @@ def _(np, torch, tqdm, training_data):
             super().__init__()
 
             # Suggest CNN architecture hyperparameters
-            conv1_channels = trial.suggest_int('conv1_channels', 16, 64, step=16)
-            conv2_channels = trial.suggest_int('conv2_channels', 32, 128, step=16)
-            conv3_channels = trial.suggest_int('conv3_channels', 64, 256, step=32)
+            conv1_channels = trial.suggest_int(
+                'conv1_channels', 16, 64, step=16
+            )
+            conv2_channels = trial.suggest_int(
+                'conv2_channels', 32, 128, step=16
+            )
+            conv3_channels = trial.suggest_int(
+                'conv3_channels', 64, 256, step=32
+            )
 
             conv1_kernel = trial.suggest_int('conv1_kernel', 3, 7, step=2)
             conv2_kernel = trial.suggest_int('conv2_kernel', 3, 7, step=2)
@@ -840,28 +898,38 @@ def _(np, torch, tqdm, training_data):
             pool_kernel = trial.suggest_int('pool_kernel', 2, 4)
 
             self.feature_extractor = nn.Sequential(
-                nn.Conv1d(in_channels=1, out_channels=conv1_channels, 
-                         kernel_size=conv1_kernel, padding=conv1_kernel//2),
+                nn.Conv1d(
+                    in_channels=1,
+                    out_channels=conv1_channels,
+                    kernel_size=conv1_kernel,
+                    padding=conv1_kernel // 2,
+                ),
                 nn.BatchNorm1d(conv1_channels),
                 nn.ReLU(),
                 nn.Dropout(dropout_conv),
-
-                nn.Conv1d(in_channels=conv1_channels, out_channels=conv2_channels, 
-                         kernel_size=conv2_kernel, padding=conv2_kernel//2),
+                nn.Conv1d(
+                    in_channels=conv1_channels,
+                    out_channels=conv2_channels,
+                    kernel_size=conv2_kernel,
+                    padding=conv2_kernel // 2,
+                ),
                 nn.BatchNorm1d(conv2_channels),
                 nn.ReLU(),
                 nn.Dropout(dropout_conv),
                 nn.MaxPool1d(kernel_size=pool_kernel),
-
-                nn.Conv1d(in_channels=conv2_channels, out_channels=conv3_channels, 
-                         kernel_size=conv3_kernel, padding=conv3_kernel//2),
+                nn.Conv1d(
+                    in_channels=conv2_channels,
+                    out_channels=conv3_channels,
+                    kernel_size=conv3_kernel,
+                    padding=conv3_kernel // 2,
+                ),
                 nn.BatchNorm1d(conv3_channels),
                 nn.ReLU(),
                 nn.Dropout(dropout_conv),
                 nn.MaxPool1d(kernel_size=pool_kernel),
             )
 
-            reduced_length = input_length // (pool_kernel ** 2)
+            reduced_length = input_length // (pool_kernel**2)
             self.head = nn.Sequential(
                 nn.Linear(conv3_channels * reduced_length, dense1_size),
                 nn.ReLU(),
@@ -869,7 +937,7 @@ def _(np, torch, tqdm, training_data):
                 nn.Linear(dense1_size, dense2_size),
                 nn.ReLU(),
                 nn.Dropout(dropout_dense2),
-                nn.Linear(dense2_size, 2)
+                nn.Linear(dense2_size, 2),
             )
 
         def forward(self, x):
@@ -904,7 +972,9 @@ def _(np, torch, tqdm, training_data):
         loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
         input_length = len(training_data['data_train'][0])
 
-        model = CNN1DModel(input_length=input_length, loss_weight=loss_weight, trial=trial).to(device)
+        model = CNN1DModel(
+            input_length=input_length, loss_weight=loss_weight, trial=trial
+        ).to(device)
 
         # Progressive layer size reduction based on division factor
         # a = len(training_data['data_train'][0])  # Input feature dimension
@@ -1294,7 +1364,6 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
-
     # Count completed trials for progress tracking
     completed_trials = len(
         [
@@ -1328,5 +1397,5 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     return optuna, study
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -310,7 +310,7 @@ app._unparsable_cell(
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
     """,
-    name="_"
+    name='_',
 )
 
 
@@ -606,7 +606,7 @@ app._unparsable_cell(
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
     """,
-    name="_"
+    name='_',
 )
 
 
@@ -732,5 +732,5 @@ def _(train_mlp_model, training_data, val_r22):
     return optuna, study
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

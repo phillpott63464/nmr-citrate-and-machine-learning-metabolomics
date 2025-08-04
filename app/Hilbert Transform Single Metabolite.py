@@ -1,13 +1,14 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
     import os
+
     return mo, os
 
 
@@ -19,7 +20,7 @@ def _(os):
     trials = 10
     combo_number = None
     notebook_name = 'hilbert_transform_single_metabolite'
-    cache_dir = f"./data_cache/{notebook_name}"
+    cache_dir = f'./data_cache/{notebook_name}'
 
     if os.path.exists(cache_dir) == False:
         os.mkdir(cache_dir)
@@ -68,7 +69,8 @@ def _(count, substanceDict):
         for i in range(batch_size):
             # Extract scales for this sample
             sample_scales = {
-                key: [values[i]] for key, values in batch_data['scales'].items()
+                key: [values[i]]
+                for key, values in batch_data['scales'].items()
             }
 
             # Create spectrum dict in current format
@@ -90,7 +92,7 @@ def _(count, substanceDict):
     num_processes = max(1, mp.cpu_count() - 1)
     batch_size = max(1, count // num_processes)
 
-    print(f"Using {num_processes} processes with batch size {batch_size}")
+    print(f'Using {num_processes} processes with batch size {batch_size}')
 
     # Generate batches of data in parallel
     batch_args = []
@@ -156,16 +158,23 @@ def _(spectra):
     graph_count = 1
 
     hilberts = []
-    for index, spectrum2 in enumerate(spectra):  # Corrected 'ennumerate' to 'enumerate'
+    for index, spectrum2 in enumerate(
+        spectra
+    ):  # Corrected 'ennumerate' to 'enumerate'
         hilberts.append(
-            (hilbert(
-                spectrum2['intensities'][0]  # Assuming 'intensities' is a list or array
-            ))
+            (
+                hilbert(
+                    spectrum2['intensities'][
+                        0
+                    ]  # Assuming 'intensities' is a list or array
+                )
+            )
         )
 
-        if index > graph_count**2:  # Changed 'i' to 'index' to use the correct loop variable
+        if (
+            index > graph_count**2
+        ):  # Changed 'i' to 'index' to use the correct loop variable
             break
-
 
     print(hilberts[0])
 
@@ -200,12 +209,8 @@ def _(graph_count, hilberts, np, plt):
     from scipy.fft import ifft
 
     inverses = []
-    for hilbertarray in hilberts:    
-        inverses.append(
-            ifft(
-                hilbertarray
-            )
-        )
+    for hilbertarray in hilberts:
+        inverses.append(ifft(hilbertarray))
 
     # for inverse in inverses:
     #     inverse[0] = 0 #Remove huge random spike at point 0
@@ -240,12 +245,8 @@ def _(graph_count, inverses, np, plt, spectra):
     from scipy.fft import fft
 
     uninversed = []
-    for inverse in inverses:    
-        uninversed.append(
-            fft(
-                inverse
-            )
-        )
+    for inverse in inverses:
+        uninversed.append(fft(inverse))
 
     # for inverse in inverses:
     #     inverse[0] = 0 #Remove huge random spike at point 0
@@ -256,12 +257,11 @@ def _(graph_count, inverses, np, plt, spectra):
     for graphcounter4 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter4)
         plt.plot(
-            uninversed[graphcounter4].astype(np.float32), 
-            label='Uninversed'
+            uninversed[graphcounter4].astype(np.float32), label='Uninversed'
         )
         plt.plot(
-            spectra[graphcounter4]['intensities'].astype(np.float32), 
-            label='Original'
+            spectra[graphcounter4]['intensities'].astype(np.float32),
+            label='Original',
         )
 
     uninversedfigures = plt.gca()
@@ -333,9 +333,7 @@ def _(createTrainingData, hilbert, ifft, plt, spectra, substanceDict):
             reference_spectra[substanceDict[substance][0]],
         )
         plt.subplot(1, 2, 2)
-        plt.plot(
-            ifft(hilbert(reference_spectra[substanceDict[substance][0]]))
-        )
+        plt.plot(ifft(hilbert(reference_spectra[substanceDict[substance][0]])))
 
     referencefigure = plt.gca()
 
@@ -394,7 +392,7 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
                 time_domain = irfft(filtered, n=len(new_intensities))
 
-                downsampled = new_intensities[::int(log2(downsample))]
+                downsampled = new_intensities[:: int(log2(downsample))]
 
                 new_intensities = downsampled
 
@@ -410,7 +408,12 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
         return ratios
 
     def preprocess_spectra(
-        spectra, ranges, substanceDict, baseline_distortion=False, downsample=0, reverse=False
+        spectra,
+        ranges,
+        substanceDict,
+        baseline_distortion=False,
+        downsample=0,
+        reverse=False,
     ):
         """
         Complete preprocessing pipeline for a single spectrum.
@@ -438,6 +441,7 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
     downsample = int(2048)  # Target resolution for ML model
+
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
         return preprocess_spectra(
@@ -504,9 +508,7 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
                 preprocessed_reference_spectra[substanceDict[substance][0]],
             )
             plt.subplot(2, 2, 3)
-            plt.plot(
-                preprocessed_spectra[0]['intensities']
-            )
+            plt.plot(preprocessed_spectra[0]['intensities'])
 
         return plt.gca()
 
@@ -625,7 +627,10 @@ def _(np, preprocessed_reference_spectra, preprocessed_spectra):
             'labels_test': labels_test,
         }
 
-    training_data = get_training_data_mlp(spectra=preprocessed_spectra, reference_spectra=preprocessed_reference_spectra)
+    training_data = get_training_data_mlp(
+        spectra=preprocessed_spectra,
+        reference_spectra=preprocessed_reference_spectra,
+    )
 
     print([training_data[x].shape for x in training_data])
     print(len(training_data['data_train'][0]))
@@ -873,11 +878,25 @@ def _(
     trial_values = [t.value for t in study.trials if t.value is not None]
     optimization_stats = {
         'total_trials': len(study.trials),
-        'completed_trials': len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-        'pruned_trials': len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
+        'completed_trials': len(
+            [
+                t
+                for t in study.trials
+                if t.state == optuna.trial.TrialState.COMPLETE
+            ]
+        ),
+        'pruned_trials': len(
+            [
+                t
+                for t in study.trials
+                if t.state == optuna.trial.TrialState.PRUNED
+            ]
+        ),
         'best_value': max(trial_values) if trial_values else 0,
         'worst_value': min(trial_values) if trial_values else 0,
-        'mean_value': sum(trial_values)/len(trial_values) if trial_values else 0
+        'mean_value': sum(trial_values) / len(trial_values)
+        if trial_values
+        else 0,
     }
 
     return (
@@ -905,7 +924,9 @@ def _(
     val_rmse,
 ):
     # Format best parameters for display
-    params_str = '\n'.join([f"- **{key}**: {value}" for key, value in best_params.items()])
+    params_str = '\n'.join(
+        [f'- **{key}**: {value}' for key, value in best_params.items()]
+    )
 
     mo.md(
         rf"""
@@ -947,5 +968,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
