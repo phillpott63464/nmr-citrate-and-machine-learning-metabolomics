@@ -42,9 +42,8 @@ def _():
     # global variables
 
     count = 10
-    trials = 10
-    combo_number = 10
-    notebook_name = 'randomisation_hold_back'
+    trials = 100
+    notebook_name = 'randomisation_hold_back-cnn'
     cache_dir = f"./data_cache/{notebook_name}"
     return cache_dir, combo_number, count, trials
 
@@ -809,7 +808,41 @@ def _(np, torch, tqdm, training_data):
     import torch.optim as optim
     import torch.nn as nn
 
-    def train_mlp_model(training_data, trial):
+    class CNN1DModel(nn.Module):
+        def __init__(self, input_length, loss_weight=1.0):
+            super().__init__()
+            self.feature_extractor = nn.Sequential(
+                nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, padding=2),
+                nn.BatchNorm1d(32),
+                nn.ReLU(),
+                nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, padding=2),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.MaxPool1d(kernel_size=2),
+
+                nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+                nn.BatchNorm1d(128),
+                nn.ReLU(),
+                nn.MaxPool1d(kernel_size=2),
+            )
+
+            reduced_length = input_length // 4  # 2 maxpools of size 2
+            self.head = nn.Sequential(
+                nn.Linear(128 * reduced_length, 128),
+                nn.ReLU(),
+                nn.Linear(128, 64),
+                nn.ReLU(),
+                nn.Linear(64, 2)  # [presence_logit, concentration]
+            )
+
+        def forward(self, x):
+            # Expected input shape: [batch_size, input_length]
+            x = x.unsqueeze(1)  # [batch_size, 1, input_length]
+            x = self.feature_extractor(x)  # [batch_size, 128, reduced_length]
+            x = x.flatten(1)  # Flatten to [batch_size, 128 * reduced_length]
+            return self.head(x)
+
+    def train_model(training_data, trial):
         """
         Train a multi-task neural network for metabolite presence detection and concentration estimation.
 
@@ -834,25 +867,28 @@ def _(np, torch, tqdm, training_data):
         div_size = trial.suggest_float('div_size', 2, 10, step=1)
         loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
 
+        input_length = len(training_data['data_train'][0])
+        model = CNN1DModel(input_length=input_length, loss_weight=loss_weight).to(device)
+    
         # Progressive layer size reduction based on division factor
-        a = len(training_data['data_train'][0])  # Input feature dimension
-        b = int(a / div_size)
-        c = int(b / div_size)
-        d = int(c / div_size)
-        e = int(d / div_size)
+        # a = len(training_data['data_train'][0])  # Input feature dimension
+        # b = int(a / div_size)
+        # c = int(b / div_size)
+        # d = int(c / div_size)
+        # e = int(d / div_size)
 
-        # Multi-layer perceptron with ReLU activations
-        model = nn.Sequential(
-            nn.Linear(a, b),
-            nn.ReLU(),
-            nn.Linear(b, c),
-            nn.ReLU(),
-            nn.Linear(c, d),
-            nn.ReLU(),
-            nn.Linear(d, e),
-            nn.ReLU(),
-            nn.Linear(e, 2),  # Output: [presence_logit, concentration]
-        ).to(device)
+        # # Multi-layer perceptron with ReLU activations
+        # model = nn.Sequential(
+        #     nn.Linear(a, b),
+        #     nn.ReLU(),
+        #     nn.Linear(b, c),
+        #     nn.ReLU(),
+        #     nn.Linear(c, d),
+        #     nn.ReLU(),
+        #     nn.Linear(d, e),
+        #     nn.ReLU(),
+        #     nn.Linear(e, 2),  # Output: [presence_logit, concentration]
+        # ).to(device)
 
         # Extract data tensors (already on GPU)
         data_train = training_data['data_train']
@@ -1081,7 +1117,7 @@ def _(np, torch, tqdm, training_data):
     gpu_name = ''
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
-    return device_info, gpu_name, train_mlp_model
+    return device_info, gpu_name
 
 
 @app.cell(hide_code=True)
