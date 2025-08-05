@@ -407,6 +407,8 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
             new_intensities = downsampled
 
+        new_intensities = (new_intensities - new_intensities.mean()) / new_intensities.std()
+
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
@@ -680,14 +682,15 @@ def _(np, torch, training_data):
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
         div_size = trial.suggest_float('div_size', 2, 10, step=1)
-
-        a = len(training_data['data_train'][0])
+    
+        # Progressive layer size reduction based on division factor
+        a = len(training_data['data_train'][0])  # Input feature dimension
         b = int(a / div_size)
         c = int(b / div_size)
         d = int(c / div_size)
         e = int(d / div_size)
 
-        # Define the model and move to GPU
+        # Multi-layer perceptron with ReLU activations
         model = nn.Sequential(
             nn.Linear(a, b),
             nn.ReLU(),
@@ -697,7 +700,7 @@ def _(np, torch, training_data):
             nn.ReLU(),
             nn.Linear(d, e),
             nn.ReLU(),
-            nn.Linear(e, 1),
+            nn.Linear(e, 1),  # Output: concentration
         ).to(device)
 
         # Data is already on GPU from get_training_data_mlp
@@ -723,12 +726,14 @@ def _(np, torch, training_data):
         best_weights = None
         history = []
 
-        # Early stopping parameters using combined metric
-        early_stop_patience = 10  # Number of validation checks to look back
-        min_improvement_rate = 0.02  # 2% improvement required
-        combined_score_history = []
-        best_combined_score = np.inf  # Track the best combined score (lower is better)
-        validation_interval = 10  # Only validate every 10 epochs
+        # Early stopping parameters - simplified and more reliable
+        early_stop_patience = 15  # Number of epochs without improvement
+        min_delta = 1e-6  # Minimum improvement to qualify as better
+        validation_interval = 5  # Validate every 5 epochs instead of 10
+
+        best_val_loss = np.inf
+        epochs_without_improvement = 0
+        best_weights = None
 
         for epoch in range(max_epochs):
             model.train()
@@ -751,48 +756,26 @@ def _(np, torch, training_data):
                     # print progress
                     bar.set_postfix(loss=float(loss))
 
-            # Only perform validation and early stopping check every 10 epochs
+            # Validate more frequently for better early stopping
             if epoch % validation_interval == 0 or epoch == max_epochs - 1:
-                # evaluate on validation set
                 model.eval()
                 with torch.no_grad():
                     labels_pred = model(data_val)
                     val_loss = combined_loss_fn(labels_pred.squeeze(), labels_val)
                     val_loss = float(val_loss)
-                    history.append(val_loss)
 
-                    # Calculate combined metric for early stopping (same as loss now)
-                    val_pred = labels_pred.squeeze()
-                    val_mae = torch.mean(torch.abs(val_pred - labels_val))
-                    val_rmse = torch.sqrt(torch.mean((val_pred - labels_val) ** 2))
-                    current_combined_score = float(0.5 * val_mae + 0.5 * val_rmse)
-                    combined_score_history.append(current_combined_score)
-
-                    # Update best combined score
-                    if current_combined_score < best_combined_score:
-                        best_combined_score = current_combined_score
-
-                    if val_loss < best_loss:
-                        best_loss = val_loss
+                    # Simple early stopping logic
+                    if val_loss < best_val_loss - min_delta:
+                        best_val_loss = val_loss
                         best_weights = copy.deepcopy(model.state_dict())
+                        epochs_without_improvement = 0
+                    else:
+                        epochs_without_improvement += validation_interval
 
-                # Early stopping check (only when we have enough validation points)
-                if len(combined_score_history) >= early_stop_patience:
-                    current_score = combined_score_history[-1]
-
-                    # Calculate improvement from best combined score
-                    improvement_from_best = best_combined_score - current_score  # Positive means improvement
-                    required_improvement = best_combined_score * min_improvement_rate
-
-                    # Stop if current score is significantly worse than best and not improving enough
-                    # Allow for some tolerance since we're comparing to the absolute best
-                    tolerance_factor = 0.05  # Allow 5% degradation from best
-                    tolerance = best_combined_score * tolerance_factor
-                    if (current_score > best_combined_score + tolerance and 
-                        improvement_from_best < required_improvement):
+                    # Early stopping check
+                    if epochs_without_improvement >= early_stop_patience:
                         print(f"Early stopping at epoch {epoch}: "
-                              f"Current combined score ({current_score:.6f}) is {current_score - best_combined_score:.6f} above best ({best_combined_score:.6f}), "
-                              f"and improvement from best ({improvement_from_best:.6f}) < required ({required_improvement:.6f})")
+                              f"No improvement for {epochs_without_improvement} epochs")
                         break
 
         # Load best weights and evaluate on test set for final metrics
