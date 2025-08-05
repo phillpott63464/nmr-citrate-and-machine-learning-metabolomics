@@ -268,7 +268,7 @@ Test Set (Final Evaluation):
 
 Best Parameters: - n_epochs: 100.0 - batch_size: 90.0 - lr: 0.003714545902240392 - div_size: 2.0
 
-It definetly works on FID data at least as well as it does on frequency data
+It definetly works on FID data at least as well as it does on frequency data, generally with a lower requirement for length of data, as well as not requiring an x axis to reduce training tensor.
 
 
 ## CNN
