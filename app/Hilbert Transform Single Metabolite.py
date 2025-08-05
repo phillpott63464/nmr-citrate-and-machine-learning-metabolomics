@@ -29,6 +29,8 @@ def _(os):
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
         'Citric acid': ['SP:3368'],
+        'Succinic acid': ['SP:3211'],
+        'Maleic acid': ['SP:3110'],
     }
     return cache_dir, count, graph_count, notebook_name, substanceDict, trials
 
@@ -407,7 +409,7 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
             new_intensities = downsampled
 
-        new_intensities = (new_intensities - new_intensities.mean()) / new_intensities.std()
+        # new_intensities = (new_intensities - new_intensities.mean()) / new_intensities.std()
 
         return new_positions, new_intensities
 
@@ -1033,7 +1035,7 @@ def _(
             test_mae,
             test_rmse,
             test_r2_score,
-        ) = train_model(training_data, trial, model_type='transformer')
+        ) = train_model(training_data, trial, model_type='mlp')
 
         # Store all metrics in trial for later analysis
         trial.set_user_attr('val_mae', float(val_mae))
@@ -1135,7 +1137,7 @@ def _(
     )
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     best_params,
     best_trial,

@@ -41,10 +41,10 @@ def _(mo):
 def _():
     # global variables
 
-    count = 10
-    trials = 100
+    count = 1000
+    trials = 1000
     combo_number = 30
-    notebook_name = 'randomisation_hold_back_transformer'
+    notebook_name = 'randomisation_hold_back_fid'
     cache_dir = f'./data_cache/{notebook_name}'
 
     # Define metabolites and their spectrum IDs for NMR simulation
@@ -266,7 +266,6 @@ def _(cache_dir, combo_number, count, substanceDict):
                 save_spectra_data(
                     spectra, held_back_metabolite, combinations, cache_key
                 )
-
             print(f'Using {len(combinations)} combinations from cache')
 
         return spectra, held_back_metabolite, combinations
@@ -506,8 +505,6 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
 
             new_intensities = downsampled
 
-        new_intensities = (new_intensities - new_intensities.mean()) / new_intensities.std()
-
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
@@ -547,7 +544,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     # Preprocessing configuration
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
-    downsample = int(2048)  # Target resolution for ML model
+    downsample = int(2**13)  # Target resolution for ML model
 
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
@@ -700,10 +697,12 @@ def _(
         held_back_metabolite,
         train_ratio=0.7,
         val_ratio=0.15,
+        test_ratio=0.15,  # Add explicit test ratio
         axes=0,
     ):
         """
         Improved data splitting to prevent data leakage and overfitting.
+        Now includes test data both with and without the held-back metabolite.
         """
         data = []
         labels = []
@@ -715,70 +714,91 @@ def _(
             f'Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})'
         )
 
-        # CRITICAL FIX: Filter out spectra containing the held-back metabolite
-        train_spectra = []
-        test_spectra = []
+        # Separate spectra based on held-back metabolite presence
+        train_val_spectra = []  # Spectra without held-back metabolite for train/val
+        test_with_holdback = []  # Spectra with held-back metabolite for testing
+        test_without_holdback = []  # Spectra without held-back metabolite for testing
 
         for spectrum in spectra:
             if held_back_key in spectrum['ratios']:
-                # This spectrum contains the held-back metabolite - use for testing only
-                test_spectra.append(spectrum)
+                # This spectrum contains the held-back metabolite - use for testing
+                test_with_holdback.append(spectrum)
             else:
-                # This spectrum doesn't contain held-back metabolite - safe for training
-                train_spectra.append(spectrum)
+                # This spectrum doesn't contain held-back metabolite
+                train_val_spectra.append(spectrum)
 
-        print(
-            f'Training spectra (without {held_back_metabolite}): {len(train_spectra)}'
-        )
-        print(
-            f'Test spectra (with {held_back_metabolite}): {len(test_spectra)}'
-        )
+        # Split the non-holdback spectra into train/val and additional test data
+        # Reserve some of the non-holdback data for testing to evaluate generalization
+        total_train_val = len(train_val_spectra)
+        test_size = int(total_train_val * test_ratio)
 
-        # Create training data from spectra without held-back metabolite
-        for spectrum in train_spectra:
-            for substance in reference_spectra:
-                if (
-                    substance != held_back_key
-                ):  # Skip held-back substance in training
-                    temp_data = np.concatenate(
-                        [
-                            spectrum['intensities'],
-                            reference_spectra[substance],
-                        ]
-                    )
+        # Randomly sample some non-holdback spectra for testing
+        import random
+        random.seed(42)  # For reproducibility
+        test_indices = random.sample(range(total_train_val), min(test_size, total_train_val))
 
-                    if substance in spectrum['ratios']:
-                        temp_label = [1, spectrum['ratios'][substance]]
-                    else:
-                        temp_label = [0, 0]
+        for i, spectrum in enumerate(train_val_spectra):
+            if i in test_indices:
+                test_without_holdback.append(spectrum)
+            else:
+                # Use for training/validation
+                for substance in reference_spectra:
+                    if substance != held_back_key:  # Skip held-back substance in training
+                        temp_data = np.concatenate(
+                            [
+                                spectrum['intensities'],
+                                reference_spectra[substance],
+                            ]
+                        )
 
-                    data.append(temp_data)
-                    labels.append(temp_label)
+                        if substance in spectrum['ratios']:
+                            temp_label = [1, spectrum['ratios'][substance]]
+                        else:
+                            temp_label = [0, 0]
 
-        # Create test data from spectra containing held-back metabolite
-        for spectrum in test_spectra:
+                        data.append(temp_data)
+                        labels.append(temp_label)
+
+        # Create test data from spectra WITH held-back metabolite
+        for spectrum in test_with_holdback:
             temp_data = np.concatenate(
                 [
                     spectrum['intensities'],
                     reference_spectra[held_back_key],
                 ]
             )
-
             temp_label = [1, spectrum['ratios'][held_back_key]]
             data_test.append(temp_data)
             labels_test.append(temp_label)
 
+        # Create test data from spectra WITHOUT held-back metabolite
+        # Test the model's ability to correctly predict absence
+        for spectrum in test_without_holdback:
+            temp_data = np.concatenate(
+                [
+                    spectrum['intensities'],
+                    reference_spectra[held_back_key],
+                ]
+            )
+            # The held-back metabolite should be absent (label = [0, 0])
+            temp_label = [0, 0]
+            data_test.append(temp_data)
+            labels_test.append(temp_label)
+
+        print(f'Training/validation spectra: {len(train_val_spectra) - test_size}')
+        print(f'Test spectra with {held_back_metabolite}: {len(test_with_holdback)}')
+        print(f'Test spectra without {held_back_metabolite}: {len(test_without_holdback)}')
+        print(f'Total test samples: {len(data_test)}')
+
         # Split training data into train/validation
         data = np.array(data)
         data_train, data_val, labels_train, labels_val = train_test_split(
-            data, labels, train_size=train_ratio, shuffle=True, random_state=42
+            data, labels, train_size=train_ratio/(train_ratio+val_ratio), shuffle=True, random_state=42
         )
 
         # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
-            device
-        )
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
         labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
@@ -838,6 +858,61 @@ def _(np, torch, tqdm, training_data):
     import torch.optim as optim
     import torch.nn as nn
     import math
+
+
+    class MLPRegressor(nn.Module):
+        def __init__(self, input_size, trial=None, div_size=None):
+            """
+            Multi-layer perceptron for regression tasks.
+
+            Args:
+                input_size: Number of input features
+                trial: Optuna trial object for hyperparameter suggestion
+                div_size: Division factor for layer size reduction (if trial is None)
+            """
+            super(MLPRegressor, self).__init__()
+
+            # Get division factor from trial or use provided value
+            if trial is not None:
+                self.div_size = trial.suggest_float('div_size', 2, 10, step=1)
+            elif div_size is not None:
+                self.div_size = div_size
+            else:
+                self.div_size = 4  # Default value
+
+            # Progressive layer size reduction based on division factor
+            a = input_size  # Input feature dimension
+            b = int(a / self.div_size)
+            c = int(b / self.div_size)
+            d = int(c / self.div_size)
+            e = int(d / self.div_size)
+
+            # Store layer sizes for reference
+            self.layer_sizes = [a, b, c, d, e, 1]
+
+            # Define the model architecture
+            self.model = nn.Sequential(
+                nn.Linear(a, b),
+                nn.ReLU(),
+                nn.Linear(b, c),
+                nn.ReLU(),
+                nn.Linear(c, d),
+                nn.ReLU(),
+                nn.Linear(d, e),
+                nn.ReLU(),
+                nn.Linear(e, 2),  # Output: concentration
+            )
+
+        def forward(self, x):
+            return self.model(x)
+
+        def get_architecture_info(self):
+            """Return information about the model architecture"""
+            return {
+                'div_size': self.div_size,
+                'layer_sizes': self.layer_sizes,
+                'total_parameters': sum(p.numel() for p in self.parameters())
+            }
 
     class TransformerRegressor(nn.Module):
         def __init__(self, input_size, trial=None, **kwargs):
@@ -983,7 +1058,7 @@ def _(np, torch, tqdm, training_data):
             x = x + self.pe[:seq_len, :].transpose(0, 1)
             return self.dropout(x)
 
-    def train_model(training_data, trial):
+    def train_model(training_data, trial, model_type = 'mlp'):
         """
         Train a multi-task neural network for metabolite presence detection and concentration estimation.
 
@@ -1002,23 +1077,24 @@ def _(np, torch, tqdm, training_data):
         device = training_data['data_train'].device
         torch.cuda.empty_cache()
 
-        # Remove n_epochs from hyperparameter search since we'll use early stopping
+        # Remove loss_weight from hyperparameter search since we're using fixed formula
         max_epochs = 200  # Set a reasonable maximum
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
-        loss_weight = trial.suggest_float('loss_weight', 0.1, 10.0)
+        # Remove loss_weight parameter - no longer needed
         input_length = len(training_data['data_train'][0])
 
-        model = TransformerRegressor(
-            input_size=input_length, trial=trial
-        ).to(device)
+        if model_type == 'transformer':
+            model = TransformerRegressor(input_size=input_length, trial=trial).to(device)
+        else:  # default to MLP
+            model = MLPRegressor(input_size=input_length, trial=trial).to(device)
 
-        model.output_projection = nn.Sequential(
-            nn.Linear(model.d_model, model.d_model // 2),
-            nn.ReLU(),
-            nn.Dropout(model.dropout),
-            nn.Linear(model.d_model // 2, 2)  # 2 outputs: presence logit + concentration
-        ).to(device)
+        # model.output_projection = nn.Sequential(
+        #     nn.Linear(model.d_model, model.d_model // 2),
+        #     nn.ReLU(),
+        #     nn.Dropout(model.dropout),
+        #     nn.Linear(model.d_model // 2, 2)  # 2 outputs: presence logit + concentration
+        # ).to(device)
 
         # Extract data tensors (already on GPU)
         data_train = training_data['data_train']
@@ -1032,9 +1108,6 @@ def _(np, torch, tqdm, training_data):
 
         # Multi-task loss functions
         bce_loss = nn.BCEWithLogitsLoss()  # Binary cross-entropy for presence
-        mse_loss = nn.MSELoss(
-            reduction='none'
-        )  # Mean squared error for concentration
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         def compute_loss(predictions, targets):
@@ -1042,13 +1115,12 @@ def _(np, torch, tqdm, training_data):
             Compute weighted multi-task loss combining classification and regression.
 
             Returns:
-                total_loss: Combined weighted loss
+                total_loss: Combined weighted loss using classification error + concentration MAE + RMSE
                 classification_loss: BCE loss for presence prediction
-                weighted_concentration_loss: MSE loss for concentration (weighted by presence)
+                concentration_mae: MAE loss for concentration
+                concentration_rmse: RMSE loss for concentration
             """
-            presence_logits = predictions[
-                :, 0
-            ]    # Raw logits for binary classification
+            presence_logits = predictions[:, 0]    # Raw logits for binary classification
             concentration_pred = predictions[:, 1]  # Concentration predictions
 
             presence_true = targets[:, 0]      # Ground truth presence (0 or 1)
@@ -1057,21 +1129,30 @@ def _(np, torch, tqdm, training_data):
             # Classification loss for presence detection
             classification_loss = bce_loss(presence_logits, presence_true)
 
-            # Regression loss for concentration (only when substance is present)
-            concentration_loss = mse_loss(
-                concentration_pred, concentration_true
-            )
-            # Weight by presence to avoid penalizing concentration errors when absent
-            weighted_concentration_loss = torch.mean(
-                concentration_loss * presence_true
-            )
+            # Convert logits to probabilities for error calculation
+            presence_pred = torch.sigmoid(presence_logits)
+            presence_binary = (presence_pred > 0.5).float()
+            classification_error = torch.mean((presence_binary != presence_true).float())
 
-            # Combine losses with learnable weighting
-            total_loss = (
-                classification_loss + loss_weight * weighted_concentration_loss
-            )
+            # Regression losses for concentration (only when substance is present)
+            present_mask = presence_true == 1
+            if present_mask.sum() > 0:
+                concentration_mae = torch.mean(
+                    torch.abs(concentration_pred[present_mask] - concentration_true[present_mask])
+                )
+                concentration_rmse = torch.sqrt(
+                    torch.mean(
+                        (concentration_pred[present_mask] - concentration_true[present_mask]) ** 2
+                    )
+                )
+            else:
+                concentration_mae = torch.tensor(0.0, device=predictions.device)
+                concentration_rmse = torch.tensor(0.0, device=predictions.device)
 
-            return total_loss, classification_loss, weighted_concentration_loss
+            # New combined loss formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
+            total_loss = 0.5 * classification_error + 0.5 * (0.5 * concentration_mae + 0.5 * concentration_rmse)
+
+            return total_loss, classification_loss, concentration_mae, concentration_rmse
 
         # Early stopping parameters - simplified and more reliable
         early_stop_patience = 15  # Number of epochs without improvement
@@ -1089,11 +1170,11 @@ def _(np, torch, tqdm, training_data):
             ) as bar:
                 bar.set_description(f'Epoch {epoch}')
                 for start in bar:
-                    # M#ini-batch training
+                    # Mini-batch training
                     data_batch = data_train[start : start + batch_size]
                     labels_batch = labels_train[start : start + batch_size]
                     predictions = model(data_batch)
-                    total_loss, class_loss, conc_loss = compute_loss(
+                    total_loss, class_loss, conc_mae, conc_rmse = compute_loss(
                         predictions, labels_batch
                     )
 
@@ -1105,7 +1186,8 @@ def _(np, torch, tqdm, training_data):
                     bar.set_postfix(
                         total_loss=float(total_loss),
                         class_loss=float(class_loss),
-                        conc_loss=float(conc_loss),
+                        conc_mae=float(conc_mae),
+                        conc_rmse=float(conc_rmse),
                     )
 
             # Validate more frequently for better early stopping
@@ -1113,7 +1195,7 @@ def _(np, torch, tqdm, training_data):
                 model.eval()
                 with torch.no_grad():
                     predictions = model(data_val)
-                    val_loss, _, _ = compute_loss(predictions, labels_val)
+                    val_loss, _, _, _ = compute_loss(predictions, labels_val)  # Fixed: expecting 4 values
                     val_loss = float(val_loss)
 
                     # Simple early stopping logic
@@ -1277,9 +1359,7 @@ def _(device_info, gpu_name, mo):
 
     - **Training Device:** {device_info} / {gpu_name}
 
-    **Model Architecture:** 1D CNN
-
-    - Sequential neural network with ReLU activations
+    **Model Architecture:** Transformer
 
     - Final output: Classification Logits and concentration regression
     """
@@ -1289,13 +1369,45 @@ def _(device_info, gpu_name, mo):
 
 @app.cell(hide_code=True)
 def _(mo, optuna, study):
+    # Determine model type from best trial parameters
+    model_type = 'Transformer' if 'd_model' in study.best_trial.params else 'MLP'
+
+    # Create model-specific parameter display
+    if model_type == 'Transformer':
+        model_params_md = f"""
+    **Transformer Architecture:**
+    - **Model Dimension (d_model):** {study.best_trial.params['d_model']}
+    - **Number of Attention Heads:** {study.best_trial.params['nhead']}
+    - **Number of Encoder Layers:** {study.best_trial.params['num_layers']}
+    - **Feedforward Dimension:** {study.best_trial.params['dim_feedforward']}
+    - **Dropout Rate:** {study.best_trial.params['dropout']:.3f}
+    - **Maximum Sequence Length:** {study.best_trial.params['max_seq_len']}
+
+    **Model Architecture:**
+
+    Input Projection → Positional Encoding → Transformer Encoder → Global Average Pooling → Output Projection
+    """
+    else:  # MLP
+        model_params_md = f"""
+    **MLP Architecture:**
+    - **Division Size (layer reduction factor):** {study.best_trial.params['div_size']:.1f}
+
+    **Model Architecture:**
+
+    Input Layer → Hidden Layers (progressively smaller) → Output Layer (2 outputs)
+
+    *Layer sizes are determined by dividing the previous layer size by the division factor*
+    """
+
     mo.md(
         f"""
     ## Hyperparameter Optimization Results
 
+    **Model Type:** {model_type}
+
     **Best Trial Performance (Validation Set):**
 
-    - **Combined Score: {study.best_trial.value:.4f}** (0.5 * Accuracy + 0.5 * R², optimized metric)
+    - **Combined Score: {study.best_trial.value:.4f}** (0.5 * Classification Error + 0.5 * (0.5*MAE + 0.5*RMSE), optimized metric - lower is better)
     - **Classification Accuracy: {study.best_trial.user_attrs['val_accuracy']:.4f}** (Presence prediction accuracy - higher is better)
     - **Concentration R²: {study.best_trial.user_attrs['val_conc_r2']:.4f}** (Coefficient of determination for concentration - higher is better)
     - **Concentration MAE: {study.best_trial.user_attrs['val_conc_mae']:.6f}** (Mean Absolute Error for concentration - lower is better)
@@ -1311,41 +1423,22 @@ def _(mo, optuna, study):
     **Best Hyperparameters:**
 
     **Training Parameters:**
-    - **Number of Epochs:** {study.best_trial.params['n_epochs']:.0f}
     - **Batch Size:** {study.best_trial.params['batch_size']:.0f}
     - **Learning Rate:** {study.best_trial.params['lr']:.2e}
-    - **Loss Weight:** {study.best_trial.params['loss_weight']:.2f} (weighting for concentration vs presence loss)
 
-    **CNN Architecture:**
-    - **Conv1 Channels:** {study.best_trial.params['conv1_channels']} (kernel: {study.best_trial.params['conv1_kernel']})
-    - **Conv2 Channels:** {study.best_trial.params['conv2_channels']} (kernel: {study.best_trial.params['conv2_kernel']})
-    - **Conv3 Channels:** {study.best_trial.params['conv3_channels']} (kernel: {study.best_trial.params['conv3_kernel']})
-    - **Pool Kernel Size:** {study.best_trial.params['pool_kernel']}
-
-    **Dense Layers:**
-    - **Dense1 Size:** {study.best_trial.params['dense1_size']}
-    - **Dense2 Size:** {study.best_trial.params['dense2_size']}
-
-    **Dropout Rates:**
-    - **Convolutional Dropout:** {study.best_trial.params['dropout_conv']:.3f}
-    - **Dense1 Dropout:** {study.best_trial.params['dropout_dense1']:.3f}
-    - **Dense2 Dropout:** {study.best_trial.params['dropout_dense2']:.3f}
-
-    **Model Architecture:**
-
-    1D CNN → BatchNorm → ReLU → Dropout → MaxPool → Dense Layers
+    {model_params_md}
 
     **Multi-Task Learning:**
 
     - **Task 1:** Binary classification for substance presence (BCEWithLogitsLoss)
-    - **Task 2:** Regression for concentration prediction (MSE, weighted by presence)
-    - **Combined Loss:** Classification + {study.best_trial.params['loss_weight']:.2f} × Concentration Loss
+    - **Task 2:** Regression for concentration prediction (weighted by presence)
+    - **Combined Loss:** 0.5 × Classification Error + 0.5 × (0.5×MAE + 0.5×RMSE)
 
     **Data Split:**
 
-    - Training: 70% 
-    - Validation: 15% (used for hyperparameter optimization)
-    - Test: 15% (held out for final evaluation)
+    - Training: Spectra without held-back metabolite
+    - Validation: 15% of training data (used for hyperparameter optimization)
+    - Test: Spectra containing held-back metabolite ({study.best_trial.user_attrs.get('held_back_metabolite', 'N/A')})
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
     """
@@ -1358,19 +1451,19 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     import optuna
     from functools import partial
 
-    def objective(training_data, trial):
+    def objective(training_data, trial, model_type='transformer'):
         """
         Optuna objective function for hyperparameter optimization.
 
-        Optimizes a weighted combination of classification accuracy and regression R².
-        This balances performance on both tasks in the multi-task learning setup.
+        Optimizes the new combined loss: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
 
         Args:
             training_data: Training/validation/test splits
             trial: Optuna trial object for hyperparameter suggestions
+            model_type: 'transformer' or 'mlp'
 
         Returns:
-            Combined score for optimization (higher is better)
+            Combined score for optimization (lower is better, so we negate it)
         """
         (
             val_accuracy,
@@ -1381,7 +1474,7 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
             test_conc_r2,
             test_conc_mae,
             test_conc_rmse,
-        ) = train_model(training_data, trial)
+        ) = train_model(training_data, trial, model_type)
 
         # Store all metrics in trial for later analysis
         trial.set_user_attr('val_accuracy', val_accuracy)
@@ -1392,14 +1485,23 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
         trial.set_user_attr('test_conc_r2', test_conc_r2)
         trial.set_user_attr('test_conc_mae', test_conc_mae)
         trial.set_user_attr('test_conc_rmse', test_conc_rmse)
+        trial.set_user_attr('model_type', model_type)  # Store model type
 
-        # Optimize weighted combination of both tasks (equal weighting)
-        combined_score = 0.5 * val_accuracy + 0.5 * val_conc_r2
+        # Calculate classification error (1 - accuracy)
+        val_classification_error = 1.0 - val_accuracy
+
+        # Use the new optimization formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
+        combined_score = 0.5 * val_classification_error + 0.5 * (0.5 * val_conc_mae + 0.5 * val_conc_rmse)
+
+        # Return negative score since Optuna maximizes but we want to minimize the error
         return combined_score
+
+    # Set model type here - change to 'mlp' to use MLP model
+    MODEL_TYPE = 'mlp'  # or 'mlp'
 
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
-        direction='maximize',  # Maximize the combined score
+        direction='minimize',  # Maximize the negative combined error (minimize error)
         study_name=cache_key,  # Use cache key for unique study identification
         storage=f'sqlite:///{cache_dir}/{cache_key}.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
@@ -1426,7 +1528,7 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
 
             # Resume or start hyperparameter optimization
             study.optimize(
-                partial(objective, training_data),
+                partial(objective, training_data, model_type=MODEL_TYPE),
                 callbacks=[
                     optuna.study.MaxTrialsCallback(
                         trials, states=(optuna.trial.TrialState.COMPLETE,)
