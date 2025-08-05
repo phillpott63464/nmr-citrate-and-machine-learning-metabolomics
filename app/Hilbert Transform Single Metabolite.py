@@ -670,8 +670,201 @@ def _(np, torch, training_data):
     import torch.optim as optim
     import torch.nn as nn
     import tqdm
+    import math
 
-    def train_model(training_data, trial):
+    class MLPRegressor(nn.Module):
+        def __init__(self, input_size, trial=None, div_size=None):
+            """
+            Multi-layer perceptron for regression tasks.
+
+            Args:
+                input_size: Number of input features
+                trial: Optuna trial object for hyperparameter suggestion
+                div_size: Division factor for layer size reduction (if trial is None)
+            """
+            super(MLPRegressor, self).__init__()
+
+            # Get division factor from trial or use provided value
+            if trial is not None:
+                self.div_size = trial.suggest_float('div_size', 2, 10, step=1)
+            elif div_size is not None:
+                self.div_size = div_size
+            else:
+                self.div_size = 4  # Default value
+
+            # Progressive layer size reduction based on division factor
+            a = input_size  # Input feature dimension
+            b = int(a / self.div_size)
+            c = int(b / self.div_size)
+            d = int(c / self.div_size)
+            e = int(d / self.div_size)
+
+            # Store layer sizes for reference
+            self.layer_sizes = [a, b, c, d, e, 1]
+
+            # Define the model architecture
+            self.model = nn.Sequential(
+                nn.Linear(a, b),
+                nn.ReLU(),
+                nn.Linear(b, c),
+                nn.ReLU(),
+                nn.Linear(c, d),
+                nn.ReLU(),
+                nn.Linear(d, e),
+                nn.ReLU(),
+                nn.Linear(e, 1),  # Output: concentration
+            )
+
+        def forward(self, x):
+            return self.model(x)
+
+        def get_architecture_info(self):
+            """Return information about the model architecture"""
+            return {
+                'div_size': self.div_size,
+                'layer_sizes': self.layer_sizes,
+                'total_parameters': sum(p.numel() for p in self.parameters())
+            }
+
+    class TransformerRegressor(nn.Module):
+        def __init__(self, input_size, trial=None, **kwargs):
+            """
+            Transformer model for regression tasks.
+
+            Args:
+                input_size: Number of input features
+                trial: Optuna trial object for hyperparameter suggestion
+                **kwargs: Manual hyperparameter overrides
+            """
+            super(TransformerRegressor, self).__init__()
+
+            # Get hyperparameters from trial or use provided values
+            if trial is not None:
+                self.d_model = int(trial.suggest_categorical('d_model', [64, 128, 256, 512]))
+                self.nhead = int(trial.suggest_categorical('nhead', [4, 8, 16]))
+                self.num_layers = int(trial.suggest_int('num_layers', 2, 8))
+                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [256, 512, 1024, 2048]))
+                self.dropout = trial.suggest_float('dropout', 0.1, 0.5)
+                self.max_seq_len = int(trial.suggest_categorical('max_seq_len', [512, 1024, 2048]))
+            else:
+                # Default values or manual overrides
+                self.d_model = kwargs.get('d_model', 256)
+                self.nhead = kwargs.get('nhead', 8)
+                self.num_layers = kwargs.get('num_layers', 4)
+                self.dim_feedforward = kwargs.get('dim_feedforward', 512)
+                self.dropout = kwargs.get('dropout', 0.1)
+                self.max_seq_len = kwargs.get('max_seq_len', 1024)
+
+            # Ensure nhead divides d_model evenly
+            while self.d_model % self.nhead != 0:
+                self.nhead = max(1, self.nhead - 1)
+
+            # Calculate sequence length based on input size and d_model
+            self.seq_len = min(input_size // self.d_model, self.max_seq_len)
+            if self.seq_len == 0:
+                self.seq_len = 1
+                self.d_model = input_size
+
+            # Actual input size after reshaping
+            self.actual_input_size = self.seq_len * self.d_model
+
+            # Input projection layer to handle size mismatch
+            self.input_projection = nn.Linear(input_size, self.actual_input_size)
+
+            # Positional encoding
+            self.pos_encoding = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
+
+            # Transformer encoder
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=self.d_model,
+                nhead=self.nhead,
+                dim_feedforward=self.dim_feedforward,
+                dropout=self.dropout,
+                activation='relu',
+                batch_first=True
+            )
+            self.transformer_encoder = nn.TransformerEncoder(
+                encoder_layer, 
+                num_layers=self.num_layers
+            )
+
+            # Output layers
+            self.global_pool = nn.AdaptiveAvgPool1d(1)
+            self.output_projection = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 2),
+                nn.ReLU(),
+                nn.Dropout(self.dropout),
+                nn.Linear(self.d_model // 2, 1)
+            )
+
+            # Store architecture info
+            self.architecture_info = {
+                'd_model': self.d_model,
+                'nhead': self.nhead,
+                'num_layers': self.num_layers,
+                'dim_feedforward': self.dim_feedforward,
+                'dropout': self.dropout,
+                'seq_len': self.seq_len,
+                'max_seq_len': self.max_seq_len,
+                'input_size': input_size,
+                'actual_input_size': self.actual_input_size,
+                'total_parameters': sum(p.numel() for p in self.parameters())
+            }
+
+        def forward(self, x):
+            # Project input to match expected size
+            x = self.input_projection(x)  # [batch_size, actual_input_size]
+
+            # Reshape to sequence format
+            batch_size = x.size(0)
+            x = x.view(batch_size, self.seq_len, self.d_model)  # [batch_size, seq_len, d_model]
+
+            # Add positional encoding
+            x = self.pos_encoding(x)
+
+            # Pass through transformer encoder
+            x = self.transformer_encoder(x)  # [batch_size, seq_len, d_model]
+
+            # Global average pooling over sequence dimension
+            x = x.transpose(1, 2)  # [batch_size, d_model, seq_len]
+            x = self.global_pool(x)  # [batch_size, d_model, 1]
+            x = x.squeeze(-1)  # [batch_size, d_model]
+
+            # Final output projection
+            x = self.output_projection(x)  # [batch_size, 1]
+
+            return x
+
+        def get_architecture_info(self):
+            """Return information about the model architecture"""
+            return self.architecture_info
+
+
+    class PositionalEncoding(nn.Module):
+        """Positional encoding for transformer input sequences"""
+
+        def __init__(self, d_model, dropout=0.1, max_len=5000):
+            super(PositionalEncoding, self).__init__()
+            self.dropout = nn.Dropout(p=dropout)
+
+            pe = torch.zeros(max_len, d_model)
+            position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2).float() * 
+                               (-math.log(10000.0) / d_model))
+
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            pe = pe.unsqueeze(0).transpose(0, 1)
+
+            self.register_buffer('pe', pe)
+
+        def forward(self, x):
+            # x shape: [batch_size, seq_len, d_model]
+            seq_len = x.size(1)
+            x = x + self.pe[:seq_len, :].transpose(0, 1)
+            return self.dropout(x)
+
+    def train_model(training_data, trial, model_type='mlp'):
         # Get device from training data tensors
         device = training_data['data_train'].device
         torch.cuda.empty_cache()
@@ -681,27 +874,13 @@ def _(np, torch, training_data):
         max_epochs = 200  # Set a reasonable maximum
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
-        div_size = trial.suggest_float('div_size', 2, 10, step=1)
-    
-        # Progressive layer size reduction based on division factor
-        a = len(training_data['data_train'][0])  # Input feature dimension
-        b = int(a / div_size)
-        c = int(b / div_size)
-        d = int(c / div_size)
-        e = int(d / div_size)
 
         # Multi-layer perceptron with ReLU activations
-        model = nn.Sequential(
-            nn.Linear(a, b),
-            nn.ReLU(),
-            nn.Linear(b, c),
-            nn.ReLU(),
-            nn.Linear(c, d),
-            nn.ReLU(),
-            nn.Linear(d, e),
-            nn.ReLU(),
-            nn.Linear(e, 1),  # Output: concentration
-        ).to(device)
+        input_size = len(training_data['data_train'][0])
+        if model_type == 'transformer':
+            model = TransformerRegressor(input_size=input_size, trial=trial).to(device)
+        else:  # default to MLP
+            model = MLPRegressor(input_size=input_size, trial=trial).to(device)
 
         # Data is already on GPU from get_training_data_mlp
         data_train = training_data['data_train']
@@ -854,7 +1033,7 @@ def _(
             test_mae,
             test_rmse,
             test_r2_score,
-        ) = train_model(training_data, trial)
+        ) = train_model(training_data, trial, model_type='transformer')
 
         # Store all metrics in trial for later analysis
         trial.set_user_attr('val_mae', float(val_mae))
