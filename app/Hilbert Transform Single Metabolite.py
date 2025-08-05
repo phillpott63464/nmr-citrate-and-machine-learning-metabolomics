@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -17,7 +17,8 @@ def _(os):
     # global variables
 
     count = 1000
-    trials = 10
+    trials = 100
+    graph_count = 3
     combo_number = None
     notebook_name = 'hilbert_transform_single_metabolite'
     cache_dir = f'./data_cache/{notebook_name}'
@@ -29,7 +30,7 @@ def _(os):
     substanceDict = {
         'Citric acid': ['SP:3368'],
     }
-    return cache_dir, count, notebook_name, substanceDict, trials
+    return cache_dir, count, graph_count, notebook_name, substanceDict, trials
 
 
 @app.cell(hide_code=True)
@@ -59,6 +60,8 @@ def _(count, substanceDict):
             rondomlyScaleSubstances=True,
             # referenceSubstanceSpectrumId='dss',
             # points=2**11
+            multipletOffsetCap=1,
+            # noiseRange=(2, -6)
         )
 
     def process_batch_data(args):
@@ -151,11 +154,9 @@ def _(hilbertfigures, mo):
 
 
 @app.cell
-def _(spectra):
+def _(graph_count, spectra):
     from scipy.signal import hilbert
     import matplotlib.pyplot as plt
-
-    graph_count = 1
 
     hilberts = []
     for index, spectrum2 in enumerate(
@@ -189,7 +190,7 @@ def _(spectra):
 
     hilbertfigures = plt.gca()
 
-    return graph_count, hilbert, hilbertfigures, hilberts, plt
+    return hilbert, hilbertfigures, hilberts, plt
 
 
 @app.cell(hide_code=True)
@@ -208,69 +209,71 @@ def _(inversefigures, mo):
 def _(graph_count, hilberts, np, plt):
     from scipy.fft import ifft
 
-    inverses = []
-    for hilbertarray in hilberts:
-        inverses.append(ifft(hilbertarray))
+    from math import log2
 
-    # for inverse in inverses:
-    #     inverse[0] = 0 #Remove huge random spike at point 0
+    inverses, inverses_real = [], []
+    for hilbertarray in hilberts:
+        inv = ifft(hilbertarray)
+        inv[0] = 0
+        # Zero out very small values (both real and imaginary)0
+        # inv_real = np.real(inv).astype(np.float32)
+        threshold = 1e-16
+        # threshold = np.percentile(inv.astype(np.float32), 90)
+        inv_real = inv
+        inv_real[np.abs(inv_real) < threshold] = 0
+        inv_real = inv_real[inv_real != 0]
+        print(log2(len(inv_real)))
+
+        inverses.append(inv)
+        inverses_real.append(inv_real)
 
     # Create visualization grid showing sample spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
-    for graphcounter3 in range(1, graph_count**2 + 1):
-        plt.subplot(graph_count, graph_count, graphcounter3)
-        plt.plot(
-            inverses[graphcounter3].astype(np.float32),
-        )
+    for idx in range(min(len(inverses), graph_count**2)):
+        plt.subplot(graph_count, graph_count, idx + 1)
+        plt.plot(inverses[idx])
+        plt.plot(inverses_real[idx])
 
     inversefigures = plt.gca()
-    return ifft, inversefigures, inverses
+    return ifft, inversefigures, inverses, inverses_real
 
 
 @app.cell
 def _(mo, uninversedfigures):
-    mo.md(
-        rf"""
-    ## Perform forwards fourier transform on inveresed data
-
-    {mo.as_html(uninversedfigures)}
-    """
-    )
+    mo.md(rf"""{mo.as_html(uninversedfigures)}""")
     return
 
 
 @app.cell
-def _(graph_count, inverses, np, plt, spectra):
+def _(inverses, inverses_real, np, plt):
     from scipy.fft import fft
 
     uninversed = []
+    uninversed_real = []
     for inverse in inverses:
         uninversed.append(fft(inverse))
-
-    # for inverse in inverses:
-    #     inverse[0] = 0 #Remove huge random spike at point 0
+    for inverse_real in inverses_real:
+        uninversed_real.append(fft(inverse_real))
 
     # Create visualization grid showing sample spectra
-    plt.figure(figsize=(graph_count * 4, graph_count * 4))
+    plt.figure(figsize=(12, 4))
 
-    for graphcounter4 in range(1, graph_count**2 + 1):
-        plt.subplot(graph_count, graph_count, graphcounter4)
-        plt.plot(
-            uninversed[graphcounter4].astype(np.float32), label='Uninversed'
-        )
-        plt.plot(
-            spectra[graphcounter4]['intensities'].astype(np.float32),
-            label='Original',
-        )
+
+    plt.subplot(1, 2, 1)
+    plt.plot(
+        uninversed[0].astype(np.float32),
+    )
+    plt.title('Uninversed')
+    plt.subplot(1, 2, 2)
+    plt.plot(
+        uninversed_real[0].astype(np.float32),
+    )
+    plt.title('Uninversed real')
+    plt.legend()
 
     uninversedfigures = plt.gca()
     return uninversed, uninversedfigures
-
-
-@app.cell
-def _():
-    return
 
 
 @app.cell
@@ -357,14 +360,13 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
     from scipy.signal import resample
     from scipy.fft import irfft
     from scipy.interpolate import interp1d
-    from math import log2
 
     def preprocess_peaks(
         intensities,
         positions,
         ranges=[[-100, 100]],
         baseline_distortion=False,
-        downsample=0,
+        downsample=None,
         reverse=True,
     ):
         """
@@ -380,23 +382,32 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
         """
 
         if reverse == True:
-            new_intensities = (ifft(hilbert(intensities))).astype(np.float32)
+            fid = ifft(hilbert(intensities))
+            fid[0] = 0
+            threshold = 1e-16
+            fid[np.abs(fid) < threshold] = 0
+            fid = fid[fid != 0]
+            new_intensities = fid.astype(np.float32)
             new_positions = [0, 0]
 
-            if len(new_intensities) > downsample:
-                new_len = len(new_intensities) // int(log2(downsample))
-                new_nyquist = new_len // 2 + 1
-
-                filtered = np.zeros_like(new_intensities)
-                filtered[:new_nyquist] = new_intensities[:new_nyquist]
-
-                time_domain = irfft(filtered, n=len(new_intensities))
-
-                downsampled = new_intensities[:: int(log2(downsample))]
-
-                new_intensities = downsampled
-
+        if downsample == None:
             return new_positions, new_intensities
+    
+        if len(new_intensities) > downsample:
+            step = len(new_intensities) // downsample  # integer division for downsampling factor
+            new_len = downsample
+            new_nyquist = new_len // 2 + 1
+
+            filtered = np.zeros_like(new_intensities)
+            filtered[:new_nyquist] = new_intensities[:new_nyquist]
+
+            time_domain = irfft(filtered, n=len(new_intensities))
+
+            downsampled = new_intensities[::step]
+
+            new_intensities = downsampled
+
+        return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
         """Calculate concentration ratios relative to internal standard (tsp)"""
@@ -440,7 +451,8 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
     # Preprocessing configuration
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
-    downsample = int(2048)  # Target resolution for ML model
+    # downsample = int(2048)  # Target resolution for ML model
+    downsample = None
 
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
@@ -516,6 +528,8 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
     print(len(preprocessed_spectra[0]['positions']))
     print(len(preprocessed_spectra[0]['intensities']))
+    print(len(preprocessed_spectra[1]['intensities']))
+    print(len(preprocessed_spectra[2]['intensities']))
 
     positions_count = len(preprocessed_spectra[0]['positions'])
     intensities_count = len(preprocessed_spectra[0]['intensities'])
@@ -734,6 +748,7 @@ def _(np, torch, training_data):
                 if val_loss < best_loss:
                     best_loss = val_loss
                     best_weights = copy.deepcopy(model.state_dict())
+
 
         # Load best weights and evaluate on test set for final metrics
         model.load_state_dict(best_weights)
@@ -968,5 +983,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
