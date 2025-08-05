@@ -392,7 +392,7 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
 
         if downsample == None:
             return new_positions, new_intensities
-    
+
         if len(new_intensities) > downsample:
             step = len(new_intensities) // downsample  # integer division for downsampling factor
             new_len = downsample
@@ -451,8 +451,8 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
     # Preprocessing configuration
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
-    # downsample = int(2048)  # Target resolution for ML model
-    downsample = None
+    downsample = int(2048)  # Target resolution for ML model
+    # downsample = None
 
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
@@ -674,7 +674,9 @@ def _(np, torch, training_data):
         device = training_data['data_train'].device
         torch.cuda.empty_cache()
 
-        n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
+        # Remove n_epochs from hyperparameter search since we'll use early stopping
+        # n_epochs = int(trial.suggest_float('n_epochs', 10, 100, step=10))
+        max_epochs = 200  # Set a reasonable maximum
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
         div_size = trial.suggest_float('div_size', 2, 10, step=1)
@@ -716,7 +718,14 @@ def _(np, torch, training_data):
         best_weights = None
         history = []
 
-        for epoch in range(n_epochs):
+        # Early stopping parameters
+        early_stop_patience = 10  # Number of validation checks to look back
+        min_improvement_rate = 0.02  # 2% of remaining score
+        r2_history = []
+        best_r2 = -np.inf  # Track the best R² score achieved
+        validation_interval = 10  # Only validate every 10 epochs
+
+        for epoch in range(max_epochs):
             model.train()
             with tqdm.tqdm(
                 batch_start, unit='batch', mininterval=0, disable=True
@@ -737,18 +746,49 @@ def _(np, torch, training_data):
                     # print progress
                     bar.set_postfix(loss=float(loss))
 
-            # evaluate on validation set at end of each epoch
-            model.eval()
-            with torch.no_grad():
-                labels_pred = model(data_val)
-                val_loss = loss_fn(labels_pred.squeeze(), labels_val)
-                val_loss = float(val_loss)
-                history.append(val_loss)
+            # Only perform validation and early stopping check every 10 epochs
+            if epoch % validation_interval == 0 or epoch == max_epochs - 1:
+                # evaluate on validation set
+                model.eval()
+                with torch.no_grad():
+                    labels_pred = model(data_val)
+                    val_loss = loss_fn(labels_pred.squeeze(), labels_val)
+                    val_loss = float(val_loss)
+                    history.append(val_loss)
 
-                if val_loss < best_loss:
-                    best_loss = val_loss
-                    best_weights = copy.deepcopy(model.state_dict())
+                    # Calculate R² score for early stopping
+                    val_pred = labels_pred.squeeze()
+                    ss_res_val = torch.sum((labels_val - val_pred) ** 2)
+                    ss_tot_val = torch.sum((labels_val - torch.mean(labels_val)) ** 2)
+                    current_r2 = float(1 - (ss_res_val / ss_tot_val))
+                    r2_history.append(current_r2)
 
+                    # Update best R² score
+                    if current_r2 > best_r2:
+                        best_r2 = current_r2
+
+                    if val_loss < best_loss:
+                        best_loss = val_loss
+                        best_weights = copy.deepcopy(model.state_dict())
+
+                # Early stopping check (only when we have enough validation points)
+                if len(r2_history) >= early_stop_patience:
+                    current_r2 = r2_history[-1]
+                    
+                    # Calculate improvement from best R² and remaining score
+                    improvement_from_best = current_r2 - best_r2
+                    remaining_score = 1.0 - best_r2  # How much R² could still improve from best
+                    required_improvement = remaining_score * min_improvement_rate
+
+                    # Stop if current R² is significantly worse than best and not improving enough
+                    # Allow for some tolerance since we're comparing to the absolute best
+                    tolerance = 0.01  # Allow 1% degradation from best
+                    if (current_r2 < best_r2 - tolerance and 
+                        improvement_from_best < required_improvement):
+                        print(f"Early stopping at epoch {epoch}: "
+                              f"Current R² ({current_r2:.4f}) is {best_r2 - current_r2:.4f} below best ({best_r2:.4f}), "
+                              f"and improvement from best ({improvement_from_best:.4f}) < required ({required_improvement:.4f})")
+                        break
 
         # Load best weights and evaluate on test set for final metrics
         model.load_state_dict(best_weights)
