@@ -60,7 +60,7 @@ def _(count, substanceDict):
             rondomlyScaleSubstances=True,
             # referenceSubstanceSpectrumId='dss',
             # points=2**11
-            multipletOffsetCap=1,
+            # multipletOffsetCap=1,
             # noiseRange=(2, -6)
         )
 
@@ -710,19 +710,24 @@ def _(np, torch, training_data):
 
         batch_start = torch.arange(0, len(data_train), batch_size)
 
-        # loss function and optimizer
-        loss_fn = nn.MSELoss()
+        # Combined loss function: 0.5 * MAE + 0.5 * RMSE
+        def combined_loss_fn(predictions, targets):
+            mae = torch.mean(torch.abs(predictions - targets))
+            mse = torch.mean((predictions - targets) ** 2)
+            rmse = torch.sqrt(mse)
+            return 0.5 * mae + 0.5 * rmse
+
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         best_loss = np.inf
         best_weights = None
         history = []
 
-        # Early stopping parameters
+        # Early stopping parameters using combined metric
         early_stop_patience = 10  # Number of validation checks to look back
-        min_improvement_rate = 0.02  # 2% of remaining score
-        r2_history = []
-        best_r2 = -np.inf  # Track the best R² score achieved
+        min_improvement_rate = 0.02  # 2% improvement required
+        combined_score_history = []
+        best_combined_score = np.inf  # Track the best combined score (lower is better)
         validation_interval = 10  # Only validate every 10 epochs
 
         for epoch in range(max_epochs):
@@ -737,7 +742,7 @@ def _(np, torch, training_data):
                     labels_batch = labels_train[start : start + batch_size]
                     # forward pass
                     labels_pred = model(data_batch)
-                    loss = loss_fn(labels_pred.squeeze(), labels_batch)
+                    loss = combined_loss_fn(labels_pred.squeeze(), labels_batch)
                     # backward pass
                     optimizer.zero_grad()
                     loss.backward()
@@ -752,42 +757,42 @@ def _(np, torch, training_data):
                 model.eval()
                 with torch.no_grad():
                     labels_pred = model(data_val)
-                    val_loss = loss_fn(labels_pred.squeeze(), labels_val)
+                    val_loss = combined_loss_fn(labels_pred.squeeze(), labels_val)
                     val_loss = float(val_loss)
                     history.append(val_loss)
 
-                    # Calculate R² score for early stopping
+                    # Calculate combined metric for early stopping (same as loss now)
                     val_pred = labels_pred.squeeze()
-                    ss_res_val = torch.sum((labels_val - val_pred) ** 2)
-                    ss_tot_val = torch.sum((labels_val - torch.mean(labels_val)) ** 2)
-                    current_r2 = float(1 - (ss_res_val / ss_tot_val))
-                    r2_history.append(current_r2)
+                    val_mae = torch.mean(torch.abs(val_pred - labels_val))
+                    val_rmse = torch.sqrt(torch.mean((val_pred - labels_val) ** 2))
+                    current_combined_score = float(0.5 * val_mae + 0.5 * val_rmse)
+                    combined_score_history.append(current_combined_score)
 
-                    # Update best R² score
-                    if current_r2 > best_r2:
-                        best_r2 = current_r2
+                    # Update best combined score
+                    if current_combined_score < best_combined_score:
+                        best_combined_score = current_combined_score
 
                     if val_loss < best_loss:
                         best_loss = val_loss
                         best_weights = copy.deepcopy(model.state_dict())
 
                 # Early stopping check (only when we have enough validation points)
-                if len(r2_history) >= early_stop_patience:
-                    current_r2 = r2_history[-1]
-                    
-                    # Calculate improvement from best R² and remaining score
-                    improvement_from_best = current_r2 - best_r2
-                    remaining_score = 1.0 - best_r2  # How much R² could still improve from best
-                    required_improvement = remaining_score * min_improvement_rate
+                if len(combined_score_history) >= early_stop_patience:
+                    current_score = combined_score_history[-1]
 
-                    # Stop if current R² is significantly worse than best and not improving enough
+                    # Calculate improvement from best combined score
+                    improvement_from_best = best_combined_score - current_score  # Positive means improvement
+                    required_improvement = best_combined_score * min_improvement_rate
+
+                    # Stop if current score is significantly worse than best and not improving enough
                     # Allow for some tolerance since we're comparing to the absolute best
-                    tolerance = 0.01  # Allow 1% degradation from best
-                    if (current_r2 < best_r2 - tolerance and 
+                    tolerance_factor = 0.05  # Allow 5% degradation from best
+                    tolerance = best_combined_score * tolerance_factor
+                    if (current_score > best_combined_score + tolerance and 
                         improvement_from_best < required_improvement):
                         print(f"Early stopping at epoch {epoch}: "
-                              f"Current R² ({current_r2:.4f}) is {best_r2 - current_r2:.4f} below best ({best_r2:.4f}), "
-                              f"and improvement from best ({improvement_from_best:.4f}) < required ({required_improvement:.4f})")
+                              f"Current combined score ({current_score:.6f}) is {current_score - best_combined_score:.6f} above best ({best_combined_score:.6f}), "
+                              f"and improvement from best ({improvement_from_best:.6f}) < required ({required_improvement:.6f})")
                         break
 
         # Load best weights and evaluate on test set for final metrics
@@ -876,12 +881,13 @@ def _(
         trial.set_user_attr('test_rmse', float(test_rmse))
         trial.set_user_attr('test_r2_score', float(test_r2_score))
 
-        # Optimize for validation R² score (higher is better)
-        return val_r2_score
+        # Optimize for combined MAE + RMSE (lower is better)
+        combined_score = 0.5 * val_mae + 0.5 * val_rmse
+        return combined_score
 
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
-        direction='maximize',  # Maximize the combined score
+        direction='minimize',  # Minimize the combined MAE + RMSE score
         study_name=notebook_name,  # Use cache key for unique study identification
         storage=f'sqlite:///{cache_dir}/{notebook_name}.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
@@ -947,8 +953,8 @@ def _(
                 if t.state == optuna.trial.TrialState.PRUNED
             ]
         ),
-        'best_value': max(trial_values) if trial_values else 0,
-        'worst_value': min(trial_values) if trial_values else 0,
+        'best_value': min(trial_values) if trial_values else 0,
+        'worst_value': max(trial_values) if trial_values else 0,
         'mean_value': sum(trial_values) / len(trial_values)
         if trial_values
         else 0,
@@ -956,6 +962,7 @@ def _(
 
     return (
         best_params,
+        best_trial,
         optimization_stats,
         test_mae,
         test_r2_score,
@@ -969,6 +976,7 @@ def _(
 @app.cell(hide_code=True)
 def _(
     best_params,
+    best_trial,
     mo,
     optimization_stats,
     test_mae,
@@ -991,7 +999,7 @@ def _(
 
     **Study Configuration:**
 
-    - Direction: Maximize R² score
+    - Direction: Minimize combined MAE + RMSE score (0.5 * MAE + 0.5 * RMSE)
     - Total trials: {optimization_stats['total_trials']}
     - Completed trials: {optimization_stats['completed_trials']}
     - Pruned trials: {optimization_stats['pruned_trials']}
@@ -1000,6 +1008,7 @@ def _(
 
     **Validation Set (Optimization Target):**
 
+    - **Combined Score (0.5 * MAE + 0.5 * RMSE):** {best_trial.value:.6f}
     - **R² Score:** {val_r2_score:.6f}
     - **MAE:** {val_mae:.6f}
     - **RMSE:** {val_rmse:.6f}
@@ -1013,7 +1022,7 @@ def _(
     **Best Parameters:**
     {params_str}
 
-    ### Performance Statistics (Validation R²)
+    ### Performance Statistics (Combined MAE + RMSE)
 
     - **Best value:** {optimization_stats['best_value']:.6f}
     - **Worst value:** {optimization_stats['worst_value']:.6f}
