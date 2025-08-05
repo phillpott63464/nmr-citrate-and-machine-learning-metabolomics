@@ -270,6 +270,20 @@ Best Parameters: - n_epochs: 100.0 - batch_size: 90.0 - lr: 0.003714545902240392
 
 It definetly works on FID data at least as well as it does on frequency data, generally with a lower requirement for length of data, as well as not requiring an x axis to reduce training tensor.
 
+#### With better data discard
+Validation Set (Optimization Target):
+
+    Combined Score (0.5 * MAE + 0.5 * RMSE): 0.039488
+    R² Score: 0.998639
+    MAE: 0.028270
+    RMSE: 0.050705
+
+Test Set (Final Evaluation):
+
+    R² Score: 0.998807
+    MAE: 0.024982
+    RMSE: 0.049781
+
 
 ## CNN
 ### Metabolite Randomisation with holdout 10 trials:
@@ -291,3 +305,9 @@ Final Test Set Performance:
 
 
 Excellent classification, truly terrible concentration. And still terrible  overfitting.
+
+### Hilbert Transform (FID data) single metabolite
+
+SOOOO slow and SOOO bad it's just not even worth it when an MLP can get to 3% mean error in 100 trials in the time it takes the CNN to do 1 trial
+
+## Transformer
