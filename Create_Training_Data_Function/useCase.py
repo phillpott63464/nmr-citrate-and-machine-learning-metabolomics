@@ -49,7 +49,7 @@ substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceD
 # The function for actually creating the simulations. See createTrainingData.py for details on the function.
 sampleNumber = 10
 
-# cProfile.run('createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)', 'output.prof')
+cProfile.run('createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)', 'output.prof')
 
 with open('results.txt', 'w') as f:
     stats = pstats.Stats('output.prof', stream=f)

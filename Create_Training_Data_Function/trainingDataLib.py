@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 from nmrsim.qm import qm_spinsystem
 
-def createLineshape(peaklist, points=65536, limits=None, function='lorentzian'):
+
+def createLineshape(
+    peaklist, points=65536, limits=None, function='lorentzian'
+):
     """
     Numpy Arrays of the simulated lineshape for a peaklist.
     Parameters
@@ -30,7 +33,7 @@ def createLineshape(peaklist, points=65536, limits=None, function='lorentzian'):
     """
     peaklist.sort()
     if limits:
-        l_limit, r_limit = low_high(limits)
+        l_limit, r_limit = validate_and_sort_limits(limits)
     else:
         l_limit = peaklist[0][0] - 0.5
         r_limit = peaklist[-1][0] + 0.5
@@ -46,21 +49,14 @@ def createLineshape(peaklist, points=65536, limits=None, function='lorentzian'):
     return x, y
 
 
-def is_number(n):
-    if isinstance(n, numbers.Real):
-        return n
-    else:
-        raise TypeError('Must be a real number.')
-
-
-def is_tuple_of_two_numbers(t):
-    m, n = t
-    return is_number(m), is_number(n)
-
-
-def low_high(t):
-    two_numbers = is_tuple_of_two_numbers(t)
-    return min(two_numbers), max(two_numbers)
+def validate_and_sort_limits(t):
+    try:
+        m, n = t
+        if not isinstance(m, numbers.Real) or not isinstance(n, numbers.Real):
+            raise TypeError
+        return (min(m, n), max(m, n))
+    except Exception:
+        raise TypeError("limits must be a tuple of two real numbers.")
 
 
 def lorentz(v, v0, I, w):
@@ -86,7 +82,6 @@ def lorentz(v, v0, I, w):
         evaluated at frequency `v`.
     """
     return I * ((0.5 * w)**2 / ((0.5 * w)**2 + (v - v0)**2))
-
 
 def add_lorentzians(linspace, peaklist):
     """
@@ -116,14 +111,22 @@ def add_lorentzians(linspace, peaklist):
 
 def gauss(v, v0, I, w):
     wf = 0.4246609
-    return I * (math.e**((-(v - v0)**2) / (2 * ((w * wf)**2))))
+
+    peak_array = np.array(peaklist)  # shape (N, 3)
+    v0 = peak_array[:, 0][:, np.newaxis]  # shape (N, 1)
+    I = peak_array[:, 1][:, np.newaxis]   # shape (N, 1)
+    w = peak_array[:, 2][:, np.newaxis]   # shape (N, 1)
+
+    x = x[np.newaxis, :]  # shape (1, M)
+
+    denom = 2 * (w * wf) ** 2  # shape (N, 1)
+    exponent = -((x - v0) ** 2) / denom  # shape (N, M)
+
+    y = I * np.exp(exponent)  # shape (N, M)
+
+    return np.sum(y, axis=0)  # shape (M,)
 
 
-def add_gaussians(linspace, peaklist, w):
-    result = gauss(linspace, peaklist[0][0], peaklist[0][1], w)
-    for v, i, w in peaklist[1:]:
-        result += gauss(linspace, v, i, w)
-    return result
 
 def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     """
@@ -147,14 +150,44 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     x, y : numpy.array
         Arrays for frequency (x) and intensity (y) for the simulated lineshape.
     """
-    breaks = [index + 1 for index in range(len(spinSystemMatrix) - 1) if not np.any(spinSystemMatrix[:index + 1, index + 1:] != 0)]
+    breaks = [
+        index + 1
+        for index in range(len(spinSystemMatrix) - 1)
+        if not np.any(spinSystemMatrix[: index + 1, index + 1 :] != 0)
+    ]
     breaks = [0] + breaks + [len(spinSystemMatrix)]
-    matrices = [spinSystemMatrix[breakpoint:breaks[index + 1], breakpoint:breaks[index + 1]] for index, breakpoint in enumerate(breaks[:-1])]
+    matrices = [
+        spinSystemMatrix[
+            breakpoint : breaks[index + 1], breakpoint : breaks[index + 1]
+        ]
+        for index, breakpoint in enumerate(breaks[:-1])
+    ]
     # Suppress the printing from qm
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
-    peaklist = [item for sublist in [qm_spinsystem([ssm[index][index] * frequency for index in range(len(ssm))], ssm) for ssm in matrices] for item in sublist]
+    peaklist = [
+        item
+        for sublist in [
+            qm_spinsystem(
+                [ssm[index][index] * frequency for index in range(len(ssm))],
+                ssm,
+            )
+            for ssm in matrices
+        ]
+        for item in sublist
+    ]
     sys.stdout = output
-    peaklist_out = [(peak[0] / frequency, peak[1], width) for peak in peaklist]
+    
+    peak_array = np.array(peaklist)  # shape (N, 3)
+    width_column = np.full((peak_array.shape[0], 1), width)
+    peak_array = np.hstack((peak_array, width_column))
+
+    # Divide first column by frequency
+    peak_array[:, 0] = peak_array[:, 0] / frequency
+
+    # Replace third column by width
+    peak_array[:, 2] = width
+
+    peaklist_out = peak_array
     # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])
     return peaklist_out
