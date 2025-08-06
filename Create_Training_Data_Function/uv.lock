@@ -98,6 +98,10 @@ dependencies = [
     { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "nmrsim", version = "0.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.7'" },
     { name = "nmrsim", version = "0.6.0.post1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.7'" },
+    { name = "numba", version = "0.53.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.7'" },
+    { name = "numba", version = "0.56.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.7.*'" },
+    { name = "numba", version = "0.58.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.8.*'" },
+    { name = "numba", version = "0.60.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "numpy", version = "1.19.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.7'" },
     { name = "numpy", version = "1.21.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.7.*'" },
     { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.8.*'" },
@@ -115,6 +119,7 @@ dependencies = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.3.4" },
     { name = "nmrsim", specifier = ">=0.5.2" },
+    { name = "numba", specifier = ">=0.53.1" },
     { name = "numpy", specifier = ">=1.19.5" },
     { name = "pandas", specifier = ">=0.25.3" },
     { name = "tqdm", specifier = ">=4.64.1" },

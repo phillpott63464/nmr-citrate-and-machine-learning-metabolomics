@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 from nmrsim.qm import qm_spinsystem
+import numba
 
 
 def createLineshape(
@@ -58,7 +59,7 @@ def validate_and_sort_limits(t):
     except Exception:
         raise TypeError("limits must be a tuple of two real numbers.")
 
-
+@numba.njit
 def lorentz(v, v0, I, w):
     """
     A lorentz function that takes linewidth at half intensity (w) as a
@@ -83,6 +84,7 @@ def lorentz(v, v0, I, w):
     """
     return I * ((0.5 * w)**2 / ((0.5 * w)**2 + (v - v0)**2))
 
+@numba.njit
 def add_lorentzians(linspace, peaklist):
     """
     Adapted from nmrsim
