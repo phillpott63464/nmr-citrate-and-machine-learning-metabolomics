@@ -41,7 +41,7 @@ def _(mo):
 def _():
     # global variables
 
-    count = 10
+    count = 1000
     trials = 1000
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'

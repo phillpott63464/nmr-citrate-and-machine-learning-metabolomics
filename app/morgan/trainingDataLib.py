@@ -605,7 +605,7 @@ def secondorder_dense(freqs, couplings, normalize=True, **kwargs):
     """
     nspins = len(freqs)
     H = hamiltonian_dense(freqs, couplings)
-    E, V = scipy.linalg.eigh(H)
+    E, V = scipy.linalg.eigh(H, driver='evd')
     V = V.real
     T = _transition_matrix_dense(nspins)
     I = np.square(V.T.dot(T.dot(V)))

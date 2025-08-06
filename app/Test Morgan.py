@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -67,9 +67,11 @@ def _(pstats):
     with open('morgan/results.txt', 'w') as f:
         stats = pstats.Stats('morgan/output.prof', stream=f)
         stats.sort_stats('tottime')
+        # stats.sort_stats('cumulative')
+        # stats.sort_stats('ncalls')
         stats.print_stats()
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

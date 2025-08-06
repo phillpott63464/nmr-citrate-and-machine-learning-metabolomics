@@ -116,29 +116,30 @@ def createTrainingData(
             1,
         )
 
+    for spectrumId in substanceSpectrumIds:
+        ssm = getSsmData(
+            spectrumId=spectrumId,
+            referenceOffset=referenceData.loc[
+                referenceSubstanceSpectrumId, 'offset'
+            ],
+            transform=False,
+            multipletOffsetCap=multipletOffsetCap,
+        )
+        x, substanceY = generateSignal(
+            ssm,
+            peakWidth,
+            frequency,
+            points,
+            limits,
+            1,
+        )
+        untransformedComponentsList.append(substanceY)
+
     for sampleNumber in tqdm(range(sampleNumber)):
         # Make the reference signal first
         positions, y = reference
         y*=scalesDict[referenceSubstanceSpectrumId][sampleNumber]
         for spectrumId in substanceSpectrumIds:
-            if sampleNumber == 0:
-                ssm = getSsmData(
-                    spectrumId=spectrumId,
-                    referenceOffset=referenceData.loc[
-                        referenceSubstanceSpectrumId, 'offset'
-                    ],
-                    transform=False,
-                    multipletOffsetCap=multipletOffsetCap,
-                )
-                x, substanceY = generateSignal(
-                    ssm,
-                    peakWidth,
-                    frequency,
-                    points,
-                    limits,
-                    scalesDict[spectrumId][sampleNumber],
-                )
-                untransformedComponentsList.append(substanceY)
             ssm = getSsmData(
                 spectrumId=spectrumId,
                 referenceOffset=referenceData.loc[
@@ -147,6 +148,7 @@ def createTrainingData(
                 transform=randomlyOffsetMultiplets,
                 multipletOffsetCap=multipletOffsetCap,
             )
+            
             x, substanceY = generateSignal(
                 ssm,
                 peakWidth,
