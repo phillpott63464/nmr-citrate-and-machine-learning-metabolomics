@@ -154,25 +154,55 @@ def add_lorentzians(linspace, peaklist):
         result += lorentz(linspace, v, i, w)
     return result
 
-
+@nb.njit
 def gauss(v, v0, I, w):
+    """
+    A gaussian function that takes linewidth at half intensity (w) as a
+    parameter.
+    
+    Arguments
+    ---------
+    v : float
+        The frequency (x coordinate) in Hz at which to evaluate intensity (y
+        coordinate).
+    v0 : float
+        The center of the distribution.
+    I : float
+        the relative intensity of the signal
+    w : float
+        the peak width at half maximum intensity
+    Returns
+    -------
+    float
+        the intensity (y coordinate) for the Gaussian distribution
+        evaluated at frequency `v`.
+    """
     wf = 0.4246609
+    return I * np.exp(-((v - v0) ** 2) / (2 * ((w * wf) ** 2)))
 
-    peak_array = np.array(peaklist)  # shape (N, 3)
-    v0 = peak_array[:, 0][:, np.newaxis]  # shape (N, 1)
-    I = peak_array[:, 1][:, np.newaxis]   # shape (N, 1)
-    w = peak_array[:, 2][:, np.newaxis]   # shape (N, 1)
-
-    x = x[np.newaxis, :]  # shape (1, M)
-
-    denom = 2 * (w * wf) ** 2  # shape (N, 1)
-    exponent = -((x - v0) ** 2) / denom  # shape (N, M)
-
-    y = I * np.exp(exponent)  # shape (N, M)
-
-    return np.sum(y, axis=0)  # shape (M,)
-
-
+@nb.njit
+def add_gaussians(linspace, peaklist):
+    """
+    Given a numpy linspace and a peaklist of (frequency, intensity, width)
+    tuples, returns an array of y coordinates for the total line shape.
+    
+    Arguments
+    ---------
+    linspace : array-like
+        Normally a numpy.linspace of x coordinates corresponding to frequency
+        in Hz.
+    peaklist : numpy.array
+        A 2D array of shape (N, 3) with (frequency, intensity, width) data.
+    
+    Returns
+    -------
+    numpy.array
+        an array of y coordinates corresponding to intensity.
+    """
+    result = gauss(linspace, peaklist[0, 0], peaklist[0, 1], peaklist[0, 2])
+    for i in range(1, len(peaklist)):
+        result += gauss(linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i, 2])
+    return result
 
 def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     """
