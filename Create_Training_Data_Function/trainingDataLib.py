@@ -150,8 +150,8 @@ def add_lorentzians(linspace, peaklist):
         an array of y coordinates corresponding to intensity.
     """
     result = lorentz(linspace, peaklist[0][0], peaklist[0][1], peaklist[0][2])
-    for v, i, w in peaklist[1:]:
-        result += lorentz(linspace, v, i, w)
+    for i in range(1, len(peaklist)):
+        result += lorentz(linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i,  2])
     return result
 
 @nb.njit

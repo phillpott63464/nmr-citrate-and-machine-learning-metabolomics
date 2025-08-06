@@ -41,10 +41,6 @@ couplings = pd.read_csv(
     dirPath.joinpath('Casmdb_Data/couplings.csv'), index_col=0
 )
 
-# Add this at module level to cache data lookups
-_multiplets_cache = {}
-_couplings_cache = {}
-
 
 def createTrainingData(
     substanceSpectrumIds=[],
@@ -97,17 +93,6 @@ def createTrainingData(
     scales, positions, intensities, components: pandas.DataFrame, numpy.array, numpy.array, numpy.array
         Data on the scales (aka true values of the components), position array of all spectra (x-axis), intensity arrays of the simulated samples (y-axes), intensity arrays of the simulated components before any transformations (y-axes).
     """
-    # Pre-compute all SSM data
-    base_ssm_data = {}
-    for spectrumId in substanceSpectrumIds:
-        base_ssm_data[spectrumId] = getSsmData(
-            spectrumId=spectrumId,
-            referenceOffset=referenceData.loc[referenceSubstanceSpectrumId, 'offset'],
-            transform=False,
-            multipletOffsetCap=0,  # No offset for base data
-        )
-    
-    # Pre-compute scales
     scalesDict = {
         ssid: [
             scale * (10 ** random.uniform(0.0, 1.0))
@@ -117,68 +102,66 @@ def createTrainingData(
         ]
         for ssid in substanceSpectrumIds + [referenceSubstanceSpectrumId]
     }
-    
+    untransformedComponentsList = []
+    transformedComponentsList = []
+    intensitiesList = []
     peakWidth = peakWidth / frequency
-    
-    # Pre-generate noise values if needed
-    if includeNoise:
-        noise_scales = 10 ** np.random.uniform(noiseRange[0], noiseRange[-1], sampleNumber)
-    
-    # Pre-allocate arrays
-    intensitiesArray = np.zeros((sampleNumber, points))
-    untransformedComponentsArray = np.zeros((len(substanceSpectrumIds), points))
-    
-    for sample_idx in range(sampleNumber):
-        # Generate reference signal
+    for sampleNumber in tqdm(range(sampleNumber)):
+        # Make the reference signal first
         positions, y = generateSignal(
             referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
             peakWidth,
             frequency,
             points,
             limits,
-            scalesDict[referenceSubstanceSpectrumId][sample_idx],
+            scalesDict[referenceSubstanceSpectrumId][sampleNumber],
         )
-        intensitiesArray[sample_idx] = y
-        
-        # Process substances
-        for spec_idx, spectrumId in enumerate(substanceSpectrumIds):
-            if sample_idx == 0:
-                # Store untransformed component only once
+        for spectrumId in substanceSpectrumIds:
+            if sampleNumber == 0:
+                ssm = getSsmData(
+                    spectrumId=spectrumId,
+                    referenceOffset=referenceData.loc[
+                        referenceSubstanceSpectrumId, 'offset'
+                    ],
+                    transform=False,
+                    multipletOffsetCap=multipletOffsetCap,
+                )
                 x, substanceY = generateSignal(
-                    base_ssm_data[spectrumId],
+                    ssm,
                     peakWidth,
                     frequency,
                     points,
                     limits,
-                    scalesDict[spectrumId][sample_idx],
+                    scalesDict[spectrumId][sampleNumber],
                 )
-                untransformedComponentsArray[spec_idx] = substanceY
-            
-            # Apply random offsets if needed
-            if randomlyOffsetMultiplets:
-                ssm = getSsmDataWithOffset(base_ssm_data[spectrumId], multipletOffsetCap)
-            else:
-                ssm = base_ssm_data[spectrumId]
-            
+                untransformedComponentsList.append(substanceY)
+            ssm = getSsmData(
+                spectrumId=spectrumId,
+                referenceOffset=referenceData.loc[
+                    referenceSubstanceSpectrumId, 'offset'
+                ],
+                transform=randomlyOffsetMultiplets,
+                multipletOffsetCap=multipletOffsetCap,
+            )
             x, substanceY = generateSignal(
                 ssm,
                 peakWidth,
                 frequency,
                 points,
                 limits,
-                scalesDict[spectrumId][sample_idx],
+                scalesDict[spectrumId][sampleNumber],
             )
+            # transformedComponentsList.append(substanceY)
             y += substanceY
-        
-        # Add noise if needed
         if includeNoise:
-            y += np.random.normal(0, scale * noise_scales[sample_idx], len(y))
-    
+            noise = 10 ** random.uniform(noiseRange[0], noiseRange[-1])
+            y += np.random.normal(y, scale * noise)
+        intensitiesList.append(y)
     return {
         'scales': pd.DataFrame(scalesDict),
         'positions': positions,
-        'intensities': intensitiesArray,
-        'components': untransformedComponentsArray,
+        'intensities': np.vstack(intensitiesList),
+        'components': np.vstack(untransformedComponentsList),
     }
 
 
@@ -189,14 +172,8 @@ def generateSignal(ssm, peakWidth, frequency, points, limits, scale):
 
 
 def getSsmData(spectrumId, referenceOffset, transform, multipletOffsetCap):
-    # Cache expensive DataFrame operations
-    if spectrumId not in _multiplets_cache:
-        _multiplets_cache[spectrumId] = multiplets.loc[multiplets['spectrum_id'] == spectrumId]
-        _couplings_cache[spectrumId] = couplings.loc[couplings['spectrum_id'] == spectrumId]
-    
-    multipletsData = _multiplets_cache[spectrumId]
-    couplingsData = _couplings_cache[spectrumId]
-    
+    multipletsData = multiplets.loc[multiplets['spectrum_id'] == spectrumId]
+    couplingsData = couplings.loc[couplings['spectrum_id'] == spectrumId]
     ssm = np.zeros((len(multipletsData), len(multipletsData)))
     for index, row in couplingsData.iterrows():
         ssm[
@@ -213,16 +190,6 @@ def getSsmData(spectrumId, referenceOffset, transform, multipletOffsetCap):
             else float(center) + referenceOffset
         )
         ssm[index, index] = float(chemShift)
-    return ssm
-
-
-def getSsmDataWithOffset(base_ssm, multipletOffsetCap):
-    """Apply random offsets to diagonal elements of SSM matrix"""
-    ssm = base_ssm.copy()
-    if multipletOffsetCap > 0:
-        n_multiplets = ssm.shape[0]
-        offsets = np.random.uniform(-multipletOffsetCap, multipletOffsetCap, n_multiplets)
-        np.fill_diagonal(ssm, np.diag(ssm) + offsets)
     return ssm
 
 
