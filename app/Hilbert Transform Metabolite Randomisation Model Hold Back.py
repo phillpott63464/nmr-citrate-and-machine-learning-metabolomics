@@ -83,7 +83,7 @@ def _(mo, spectrafigures, substanceDict):
 
 
 @app.cell
-def _(cache_dir, combo_number, count, substanceDict):
+def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -131,7 +131,7 @@ def _(cache_dir, combo_number, count, substanceDict):
                 print(
                     f'Loaded {len(data)} spectra from {filepath} (old format)'
                 )
-                return data, None, None
+                return data, None, Nonelinalg
             elif 'combinations' not in data:
                 # Medium format - spectra + held_back_metabolite
                 spectra = data['spectra']
@@ -988,7 +988,7 @@ def _(np, torch, tqdm, training_data):
                 nn.Linear(self.d_model, self.d_model // 2),
                 nn.ReLU(),
                 nn.Dropout(self.dropout),
-                nn.Linear(self.d_model // 2, 1)
+                nn.Linear(self.d_model // 2, 2)  # Changed from 1 to 2 outputs
             )
 
             # Store architecture info
@@ -1025,7 +1025,7 @@ def _(np, torch, tqdm, training_data):
             x = x.squeeze(-1)  # [batch_size, d_model]
 
             # Final output projection
-            x = self.output_projection(x)  # [batch_size, 1]
+            x = self.output_projection(x)  # [batch_size, 2] - Changed from 1 to 2
 
             return x
 
@@ -1132,7 +1132,9 @@ def _(np, torch, tqdm, training_data):
             # Convert logits to probabilities for error calculation
             presence_pred = torch.sigmoid(presence_logits)
             presence_binary = (presence_pred > 0.5).float()
-            classification_error = torch.mean((presence_binary != presence_true).float())
+
+            # Use BCE loss directly instead of manual error calculation to maintain gradients
+            classification_error = classification_loss  # This maintains gradients
 
             # Regression losses for concentration (only when substance is present)
             present_mask = presence_true == 1
@@ -1146,8 +1148,9 @@ def _(np, torch, tqdm, training_data):
                     )
                 )
             else:
-                concentration_mae = torch.tensor(0.0, device=predictions.device)
-                concentration_rmse = torch.tensor(0.0, device=predictions.device)
+                # Ensure these maintain gradients by using tensor operations on predictions
+                concentration_mae = torch.mean(torch.abs(concentration_pred)) * 0.0  # Maintains gradient
+                concentration_rmse = torch.mean(concentration_pred) * 0.0  # Maintains gradient
 
             # New combined loss formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
             total_loss = 0.5 * classification_error + 0.5 * (0.5 * concentration_mae + 0.5 * concentration_rmse)
