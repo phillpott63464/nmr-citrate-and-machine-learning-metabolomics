@@ -106,16 +106,19 @@ def createTrainingData(
     transformedComponentsList = []
     intensitiesList = []
     peakWidth = peakWidth / frequency
-    for sampleNumber in tqdm(range(sampleNumber)):
-        # Make the reference signal first
-        positions, y = generateSignal(
+
+    reference = generateSignal(
             referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
             peakWidth,
             frequency,
             points,
             limits,
-            scalesDict[referenceSubstanceSpectrumId][sampleNumber],
+            scalesDict[referenceSubstanceSpectrumId][0],
         )
+
+    for sampleNumber in tqdm(range(sampleNumber)):
+        # Make the reference signal first
+        positions, y = reference
         for spectrumId in substanceSpectrumIds:
             if sampleNumber == 0:
                 ssm = getSsmData(

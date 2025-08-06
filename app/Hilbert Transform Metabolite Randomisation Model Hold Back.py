@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -41,7 +41,7 @@ def _(mo):
 def _():
     # global variables
 
-    count = 1000
+    count = 10
     trials = 1000
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'
@@ -1626,5 +1626,5 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     return optuna, study
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
