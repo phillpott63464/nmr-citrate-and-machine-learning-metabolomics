@@ -4,31 +4,33 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import cProfile
+import pstats
 
 # Name to Spectrum ID Dictionary.
 # # We can expand this to any of the GISSMO simulated spectra. All the data is in the Casmdb_Data directory.
-# substanceDict = {
-#     'L-Alanine': ['SP:3208'],
-#     'L-Arginine': ['SP:3212', 'SP:3285', 'SP:3360', 'SP:3388'],
-#     'L-Asparagine': ['SP:3408', 'SP:3597'],
-#     'L-Aspartic_Acid': ['SP:3526', 'SP:3603'],
-#     'L-Cysteine': ['SP:3723', 'SP:3725'],
-#     'L-Glutamic_Acid': ['SP:3412', 'SP:3690'],
-#     'L-Glutamine': ['SP:3108'],
-#     'L-Histidine': ['SP:3099', 'SP:3684'],
-#     'L-Isoleucine': ['SP:3390', 'SP:3502'],
-#     'L-Leucine': ['SP:3551'],
-#     'L-Lysine': ['SP:3506', 'SP:3560'],
-#     'L-Methionine': ['SP:3456', 'SP:3509'],
-#     'L-Proline': ['SP:3140', 'SP:3406'],
-#     'L-Phenylalanine': ['SP:3326', 'SP:3462', 'SP:3507'],
-#     'L-Serine': ['SP:3324', 'SP:3427', 'SP:3732'],
-#     'L-Threonine': ['SP:3327', 'SP:3437'],
-#     'L-Tryptophan': ['SP:3342', 'SP:3455'],
-#     'L-Tyrosine': ['SP:3464'],
-#     'L-Valine': ['SP:3413', 'SP:3490'],
-#     'Glycine': ['SP:3365', 'SP:3682'],
-#     }
+substanceDict = {
+    'L-Alanine': ['SP:3208'],
+    'L-Arginine': ['SP:3212', 'SP:3285', 'SP:3360', 'SP:3388'],
+    'L-Asparagine': ['SP:3408', 'SP:3597'],
+    'L-Aspartic_Acid': ['SP:3526', 'SP:3603'],
+    'L-Cysteine': ['SP:3723', 'SP:3725'],
+    'L-Glutamic_Acid': ['SP:3412', 'SP:3690'],
+    'L-Glutamine': ['SP:3108'],
+    'L-Histidine': ['SP:3099', 'SP:3684'],
+    'L-Isoleucine': ['SP:3390', 'SP:3502'],
+    'L-Leucine': ['SP:3551'],
+    'L-Lysine': ['SP:3506', 'SP:3560'],
+    'L-Methionine': ['SP:3456', 'SP:3509'],
+    'L-Proline': ['SP:3140', 'SP:3406'],
+    'L-Phenylalanine': ['SP:3326', 'SP:3462', 'SP:3507'],
+    'L-Serine': ['SP:3324', 'SP:3427', 'SP:3732'],
+    'L-Threonine': ['SP:3327', 'SP:3437'],
+    'L-Tryptophan': ['SP:3342', 'SP:3455'],
+    'L-Tyrosine': ['SP:3464'],
+    'L-Valine': ['SP:3413', 'SP:3490'],
+    'Glycine': ['SP:3365', 'SP:3682'],
+    }
 
 # # Amino acid list. This is just a list of names for convenience.
 # aminoAcids = ['L-Alanine', 'L-Arginine', 'L-Asparagine', 'L-Aspartic_Acid', 'L-Cysteine', 'L-Glutamic_Acid', 'L-Glutamine', 'L-Histidine', 'L-Isoleucine', 'L-Leucine', 'L-Lysine', 'L-Methionine', 'L-Proline', 'L-Phenylalanine', 'L-Serine', 'L-Threonine', 'L-Tryptophan', 'L-Tyrosine', 'L-Valine', 'Glycine']
@@ -38,15 +40,21 @@ import os
 
 # Citric Acid: SP:3368
 
-substanceDict = {
-    'Citric acid': ['SP:3368'],
-}
+# substanceDict = {
+#     'Citric acid': ['SP:3368'],
+# }
 
 substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
 
 # The function for actually creating the simulations. See createTrainingData.py for details on the function.
-sampleNumber = 3
-scales, positions, intensities, components = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)
+sampleNumber = 10
+
+# cProfile.run('createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)', 'output.prof')
+
+with open('results.txt', 'w') as f:
+    stats = pstats.Stats('output.prof', stream=f)
+    stats.sort_stats('cumulative')
+    stats.print_stats()
 
 print(positions.shape)
 print(intensities.shape)
