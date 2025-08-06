@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -93,7 +93,9 @@ def _(electrolytes):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
+    mo.md(
+        r"""Define a function to simulate a ph graph at a concentration from pkas"""
+    )
     return
 
 
@@ -123,7 +125,9 @@ def _(phfork):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
+    mo.md(
+        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
+    )
     return
 
 
@@ -384,7 +388,9 @@ def _(options, ratios):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
+    mo.md(
+        r"""Calculate volume of acid/base needed to complete these experiments"""
+    )
     return
 
 
@@ -548,5 +554,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

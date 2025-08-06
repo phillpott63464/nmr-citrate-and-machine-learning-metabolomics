@@ -4,9 +4,11 @@ import sys
 import os
 import numpy as np
 import pandas as pd
+
 # from nmrsim.qm import qm_spinsystem
 import numba as nb
 import scipy
+
 
 @nb.njit
 def _createLineshape_numba(
@@ -14,7 +16,7 @@ def _createLineshape_numba(
 ):
     """
     Numba-compiled core function for createLineshape.
-    
+
     Parameters
     ----------
     peaklist_array : numpy.array
@@ -27,7 +29,7 @@ def _createLineshape_numba(
         Right frequency limit.
     function_type : int
         0 for lorentzian, 1 for gaussian.
-    
+
     Returns
     -------
     x, y : numpy.array
@@ -35,7 +37,7 @@ def _createLineshape_numba(
     """
     x_inv = np.linspace(l_limit, r_limit, points)
     x = x_inv[::-1]  # reverses the x axis
-    
+
     if len(peaklist_array) > 0:
         if function_type == 0:  # lorentzian
             y = add_lorentzians(x, peaklist_array)
@@ -46,6 +48,7 @@ def _createLineshape_numba(
     else:
         y = np.zeros(points)
     return x, y
+
 
 def createLineshape(
     peaklist, points=65536, limits=None, function='lorentzian'
@@ -77,7 +80,7 @@ def createLineshape(
         # Sort by frequency (first column)
         sort_indices = np.argsort(peaklist_array[:, 0])
         peaklist_array = peaklist_array[sort_indices]
-    
+
     # Handle limits
     if limits:
         l_limit, r_limit = validate_and_sort_limits(limits)
@@ -88,11 +91,14 @@ def createLineshape(
         else:
             l_limit = -0.5
             r_limit = 0.5
-    
+
     # Convert function string to integer
     function_type = 0 if function == 'lorentzian' else 1
-    
-    return _createLineshape_numba(peaklist_array, points, l_limit, r_limit, function_type)
+
+    return _createLineshape_numba(
+        peaklist_array, points, l_limit, r_limit, function_type
+    )
+
 
 def validate_and_sort_limits(t):
     try:
@@ -101,7 +107,8 @@ def validate_and_sort_limits(t):
             raise TypeError
         return (min(m, n), max(m, n))
     except Exception:
-        raise TypeError("limits must be a tuple of two real numbers.")
+        raise TypeError('limits must be a tuple of two real numbers.')
+
 
 @nb.njit
 def lorentz(v, v0, I, w):
@@ -126,7 +133,8 @@ def lorentz(v, v0, I, w):
         the intensity (y coordinate) for the Lorentzian distribution
         evaluated at frequency `v`.
     """
-    return I * ((0.5 * w)**2 / ((0.5 * w)**2 + (v - v0)**2))
+    return I * ((0.5 * w) ** 2 / ((0.5 * w) ** 2 + (v - v0) ** 2))
+
 
 @nb.njit
 def add_lorentzians(linspace, peaklist):
@@ -151,15 +159,18 @@ def add_lorentzians(linspace, peaklist):
     """
     result = np.zeros(linspace.shape)
     for i in range(len(peaklist)):
-        result += lorentz(linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i,  2])
+        result += lorentz(
+            linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i, 2]
+        )
     return result
+
 
 @nb.njit
 def gauss(v, v0, I, w):
     """
     A gaussian function that takes linewidth at half intensity (w) as a
     parameter.
-    
+
     Arguments
     ---------
     v : float
@@ -180,12 +191,13 @@ def gauss(v, v0, I, w):
     wf = 0.4246609
     return I * np.exp(-((v - v0) ** 2) / (2 * ((w * wf) ** 2)))
 
+
 @nb.njit
 def add_gaussians(linspace, peaklist):
     """
     Given a numpy linspace and a peaklist of (frequency, intensity, width)
     tuples, returns an array of y coordinates for the total line shape.
-    
+
     Arguments
     ---------
     linspace : array-like
@@ -193,7 +205,7 @@ def add_gaussians(linspace, peaklist):
         in Hz.
     peaklist : numpy.array
         A 2D array of shape (N, 3) with (frequency, intensity, width) data.
-    
+
     Returns
     -------
     numpy.array
@@ -201,8 +213,11 @@ def add_gaussians(linspace, peaklist):
     """
     result = gauss(linspace, peaklist[0, 0], peaklist[0, 1], peaklist[0, 2])
     for i in range(1, len(peaklist)):
-        result += gauss(linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i, 2])
+        result += gauss(
+            linspace, peaklist[i, 0], peaklist[i, 1], peaklist[i, 2]
+        )
     return result
+
 
 def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     """
@@ -253,7 +268,7 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
         for item in sublist
     ]
     sys.stdout = output
-    
+
     peak_array = np.array(peaklist, dtype=np.float64)  # shape (N, 3)
     width_column = np.full((peak_array.shape[0], 1), width)
     peak_array = np.hstack((peak_array, width_column))
@@ -267,6 +282,7 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     peaklist_out = peak_array
     # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])
     return peaklist_out
+
 
 """qm contains functions for the quantum-mechanical (second-order)
 calculation of NMR spectra.
@@ -331,7 +347,7 @@ SPARSE = True  # the sparse library is available
 
 def _bin_path():
     """Return a Path to the nmrsim/bin directory."""
-    init_path_context = resources.path(nmrsim.bin, "__init__.py")
+    init_path_context = resources.path(nmrsim.bin, '__init__.py')
     with init_path_context as p:
         init_path = p
     bin_path = init_path.parent
@@ -361,7 +377,9 @@ def _so_dense(nspins):
     sigma_z = np.array([[1 / 2, 0], [0, -1 / 2]])
     unit = np.array([[1, 0], [0, 1]])
 
-    L = np.empty((3, nspins, 2**nspins, 2**nspins), dtype=np.complex128)  # TODO: consider other dtype?
+    L = np.empty(
+        (3, nspins, 2**nspins, 2**nspins), dtype=np.complex128
+    )  # TODO: consider other dtype?
     for n in range(nspins):
         Lx_current = 1
         Ly_current = 1
@@ -419,8 +437,8 @@ def _so_sparse(nspins):
     # Also, need to consider different users with different system capabilities
     # (e.g. at extreme, Raspberry Pi). Some way to let user select, or select
     # for user?
-    filename_Lz = f"Lz{nspins}.npz"
-    filename_Lproduct = f"Lproduct{nspins}.npz"
+    filename_Lz = f'Lz{nspins}.npz'
+    filename_Lproduct = f'Lproduct{nspins}.npz'
     bin_path = _bin_path()
     path_Lz = bin_path.joinpath(filename_Lz)
     path_Lproduct = bin_path.joinpath(filename_Lproduct)
@@ -433,8 +451,8 @@ def _so_sparse(nspins):
         Lproduct = sparse.load_npz(path_Lproduct)
         return Lz, Lproduct
     except FileNotFoundError:
-        print("no SO file ", path_Lz, " found.")
-        print(f"creating {filename_Lz} and {filename_Lproduct}")
+        print('no SO file ', path_Lz, ' found.')
+        print(f'creating {filename_Lz} and {filename_Lproduct}')
     Lz, Lproduct = _so_dense(nspins)
     Lz_sparse = sparse.COO(Lz)
     Lproduct_sparse = sparse.COO(Lproduct)
@@ -442,7 +460,6 @@ def _so_sparse(nspins):
     sparse.save_npz(path_Lproduct, Lproduct_sparse)
 
     return Lz_sparse, Lproduct_sparse
-
 
 
 def hamiltonian_dense(v, J):
@@ -473,8 +490,6 @@ def hamiltonian_dense(v, J):
     return H
 
 
-
-
 def hamiltonian_sparse(v, J):
     """
     Calculate the spin Hamiltonian as a sparse array.
@@ -496,9 +511,9 @@ def hamiltonian_sparse(v, J):
     nspins = len(v)
     Lz, Lproduct = _so_sparse(nspins)  # noqa
     # TODO: remove the following lines once tests pass
-    print("From hamiltonian_sparse:")
-    print("Lz is type: ", type(Lz))
-    print("Lproduct is type: ", type(Lproduct))
+    print('From hamiltonian_sparse:')
+    print('Lz is type: ', type(Lz))
+    print('Lproduct is type: ', type(Lproduct))
     assert isinstance(Lz, (sparse.COO, np.ndarray, scipy.sparse.spmatrix))
     # On large spin systems, converting v and J to sparse improved speed of
     # sparse.tensordot calls with them.
@@ -511,7 +526,6 @@ def hamiltonian_sparse(v, J):
     scalars = 0.5 * sparse.COO(J)
     H += sparse.tensordot(scalars, Lproduct, axes=2)
     return H
-
 
 
 def _transition_matrix_dense(nspins):
@@ -555,11 +569,10 @@ def _transition_matrix_dense(nspins):
     T = np.zeros((n, n))
     for i in range(n - 1):
         for j in range(i + 1, n):
-            if bin(i ^ j).count("1") == 1:
+            if bin(i ^ j).count('1') == 1:
                 T[i, j] = 1
     T += T.T
     return T
-
 
 
 def secondorder_dense(freqs, couplings, normalize=True, **kwargs):
@@ -602,7 +615,6 @@ def secondorder_dense(freqs, couplings, normalize=True, **kwargs):
     return peaklist
 
 
-
 def _tm_cache(nspins):
     """
     Loads a saved sparse transition matrix if it exists, or creates and saves
@@ -625,7 +637,7 @@ def _tm_cache(nspins):
     """
     # Speed tests indicated that using sparse-array transition matrices
     # provides a modest speed improvement on larger spin systems.
-    filename = f"T{nspins}.npz"
+    filename = f'T{nspins}.npz'
     # init_path_context = resources.path(nmrsim.bin, '__init__.py')
     # with init_path_context as p:
     #     init_path = p
@@ -637,10 +649,10 @@ def _tm_cache(nspins):
         T_sparse = sparse.load_npz(path)
         return T_sparse
     except FileNotFoundError:
-        print(f"creating {filename}")
+        print(f'creating {filename}')
         T_sparse = _transition_matrix_dense(nspins)
         T_sparse = sparse.COO(T_sparse)
-        print("_tm_cache will save on path: ", path)
+        print('_tm_cache will save on path: ', path)
         sparse.save_npz(path, T_sparse)
         return T_sparse
 
@@ -695,7 +707,6 @@ def _compile_peaklist(I, E, cutoff=0.001):
     return iv[iv[:, 1] >= cutoff]
 
 
-
 def solve_hamiltonian(H, nspins, **kwargs):
     """
     Calculates frequencies and intensities of signals from a spin Hamiltonian
@@ -719,8 +730,6 @@ def solve_hamiltonian(H, nspins, **kwargs):
     """
     I, E = _intensity_and_energy(H, nspins)
     return _compile_peaklist(I, E, **kwargs)
-
-
 
 
 def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
@@ -757,8 +766,6 @@ def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
     if normalize:
         peaklist = normalize_peaklist(peaklist, nspins)
     return peaklist
-
-
 
 
 def qm_spinsystem(*args, cache=CACHE, sparse=SPARSE, **kwargs):
@@ -810,4 +817,3 @@ def qm_spinsystem(*args, cache=CACHE, sparse=SPARSE, **kwargs):
     if not (cache and sparse):
         return secondorder_dense(*args, **kwargs)
     return secondorder_sparse(*args, **kwargs)
-

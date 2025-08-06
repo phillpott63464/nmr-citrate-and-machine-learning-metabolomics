@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -492,7 +492,9 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             return new_positions, new_intensities
 
         if len(new_intensities) > downsample:
-            step = len(new_intensities) // downsample  # integer division for downsampling factor
+            step = (
+                len(new_intensities) // downsample
+            )  # integer division for downsampling factor
             new_len = downsample
             new_nyquist = new_len // 2 + 1
 
@@ -517,7 +519,12 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
         return ratios
 
     def preprocess_spectra(
-        spectra, ranges, substanceDict, baseline_distortion=False, downsample=None, reverse=True
+        spectra,
+        ranges,
+        substanceDict,
+        baseline_distortion=False,
+        downsample=None,
+        reverse=True,
     ):
         """
         Complete preprocessing pipeline for a single spectrum.
@@ -553,7 +560,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
             ranges=ranges,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
-            downsample=downsample,#
+            downsample=downsample,  #
         )
 
     def process_single_reference(spectrum_key):
@@ -715,9 +722,15 @@ def _(
         )
 
         # Separate spectra based on held-back metabolite presence
-        train_val_spectra = []  # Spectra without held-back metabolite for train/val
-        test_with_holdback = []  # Spectra with held-back metabolite for testing
-        test_without_holdback = []  # Spectra without held-back metabolite for testing
+        train_val_spectra = (
+            []
+        )  # Spectra without held-back metabolite for train/val
+        test_with_holdback = (
+            []
+        )  # Spectra with held-back metabolite for testing
+        test_without_holdback = (
+            []
+        )  # Spectra without held-back metabolite for testing
 
         for spectrum in spectra:
             if held_back_key in spectrum['ratios']:
@@ -734,8 +747,11 @@ def _(
 
         # Randomly sample some non-holdback spectra for testing
         import random
+
         random.seed(42)  # For reproducibility
-        test_indices = random.sample(range(total_train_val), min(test_size, total_train_val))
+        test_indices = random.sample(
+            range(total_train_val), min(test_size, total_train_val)
+        )
 
         for i, spectrum in enumerate(train_val_spectra):
             if i in test_indices:
@@ -743,7 +759,9 @@ def _(
             else:
                 # Use for training/validation
                 for substance in reference_spectra:
-                    if substance != held_back_key:  # Skip held-back substance in training
+                    if (
+                        substance != held_back_key
+                    ):  # Skip held-back substance in training
                         temp_data = np.concatenate(
                             [
                                 spectrum['intensities'],
@@ -785,20 +803,32 @@ def _(
             data_test.append(temp_data)
             labels_test.append(temp_label)
 
-        print(f'Training/validation spectra: {len(train_val_spectra) - test_size}')
-        print(f'Test spectra with {held_back_metabolite}: {len(test_with_holdback)}')
-        print(f'Test spectra without {held_back_metabolite}: {len(test_without_holdback)}')
+        print(
+            f'Training/validation spectra: {len(train_val_spectra) - test_size}'
+        )
+        print(
+            f'Test spectra with {held_back_metabolite}: {len(test_with_holdback)}'
+        )
+        print(
+            f'Test spectra without {held_back_metabolite}: {len(test_without_holdback)}'
+        )
         print(f'Total test samples: {len(data_test)}')
 
         # Split training data into train/validation
         data = np.array(data)
         data_train, data_val, labels_train, labels_val = train_test_split(
-            data, labels, train_size=train_ratio/(train_ratio+val_ratio), shuffle=True, random_state=42
+            data,
+            labels,
+            train_size=train_ratio / (train_ratio + val_ratio),
+            shuffle=True,
+            random_state=42,
         )
 
         # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(device)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
+            device
+        )
         data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
         labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
         data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
@@ -859,7 +889,6 @@ def _(np, torch, tqdm, training_data):
     import torch.nn as nn
     import math
 
-
     class MLPRegressor(nn.Module):
         def __init__(self, input_size, trial=None, div_size=None):
             """
@@ -911,7 +940,7 @@ def _(np, torch, tqdm, training_data):
             return {
                 'div_size': self.div_size,
                 'layer_sizes': self.layer_sizes,
-                'total_parameters': sum(p.numel() for p in self.parameters())
+                'total_parameters': sum(p.numel() for p in self.parameters()),
             }
 
     class TransformerRegressor(nn.Module):
@@ -928,12 +957,22 @@ def _(np, torch, tqdm, training_data):
 
             # Get hyperparameters from trial or use provided values
             if trial is not None:
-                self.d_model = int(trial.suggest_categorical('d_model', [64, 128, 256, 512]))
-                self.nhead = int(trial.suggest_categorical('nhead', [4, 8, 16]))
+                self.d_model = int(
+                    trial.suggest_categorical('d_model', [64, 128, 256, 512])
+                )
+                self.nhead = int(
+                    trial.suggest_categorical('nhead', [4, 8, 16])
+                )
                 self.num_layers = int(trial.suggest_int('num_layers', 2, 8))
-                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [256, 512, 1024, 2048]))
+                self.dim_feedforward = int(
+                    trial.suggest_categorical(
+                        'dim_feedforward', [256, 512, 1024, 2048]
+                    )
+                )
                 self.dropout = trial.suggest_float('dropout', 0.1, 0.5)
-                self.max_seq_len = int(trial.suggest_categorical('max_seq_len', [512, 1024, 2048]))
+                self.max_seq_len = int(
+                    trial.suggest_categorical('max_seq_len', [512, 1024, 2048])
+                )
             else:
                 # Default values or manual overrides
                 self.d_model = kwargs.get('d_model', 256)
@@ -949,7 +988,9 @@ def _(np, torch, tqdm, training_data):
 
             # Calculate sequence length based on input size and d_model
             # Fix: Ensure we have at least one sequence element
-            self.seq_len = max(1, min(input_size // self.d_model, self.max_seq_len))
+            self.seq_len = max(
+                1, min(input_size // self.d_model, self.max_seq_len)
+            )
 
             # Fix: If input is smaller than d_model, adjust d_model
             if input_size < self.d_model:
@@ -963,10 +1004,14 @@ def _(np, torch, tqdm, training_data):
             self.actual_input_size = self.seq_len * self.d_model
 
             # Fix: Input projection should map from actual input_size to our target size
-            self.input_projection = nn.Linear(input_size, self.actual_input_size)
+            self.input_projection = nn.Linear(
+                input_size, self.actual_input_size
+            )
 
             # Positional encoding
-            self.pos_encoding = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
+            self.pos_encoding = PositionalEncoding(
+                self.d_model, self.dropout, self.seq_len
+            )
 
             # Transformer encoder
             encoder_layer = nn.TransformerEncoderLayer(
@@ -975,11 +1020,10 @@ def _(np, torch, tqdm, training_data):
                 dim_feedforward=self.dim_feedforward,
                 dropout=self.dropout,
                 activation='relu',
-                batch_first=True
+                batch_first=True,
             )
             self.transformer_encoder = nn.TransformerEncoder(
-                encoder_layer, 
-                num_layers=self.num_layers
+                encoder_layer, num_layers=self.num_layers
             )
 
             # Output layers
@@ -988,7 +1032,7 @@ def _(np, torch, tqdm, training_data):
                 nn.Linear(self.d_model, self.d_model // 2),
                 nn.ReLU(),
                 nn.Dropout(self.dropout),
-                nn.Linear(self.d_model // 2, 2)  # Changed from 1 to 2 outputs
+                nn.Linear(self.d_model // 2, 2),  # Changed from 1 to 2 outputs
             )
 
             # Store architecture info
@@ -1002,7 +1046,7 @@ def _(np, torch, tqdm, training_data):
                 'max_seq_len': self.max_seq_len,
                 'input_size': input_size,
                 'actual_input_size': self.actual_input_size,
-                'total_parameters': sum(p.numel() for p in self.parameters())
+                'total_parameters': sum(p.numel() for p in self.parameters()),
             }
 
         def forward(self, x):
@@ -1011,7 +1055,9 @@ def _(np, torch, tqdm, training_data):
 
             # Reshape to sequence format
             batch_size = x.size(0)
-            x = x.view(batch_size, self.seq_len, self.d_model)  # [batch_size, seq_len, d_model]
+            x = x.view(
+                batch_size, self.seq_len, self.d_model
+            )  # [batch_size, seq_len, d_model]
 
             # Add positional encoding
             x = self.pos_encoding(x)
@@ -1025,14 +1071,15 @@ def _(np, torch, tqdm, training_data):
             x = x.squeeze(-1)  # [batch_size, d_model]
 
             # Final output projection
-            x = self.output_projection(x)  # [batch_size, 2] - Changed from 1 to 2
+            x = self.output_projection(
+                x
+            )  # [batch_size, 2] - Changed from 1 to 2
 
             return x
 
         def get_architecture_info(self):
             """Return information about the model architecture"""
             return self.architecture_info
-
 
     class PositionalEncoding(nn.Module):
         """Positional encoding for transformer input sequences"""
@@ -1043,8 +1090,10 @@ def _(np, torch, tqdm, training_data):
 
             pe = torch.zeros(max_len, d_model)
             position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-            div_term = torch.exp(torch.arange(0, d_model, 2).float() * 
-                               (-math.log(10000.0) / d_model))
+            div_term = torch.exp(
+                torch.arange(0, d_model, 2).float()
+                * (-math.log(10000.0) / d_model)
+            )
 
             pe[:, 0::2] = torch.sin(position * div_term)
             pe[:, 1::2] = torch.cos(position * div_term)
@@ -1058,7 +1107,7 @@ def _(np, torch, tqdm, training_data):
             x = x + self.pe[:seq_len, :].transpose(0, 1)
             return self.dropout(x)
 
-    def train_model(training_data, trial, model_type = 'mlp'):
+    def train_model(training_data, trial, model_type='mlp'):
         """
         Train a multi-task neural network for metabolite presence detection and concentration estimation.
 
@@ -1085,9 +1134,13 @@ def _(np, torch, tqdm, training_data):
         input_length = len(training_data['data_train'][0])
 
         if model_type == 'transformer':
-            model = TransformerRegressor(input_size=input_length, trial=trial).to(device)
+            model = TransformerRegressor(
+                input_size=input_length, trial=trial
+            ).to(device)
         else:  # default to MLP
-            model = MLPRegressor(input_size=input_length, trial=trial).to(device)
+            model = MLPRegressor(input_size=input_length, trial=trial).to(
+                device
+            )
 
         # model.output_projection = nn.Sequential(
         #     nn.Linear(model.d_model, model.d_model // 2),
@@ -1120,7 +1173,9 @@ def _(np, torch, tqdm, training_data):
                 concentration_mae: MAE loss for concentration
                 concentration_rmse: RMSE loss for concentration
             """
-            presence_logits = predictions[:, 0]    # Raw logits for binary classification
+            presence_logits = predictions[
+                :, 0
+            ]    # Raw logits for binary classification
             concentration_pred = predictions[:, 1]  # Concentration predictions
 
             presence_true = targets[:, 0]      # Ground truth presence (0 or 1)
@@ -1134,28 +1189,48 @@ def _(np, torch, tqdm, training_data):
             presence_binary = (presence_pred > 0.5).float()
 
             # Use BCE loss directly instead of manual error calculation to maintain gradients
-            classification_error = classification_loss  # This maintains gradients
+            classification_error = (
+                classification_loss  # This maintains gradients
+            )
 
             # Regression losses for concentration (only when substance is present)
             present_mask = presence_true == 1
             if present_mask.sum() > 0:
                 concentration_mae = torch.mean(
-                    torch.abs(concentration_pred[present_mask] - concentration_true[present_mask])
+                    torch.abs(
+                        concentration_pred[present_mask]
+                        - concentration_true[present_mask]
+                    )
                 )
                 concentration_rmse = torch.sqrt(
                     torch.mean(
-                        (concentration_pred[present_mask] - concentration_true[present_mask]) ** 2
+                        (
+                            concentration_pred[present_mask]
+                            - concentration_true[present_mask]
+                        )
+                        ** 2
                     )
                 )
             else:
                 # Ensure these maintain gradients by using tensor operations on predictions
-                concentration_mae = torch.mean(torch.abs(concentration_pred)) * 0.0  # Maintains gradient
-                concentration_rmse = torch.mean(concentration_pred) * 0.0  # Maintains gradient
+                concentration_mae = (
+                    torch.mean(torch.abs(concentration_pred)) * 0.0
+                )  # Maintains gradient
+                concentration_rmse = (
+                    torch.mean(concentration_pred) * 0.0
+                )  # Maintains gradient
 
             # New combined loss formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
-            total_loss = 0.5 * classification_error + 0.5 * (0.5 * concentration_mae + 0.5 * concentration_rmse)
+            total_loss = 0.5 * classification_error + 0.5 * (
+                0.5 * concentration_mae + 0.5 * concentration_rmse
+            )
 
-            return total_loss, classification_loss, concentration_mae, concentration_rmse
+            return (
+                total_loss,
+                classification_loss,
+                concentration_mae,
+                concentration_rmse,
+            )
 
         # Early stopping parameters - simplified and more reliable
         early_stop_patience = 15  # Number of epochs without improvement
@@ -1198,7 +1273,9 @@ def _(np, torch, tqdm, training_data):
                 model.eval()
                 with torch.no_grad():
                     predictions = model(data_val)
-                    val_loss, _, _, _ = compute_loss(predictions, labels_val)  # Fixed: expecting 4 values
+                    val_loss, _, _, _ = compute_loss(
+                        predictions, labels_val
+                    )  # Fixed: expecting 4 values
                     val_loss = float(val_loss)
 
                     # Simple early stopping logic
@@ -1211,8 +1288,10 @@ def _(np, torch, tqdm, training_data):
 
                     # Early stopping check
                     if epochs_without_improvement >= early_stop_patience:
-                        print(f"Early stopping at epoch {epoch}: "
-                              f"No improvement for {epochs_without_improvement} epochs")
+                        print(
+                            f'Early stopping at epoch {epoch}: '
+                            f'No improvement for {epochs_without_improvement} epochs'
+                        )
                         break
 
         # Load best weights for final evaluation
@@ -1373,7 +1452,9 @@ def _(device_info, gpu_name, mo):
 @app.cell(hide_code=True)
 def _(mo, optuna, study):
     # Determine model type from best trial parameters
-    model_type = 'Transformer' if 'd_model' in study.best_trial.params else 'MLP'
+    model_type = (
+        'Transformer' if 'd_model' in study.best_trial.params else 'MLP'
+    )
 
     # Create model-specific parameter display
     if model_type == 'Transformer':
@@ -1494,7 +1575,9 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
         val_classification_error = 1.0 - val_accuracy
 
         # Use the new optimization formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
-        combined_score = 0.5 * val_classification_error + 0.5 * (0.5 * val_conc_mae + 0.5 * val_conc_rmse)
+        combined_score = 0.5 * val_classification_error + 0.5 * (
+            0.5 * val_conc_mae + 0.5 * val_conc_rmse
+        )
 
         # Return negative score since Optuna maximizes but we want to minimize the error
         return combined_score
@@ -1543,5 +1626,5 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     return optuna, study
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

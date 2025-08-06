@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -261,7 +261,6 @@ def _(inverses, inverses_real, np, plt):
     # Create visualization grid showing sample spectra
     plt.figure(figsize=(12, 4))
 
-
     plt.subplot(1, 2, 1)
     plt.plot(
         uninversed[0].astype(np.float32),
@@ -396,7 +395,9 @@ def _(hilbert, ifft, mp, np, plt, reference_spectra, spectra, substanceDict):
             return new_positions, new_intensities
 
         if len(new_intensities) > downsample:
-            step = len(new_intensities) // downsample  # integer division for downsampling factor
+            step = (
+                len(new_intensities) // downsample
+            )  # integer division for downsampling factor
             new_len = downsample
             new_nyquist = new_len // 2 + 1
 
@@ -725,7 +726,7 @@ def _(np, torch, training_data):
             return {
                 'div_size': self.div_size,
                 'layer_sizes': self.layer_sizes,
-                'total_parameters': sum(p.numel() for p in self.parameters())
+                'total_parameters': sum(p.numel() for p in self.parameters()),
             }
 
     class TransformerRegressor(nn.Module):
@@ -742,12 +743,22 @@ def _(np, torch, training_data):
 
             # Get hyperparameters from trial or use provided values
             if trial is not None:
-                self.d_model = int(trial.suggest_categorical('d_model', [64, 128, 256, 512]))
-                self.nhead = int(trial.suggest_categorical('nhead', [4, 8, 16]))
+                self.d_model = int(
+                    trial.suggest_categorical('d_model', [64, 128, 256, 512])
+                )
+                self.nhead = int(
+                    trial.suggest_categorical('nhead', [4, 8, 16])
+                )
                 self.num_layers = int(trial.suggest_int('num_layers', 2, 8))
-                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [256, 512, 1024, 2048]))
+                self.dim_feedforward = int(
+                    trial.suggest_categorical(
+                        'dim_feedforward', [256, 512, 1024, 2048]
+                    )
+                )
                 self.dropout = trial.suggest_float('dropout', 0.1, 0.5)
-                self.max_seq_len = int(trial.suggest_categorical('max_seq_len', [512, 1024, 2048]))
+                self.max_seq_len = int(
+                    trial.suggest_categorical('max_seq_len', [512, 1024, 2048])
+                )
             else:
                 # Default values or manual overrides
                 self.d_model = kwargs.get('d_model', 256)
@@ -771,10 +782,14 @@ def _(np, torch, training_data):
             self.actual_input_size = self.seq_len * self.d_model
 
             # Input projection layer to handle size mismatch
-            self.input_projection = nn.Linear(input_size, self.actual_input_size)
+            self.input_projection = nn.Linear(
+                input_size, self.actual_input_size
+            )
 
             # Positional encoding
-            self.pos_encoding = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
+            self.pos_encoding = PositionalEncoding(
+                self.d_model, self.dropout, self.seq_len
+            )
 
             # Transformer encoder
             encoder_layer = nn.TransformerEncoderLayer(
@@ -783,11 +798,10 @@ def _(np, torch, training_data):
                 dim_feedforward=self.dim_feedforward,
                 dropout=self.dropout,
                 activation='relu',
-                batch_first=True
+                batch_first=True,
             )
             self.transformer_encoder = nn.TransformerEncoder(
-                encoder_layer, 
-                num_layers=self.num_layers
+                encoder_layer, num_layers=self.num_layers
             )
 
             # Output layers
@@ -796,7 +810,7 @@ def _(np, torch, training_data):
                 nn.Linear(self.d_model, self.d_model // 2),
                 nn.ReLU(),
                 nn.Dropout(self.dropout),
-                nn.Linear(self.d_model // 2, 1)
+                nn.Linear(self.d_model // 2, 1),
             )
 
             # Store architecture info
@@ -810,7 +824,7 @@ def _(np, torch, training_data):
                 'max_seq_len': self.max_seq_len,
                 'input_size': input_size,
                 'actual_input_size': self.actual_input_size,
-                'total_parameters': sum(p.numel() for p in self.parameters())
+                'total_parameters': sum(p.numel() for p in self.parameters()),
             }
 
         def forward(self, x):
@@ -819,7 +833,9 @@ def _(np, torch, training_data):
 
             # Reshape to sequence format
             batch_size = x.size(0)
-            x = x.view(batch_size, self.seq_len, self.d_model)  # [batch_size, seq_len, d_model]
+            x = x.view(
+                batch_size, self.seq_len, self.d_model
+            )  # [batch_size, seq_len, d_model]
 
             # Add positional encoding
             x = self.pos_encoding(x)
@@ -841,7 +857,6 @@ def _(np, torch, training_data):
             """Return information about the model architecture"""
             return self.architecture_info
 
-
     class PositionalEncoding(nn.Module):
         """Positional encoding for transformer input sequences"""
 
@@ -851,8 +866,10 @@ def _(np, torch, training_data):
 
             pe = torch.zeros(max_len, d_model)
             position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-            div_term = torch.exp(torch.arange(0, d_model, 2).float() * 
-                               (-math.log(10000.0) / d_model))
+            div_term = torch.exp(
+                torch.arange(0, d_model, 2).float()
+                * (-math.log(10000.0) / d_model)
+            )
 
             pe[:, 0::2] = torch.sin(position * div_term)
             pe[:, 1::2] = torch.cos(position * div_term)
@@ -880,7 +897,9 @@ def _(np, torch, training_data):
         # Multi-layer perceptron with ReLU activations
         input_size = len(training_data['data_train'][0])
         if model_type == 'transformer':
-            model = TransformerRegressor(input_size=input_size, trial=trial).to(device)
+            model = TransformerRegressor(
+                input_size=input_size, trial=trial
+            ).to(device)
         else:  # default to MLP
             model = MLPRegressor(input_size=input_size, trial=trial).to(device)
 
@@ -928,7 +947,9 @@ def _(np, torch, training_data):
                     labels_batch = labels_train[start : start + batch_size]
                     # forward pass
                     labels_pred = model(data_batch)
-                    loss = combined_loss_fn(labels_pred.squeeze(), labels_batch)
+                    loss = combined_loss_fn(
+                        labels_pred.squeeze(), labels_batch
+                    )
                     # backward pass
                     optimizer.zero_grad()
                     loss.backward()
@@ -942,7 +963,9 @@ def _(np, torch, training_data):
                 model.eval()
                 with torch.no_grad():
                     labels_pred = model(data_val)
-                    val_loss = combined_loss_fn(labels_pred.squeeze(), labels_val)
+                    val_loss = combined_loss_fn(
+                        labels_pred.squeeze(), labels_val
+                    )
                     val_loss = float(val_loss)
 
                     # Simple early stopping logic
@@ -955,8 +978,10 @@ def _(np, torch, training_data):
 
                     # Early stopping check
                     if epochs_without_improvement >= early_stop_patience:
-                        print(f"Early stopping at epoch {epoch}: "
-                              f"No improvement for {epochs_without_improvement} epochs")
+                        print(
+                            f'Early stopping at epoch {epoch}: '
+                            f'No improvement for {epochs_without_improvement} epochs'
+                        )
                         break
 
         # Load best weights and evaluate on test set for final metrics
@@ -1196,5 +1221,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

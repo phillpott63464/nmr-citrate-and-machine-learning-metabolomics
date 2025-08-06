@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return
 
 
@@ -15,6 +16,7 @@ def _():
     import cProfile
     import pstats
     from morgan.createTrainingData import createTrainingData
+
     return cProfile, pstats
 
 
@@ -41,8 +43,10 @@ def _():
         'L-Tyrosine': ['SP:3464'],
         'L-Valine': ['SP:3413', 'SP:3490'],
         'Glycine': ['SP:3365', 'SP:3682'],
-        }
-    substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
+    }
+    substanceSpectrumIds = [
+        substanceDict[substance][-1] for substance in substanceDict
+    ]
     return
 
 
@@ -50,7 +54,10 @@ def _():
 def _(cProfile):
     sampleNumber = 10
 
-    cProfile.run('createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)', 'morgan/output.prof')
+    cProfile.run(
+        'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
+        'morgan/output.prof',
+    )
 
     return
 
@@ -64,5 +71,5 @@ def _(pstats):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
