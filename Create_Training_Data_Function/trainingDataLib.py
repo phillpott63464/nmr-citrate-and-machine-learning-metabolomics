@@ -6,7 +6,46 @@ import numpy as np
 import pandas as pd
 from nmrsim.qm import qm_spinsystem
 import numba
+import numba as nb
 
+@nb.njit
+def _createLineshape_numba(
+    peaklist_array, points, l_limit, r_limit, function_type
+):
+    """
+    Numba-compiled core function for createLineshape.
+    
+    Parameters
+    ----------
+    peaklist_array : numpy.array
+        Array of shape (N, 3) with (frequency, intensity, width) data.
+    points : int
+        Number of data points.
+    l_limit : float
+        Left frequency limit.
+    r_limit : float
+        Right frequency limit.
+    function_type : int
+        0 for lorentzian, 1 for gaussian.
+    
+    Returns
+    -------
+    x, y : numpy.array
+        Arrays for frequency (x) and intensity (y) for the simulated lineshape.
+    """
+    x_inv = np.linspace(l_limit, r_limit, points)
+    x = x_inv[::-1]  # reverses the x axis
+    
+    if len(peaklist_array) > 0:
+        if function_type == 0:  # lorentzian
+            y = add_lorentzians(x, peaklist_array)
+        elif function_type == 1:  # gaussian
+            y = add_gaussians(x, peaklist_array)
+        else:
+            y = np.zeros(points)
+    else:
+        y = np.zeros(points)
+    return x, y
 
 def createLineshape(
     peaklist, points=65536, limits=None, function='lorentzian'
@@ -32,23 +71,28 @@ def createLineshape(
     x, y : numpy.array
         Arrays for frequency (x) and intensity (y) for the simulated lineshape.
     """
-    peaklist.sort()
+    # Convert peaklist to numpy array and sort by frequency
+    peaklist_array = np.array(peaklist)
+    if len(peaklist_array) > 0:
+        # Sort by frequency (first column)
+        sort_indices = np.argsort(peaklist_array[:, 0])
+        peaklist_array = peaklist_array[sort_indices]
+    
+    # Handle limits
     if limits:
         l_limit, r_limit = validate_and_sort_limits(limits)
     else:
-        l_limit = peaklist[0][0] - 0.5
-        r_limit = peaklist[-1][0] + 0.5
-    x_inv = np.linspace(l_limit, r_limit, points)
-    x = x_inv[::-1]  # reverses the x axis
-    if len(peaklist) > 0:
-        if function == 'lorentzian':
-            y = add_lorentzians(x, peaklist)
-        elif function == 'gaussian':
-            y = add_gaussians(x, peaklist)
-    else:
-        y = np.zeros(points)
-    return x, y
-
+        if len(peaklist_array) > 0:
+            l_limit = peaklist_array[0, 0] - 0.5
+            r_limit = peaklist_array[-1, 0] + 0.5
+        else:
+            l_limit = -0.5
+            r_limit = 0.5
+    
+    # Convert function string to integer
+    function_type = 0 if function == 'lorentzian' else 1
+    
+    return _createLineshape_numba(peaklist_array, points, l_limit, r_limit, function_type)
 
 def validate_and_sort_limits(t):
     try:
@@ -59,7 +103,7 @@ def validate_and_sort_limits(t):
     except Exception:
         raise TypeError("limits must be a tuple of two real numbers.")
 
-@numba.njit
+@nb.njit
 def lorentz(v, v0, I, w):
     """
     A lorentz function that takes linewidth at half intensity (w) as a
@@ -84,7 +128,7 @@ def lorentz(v, v0, I, w):
     """
     return I * ((0.5 * w)**2 / ((0.5 * w)**2 + (v - v0)**2))
 
-@numba.njit
+@nb.njit
 def add_lorentzians(linspace, peaklist):
     """
     Adapted from nmrsim

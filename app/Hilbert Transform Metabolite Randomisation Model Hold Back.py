@@ -544,7 +544,7 @@ def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     # Preprocessing configuration
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
-    downsample = int(2**13)  # Target resolution for ML model
+    downsample = int(2**11)  # Target resolution for ML model
 
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
