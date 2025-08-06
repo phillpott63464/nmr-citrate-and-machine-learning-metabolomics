@@ -311,3 +311,35 @@ Excellent classification, truly terrible concentration. And still terrible  over
 SOOOO slow and SOOO bad it's just not even worth it when an MLP can get to 3% mean error in 100 trials in the time it takes the CNN to do 1 trial
 
 ## Transformer
+### Hilbert Transform (FID data) single metabolite
+Hyperparameter Optimisation
+Optimization Results
+Study Configuration:
+
+    Direction: Minimize combined MAE + RMSE score (0.5 * MAE + 0.5 * RMSE)
+    Total trials: 101
+    Completed trials: 100
+    Pruned trials: 0
+
+Best Trial Performance
+Validation Set (Optimization Target):
+
+    Combined Score (0.5 * MAE + 0.5 * RMSE): 0.052217
+    R² Score: 0.997694
+    MAE: 0.029763
+    RMSE: 0.074671
+
+Test Set (Final Evaluation):
+
+    R² Score: 0.997687
+    MAE: 0.032869
+    RMSE: 0.081524
+
+Best Parameters: - batch_size: 60.0 - lr: 3.1186670073355935e-05 - d_model: 128 - nhead: 8 - num_layers: 5 - dim_feedforward: 256 - dropout: 0.12784054827463534 - max_seq_len: 1024
+Performance Statistics (Combined MAE + RMSE)
+
+    Best value: 0.052217
+    Worst value: 1.402507
+    Mean value: 1.156345
+
+Fairly decent results. Took slightly longer than the MLP to decide on decent hyperparameters. 
