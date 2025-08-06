@@ -108,6 +108,8 @@ def createTrainingData(
     peakWidth = peakWidth / frequency
 
     reference = generateSignal(
+
+    reference = generateSignal(
             referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
             peakWidth,
             frequency,
