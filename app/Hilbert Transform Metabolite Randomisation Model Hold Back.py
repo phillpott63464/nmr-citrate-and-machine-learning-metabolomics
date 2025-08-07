@@ -1,13 +1,15 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
     import torch
+
+    torch.set_float32_matmul_precision('high')
 
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
@@ -142,7 +144,10 @@ def _(cache_dir, combo_number, count, substanceDict):
 
                 # Check if held_back_metabolites is a string and convert to a list
                 if isinstance(held_back_metabolites, str):
-                    held_back_metabolites = [held_back_metabolites, random.choice(list(substanceDict.keys()))]
+                    held_back_metabolites = [
+                        held_back_metabolites,
+                        random.choice(list(substanceDict.keys())),
+                    ]
 
                 print(
                     f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolites}' from {filepath} (medium format)"
@@ -159,7 +164,10 @@ def _(cache_dir, combo_number, count, substanceDict):
 
                 # Check if held_back_metabolites is a string and convert to a list
                 if isinstance(held_back_metabolites, str):
-                    held_back_metabolites = [held_back_metabolites, random.choice(list(substanceDict.keys()))]
+                    held_back_metabolites = [
+                        held_back_metabolites,
+                        random.choice(list(substanceDict.keys())),
+                    ]
 
                 print(
                     f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolites}', and {len(combinations)} combinations from {filepath}"
@@ -204,7 +212,9 @@ def _(cache_dir, combo_number, count, substanceDict):
             print(f'Generated {len(combinations)} random combinations')
 
             # Select random metabolite to hold back for testing
-            held_back_metabolites = [random.choice(list(substanceDict.keys())) for i in range (2)]
+            held_back_metabolites = [
+                random.choice(list(substanceDict.keys())) for i in range(2)
+            ]
             print(
                 f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
             )
@@ -290,7 +300,9 @@ def _(cache_dir, combo_number, count, substanceDict):
     cache_key = generate_cache_key(substanceDict, combo_number, count)
 
     # Try to load existing data first
-    spectra, held_back_metabolites, combinations = load_spectra_data(cache_key, substanceDict)
+    spectra, held_back_metabolites, combinations = load_spectra_data(
+        cache_key, substanceDict
+    )
     spectra, held_back_metabolites, combinations = check_loaded_data(
         spectra, held_back_metabolites, combinations
     )
@@ -746,24 +758,16 @@ def _(
         train_spectra = (
             []
         )  # Spectra without held-back metabolite for train/val
-        val_with_holdback = (
-            []
-        )
-        val_without_holdback = (
-            []
-        )
+        val_with_holdback = []
+        val_without_holdback = []
         test_with_holdback = (
             []
         )  # Spectra with held-back metabolite for testing
         test_without_holdback = (
             []
         )  # Spectra without held-back metabolite for testing
-        data_train = (
-            []
-        )
-        labels_train = (
-            []
-        )
+        data_train = []
+        labels_train = []
 
         for spectrum in spectra:
             if held_back_key_test in spectrum['ratios']:
@@ -786,8 +790,8 @@ def _(
         random.shuffle(all_indices)
 
         test_indices = set(all_indices[:test_size])
-        val_indices = set(all_indices[test_size:test_size + val_size])
-        train_indices = set(all_indices[test_size + val_size:])
+        val_indices = set(all_indices[test_size : test_size + val_size])
+        train_indices = set(all_indices[test_size + val_size :])
 
         for i, spectrum in enumerate(train_spectra):
             if i in test_indices:
@@ -796,9 +800,10 @@ def _(
                 val_without_holdback.append(spectrum)
             elif i in train_indices:
                 for substance in reference_spectra:
-                    if (
-                        substance not in [held_back_key_test, held_back_key_validation]
-                    ):  # Skip held-back substance in training
+                    if substance not in [
+                        held_back_key_test,
+                        held_back_key_validation,
+                    ]:  # Skip held-back substance in training
                         temp_data = np.concatenate(
                             [
                                 spectrum['intensities'],
@@ -863,9 +868,7 @@ def _(
             data_val.append(temp_data)
             labels_val.append(temp_label)
 
-        print(
-            f'Training spectra: {len(train_spectra) - test_size - val_size}'
-        )
+        print(f'Training spectra: {len(train_spectra) - test_size - val_size}')
         print(
             f'Test spectra with {held_back_metabolites[0]}: {len(test_with_holdback)}'
         )
@@ -1175,6 +1178,8 @@ def _(np, torch, tqdm, training_data):
             return self.dropout(x)
 
     def train_model(training_data, trial, model_type='mlp'):
+        from torch.utils.data import TensorDataset, DataLoader
+
         """
         Train a multi-task neural network for metabolite presence detection and concentration estimation.
 
@@ -1208,6 +1213,11 @@ def _(np, torch, tqdm, training_data):
             model = MLPRegressor(input_size=input_length, trial=trial).to(
                 device
             )
+
+        try:
+            model = torch.compile(model)
+        except Exception:
+            print('Compilation failed — using uncompiled model.')
 
         # model.output_projection = nn.Sequential(
         #     nn.Linear(model.d_model, model.d_model // 2),
@@ -1346,7 +1356,7 @@ def _(np, torch, tqdm, training_data):
                     val_loss = float(val_loss)
 
                     # Simple early stopping logic
-                    if val_loss < best_val_loss - min_delta:
+                    if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         best_weights = copy.deepcopy(model.state_dict())
                         epochs_without_improvement = 0
@@ -1365,10 +1375,6 @@ def _(np, torch, tqdm, training_data):
         model.load_state_dict(best_weights)
         model.eval()
         with torch.no_grad():
-            # Validation metrics computation
-            val_pred = model(data_val)
-            val_presence_logits = val_pred[:, 0]
-            val_concentration_pred = val_pred[:, 1]
             # Validation metrics computation
             val_pred = model(data_val)
             val_presence_logits = val_pred[:, 0]
@@ -1693,5 +1699,10 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     return optuna, study
 
 
-if __name__ == "__main__":
+@app.cell
+def _():
+    return
+
+
+if __name__ == '__main__':
     app.run()
