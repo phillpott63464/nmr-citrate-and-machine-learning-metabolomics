@@ -5,7 +5,9 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
-from .trainingDataLib import createLineshape, peakListFromSpinSystemMatrix
+from .trainingDataLib import createLineshape, peakListFromSpinSystemMatrix, _createLineshape_numba
+from numba import njit
+from numba.typed import List
 
 referenceData = pd.DataFrame(
     {
@@ -104,10 +106,7 @@ def createTrainingData(
     }
     untransformedComponentsList = []
     transformedComponentsList = []
-    intensitiesList = []
     peakWidth = peakWidth / frequency
-
-    reference = generateSignal(
 
     reference = generateSignal(
         referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
@@ -117,6 +116,11 @@ def createTrainingData(
         limits,
         1,
     )
+
+    positions_temp, _ = reference
+    positions = positions_temp.copy()
+
+    sampleNumbers = sampleNumber
 
     for spectrumId in substanceSpectrumIds:
         ssm = getSsmData(
@@ -137,34 +141,45 @@ def createTrainingData(
         )
         untransformedComponentsList.append(substanceY)
 
-    for sampleNumber in tqdm(range(sampleNumber)):
-        # Make the reference signal first
-        positions, y = reference
-        y *= scalesDict[referenceSubstanceSpectrumId][sampleNumber]
-        for spectrumId in substanceSpectrumIds:
-            ssm = getSsmData(
+    ssms_top = []
+
+    for sampleNumber in tqdm(range(sampleNumbers), desc='Generating ssms'):
+        ssms = [getSsmData(
                 spectrumId=spectrumId,
                 referenceOffset=referenceData.loc[
                     referenceSubstanceSpectrumId, 'offset'
                 ],
                 transform=randomlyOffsetMultiplets,
                 multipletOffsetCap=multipletOffsetCap,
-            )
+            ) for spectrumId in substanceSpectrumIds]
+        ssms_top.append(ssms)
 
-            x, substanceY = generateSignal(
-                ssm,
-                peakWidth,
-                frequency,
-                points,
-                limits,
-                scalesDict[spectrumId][sampleNumber],
-            )
-            # transformedComponentsList.append(substanceY)
-            y += substanceY
-        if includeNoise:
-            noise = 10 ** random.uniform(noiseRange[0], noiseRange[-1])
-            y += np.random.normal(y, scale * noise)
-        intensitiesList.append(y)
+    peaklists_top = []
+
+    for ssms in tqdm(ssms_top, desc='Generating peaklists'):
+        peaklists = []
+        for ssm in ssms:
+            peakList = peakListFromSpinSystemMatrix(ssm, frequency, peakWidth)
+            peaklists.append(peakList)
+        peaklists_top.append(peaklists)
+
+    scales_top = []
+
+    for sampleNumber in tqdm(range(sampleNumbers), desc='Generating scales'):
+        scales = []
+        for spectrumId in substanceSpectrumIds + [referenceSubstanceSpectrumId]:
+            scales.append(scalesDict[spectrumId][sampleNumber])
+        scales_top.append(scales)
+
+    intensitiesList = get_lineshapes(peaklists_top=peaklists_top,
+                                     scales_top=scales_top,
+                                     reference=reference,
+                                     points=points,
+                                     limits=limits,
+                                     includeNoise=includeNoise,
+                                     noiseRange=noiseRange,
+                                     scale=scale)
+
     return {
         'scales': pd.DataFrame(scalesDict),
         'positions': positions,
@@ -172,10 +187,77 @@ def createTrainingData(
         'components': np.vstack(untransformedComponentsList),
     }
 
+def get_lineshapes(peaklists_top, scales_top, reference, points, limits, includeNoise, noiseRange, scale):
+    intensitiesList = []
+    lineshapes_top = []
+    
+    for peaklists, scales in tqdm(zip(peaklists_top, scales_top), total=len(peaklists_top), desc='Deciding lineshape vars'):
+        lineshapes = []
+        for peaklist, scale2 in zip(peaklists, scales):
+            lineshapes.append(createLineshape(
+                peaklist, points=points, limits=limits
+            ))
+        lineshapes_top.append(lineshapes)
+
+    flat_list = List()
+    for group in lineshapes_top:
+        for shape in group:
+            peaklist_array, points, l_limit, r_limit, function_type = shape
+            peaklist_array = np.ascontiguousarray(peaklist_array)  # Ensure numba-safe memory layout
+            flat_list.append((peaklist_array, points, l_limit, r_limit, function_type))
+
+    reference_y = reference[1]
+
+    intensitiesList = _get_lineshapes_numba(
+        flat_lineshapes=flat_list,
+        reference_y=reference_y,
+        includeNoise=True,
+        noiseRange=noiseRange,  # example
+        scale=scale
+    )   
+
+    return intensitiesList
+
+@njit
+def _get_lineshapes_numba(
+    flat_lineshapes, 
+    reference_y, 
+    includeNoise, 
+    noiseRange, 
+    scale
+):
+    total_lineshapes = len(flat_lineshapes)
+    points = reference_y.shape[0]
+    results = np.empty((total_lineshapes, points), dtype=np.float64)
+
+    for index in range(total_lineshapes):
+        y = reference_y.copy()
+
+        lineshape = flat_lineshapes[index]
+        positions, y = _createLineshape_numba(*lineshape)
+
+        if includeNoise:
+            noise_exp = noiseRange[0] + (noiseRange[1] - noiseRange[0]) * np.random.random()
+            noise = 10.0 ** noise_exp
+            y += np.random.normal(0.0, scale * noise, size=y.shape)
+
+        results[index] = y * scale
+
+    return results
+
+
+
 
 def generateSignal(ssm, peakWidth, frequency, points, limits, scale):
-    peakList = peakListFromSpinSystemMatrix(ssm, frequency, peakWidth)
-    x, y = createLineshape(peakList, points=points, limits=limits)
+    peakvars = peakListFromSpinSystemMatrix(ssm, frequency, peakWidth)
+
+    # Get parameters for _createLineshape_numba from createLineshape
+    params = createLineshape(peakvars, points=points, limits=limits)
+
+    # Now call your numba function with these params
+    x, y = _createLineshape_numba(*params)
+
+    # Scale y as needed
     return x, y * scale
 
 

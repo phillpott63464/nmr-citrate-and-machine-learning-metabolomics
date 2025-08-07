@@ -53,35 +53,11 @@ def _createLineshape_numba(
 def createLineshape(
     peaklist, points=65536, limits=None, function='lorentzian'
 ):
-    """
-    Numpy Arrays of the simulated lineshape for a peaklist.
-    Parameters
-    ----------
-    peaklist : [(float, float, float)...]
-        A list of (frequency, intensity, width) tuples.
-    y_min : float or int
-        Minimum intensity for the plot.
-    y_max : float or int
-        Maximum intensity for the plot.
-    points : int
-        Number of data points.
-    limits : (float, float)
-        Frequency limits for the plot.
-    function: string
-        Plotting function for the peak shape, either lorentzian or gaussian.
-    Returns
-    -------
-    x, y : numpy.array
-        Arrays for frequency (x) and intensity (y) for the simulated lineshape.
-    """
-    # Convert peaklist to numpy array and sort by frequency
     peaklist_array = np.array(peaklist)
     if len(peaklist_array) > 0:
-        # Sort by frequency (first column)
         sort_indices = np.argsort(peaklist_array[:, 0])
         peaklist_array = peaklist_array[sort_indices]
 
-    # Handle limits
     if limits:
         l_limit, r_limit = validate_and_sort_limits(limits)
     else:
@@ -92,12 +68,14 @@ def createLineshape(
             l_limit = -0.5
             r_limit = 0.5
 
-    # Convert function string to integer
     function_type = 0 if function == 'lorentzian' else 1
 
-    return _createLineshape_numba(
-        peaklist_array, points, l_limit, r_limit, function_type
-    )
+    # Return the parameters needed for _createLineshape_numba
+    return peaklist_array, points, l_limit, r_limit, function_type
+
+    # return _createLineshape_numba(
+    #     peaklist_array, points, l_limit, r_limit, function_type
+    # )
 
 
 def validate_and_sort_limits(t):
