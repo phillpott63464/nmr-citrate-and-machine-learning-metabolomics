@@ -110,13 +110,13 @@ def createTrainingData(
     reference = generateSignal(
 
     reference = generateSignal(
-            referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
-            peakWidth,
-            frequency,
-            points,
-            limits,
-            1,
-        )
+        referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
+        peakWidth,
+        frequency,
+        points,
+        limits,
+        1,
+    )
 
     for spectrumId in substanceSpectrumIds:
         ssm = getSsmData(
@@ -140,7 +140,7 @@ def createTrainingData(
     for sampleNumber in tqdm(range(sampleNumber)):
         # Make the reference signal first
         positions, y = reference
-        y*=scalesDict[referenceSubstanceSpectrumId][sampleNumber]
+        y *= scalesDict[referenceSubstanceSpectrumId][sampleNumber]
         for spectrumId in substanceSpectrumIds:
             ssm = getSsmData(
                 spectrumId=spectrumId,
@@ -150,7 +150,7 @@ def createTrainingData(
                 transform=randomlyOffsetMultiplets,
                 multipletOffsetCap=multipletOffsetCap,
             )
-            
+
             x, substanceY = generateSignal(
                 ssm,
                 peakWidth,

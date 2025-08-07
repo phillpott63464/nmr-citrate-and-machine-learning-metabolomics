@@ -41,8 +41,8 @@ def _(mo):
 def _():
     # global variables
 
-    count = 10
-    trials = 1000
+    count = 1000
+    trials = 10
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'
     cache_dir = f'./data_cache/{notebook_name}'
@@ -83,7 +83,7 @@ def _(mo, spectrafigures, substanceDict):
 
 
 @app.cell
-def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
+def _(cache_dir, combo_number, count, substanceDict):
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -99,7 +99,7 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
 
     # Save/load functions for data persistence
     def save_spectra_data(
-        spectra, held_back_metabolite, combinations, filename
+        spectra, held_back_metabolites, combinations, filename
     ):
         """Save generated spectra data, held-back metabolite, and combinations to pickle file"""
         os.makedirs(cache_dir, exist_ok=True)
@@ -107,17 +107,17 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
 
         data_to_save = {
             'spectra': spectra,
-            'held_back_metabolite': held_back_metabolite,
+            'held_back_metabolites': held_back_metabolites,
             'combinations': combinations,
         }
 
         with open(filepath, 'wb') as f:
             pickle.dump(data_to_save, f)
         print(
-            f"Saved {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations to {filepath}"
+            f"Saved {len(spectra)} spectra, held-back metabolites '{[x for x in held_back_metabolites]}', and {len(combinations)} combinations to {filepath}"
         )
 
-    def load_spectra_data(filename):
+    def load_spectra_data(filename, substanceDict):
         """Load generated spectra data, held-back metabolite, and combinations from pickle file"""
         filepath = f'{cache_dir}/{filename}.pkl'
 
@@ -131,24 +131,40 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
                 print(
                     f'Loaded {len(data)} spectra from {filepath} (old format)'
                 )
-                return data, None, Nonelinalg
+                return data, None, None
             elif 'combinations' not in data:
-                # Medium format - spectra + held_back_metabolite
+                # Medium format - spectra + held_back_metabolites
                 spectra = data['spectra']
-                held_back_metabolite = data['held_back_metabolite']
+                try:
+                    held_back_metabolites = data['held_back_metabolites']
+                except:
+                    held_back_metabolites = data['held_back_metabolite']
+
+                # Check if held_back_metabolites is a string and convert to a list
+                if isinstance(held_back_metabolites, str):
+                    held_back_metabolites = [held_back_metabolites, random.choice(list(substanceDict.keys()))]
+
                 print(
-                    f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolite}' from {filepath} (medium format)"
+                    f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolites}' from {filepath} (medium format)"
                 )
-                return spectra, held_back_metabolite, None
+                return spectra, held_back_metabolites, None
             else:
-                # New format - spectra + held_back_metabolite + combinations
+                # New format - spectra + held_back_metabolites + combinations
                 spectra = data['spectra']
-                held_back_metabolite = data['held_back_metabolite']
+                try:
+                    held_back_metabolites = data['held_back_metabolites']
+                except:
+                    held_back_metabolites = data['held_back_metabolite']
                 combinations = data['combinations']
+
+                # Check if held_back_metabolites is a string and convert to a list
+                if isinstance(held_back_metabolites, str):
+                    held_back_metabolites = [held_back_metabolites, random.choice(list(substanceDict.keys()))]
+
                 print(
-                    f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolite}', and {len(combinations)} combinations from {filepath}"
+                    f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolites}', and {len(combinations)} combinations from {filepath}"
                 )
-                return spectra, held_back_metabolite, combinations
+                return spectra, held_back_metabolites, combinations
         return None, None, None
 
     def generate_cache_key(substanceDict, combo_number, count):
@@ -168,7 +184,7 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
             referenceSubstanceSpectrumId='tsp',
         )
 
-    def check_loaded_data(spectra, held_back_metabolite, combinations):
+    def check_loaded_data(spectra, held_back_metabolites, combinations):
         if spectra is None:
             print('No cached data found. Generating new spectra...')
 
@@ -188,9 +204,9 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
             print(f'Generated {len(combinations)} random combinations')
 
             # Select random metabolite to hold back for testing
-            held_back_metabolite = random.choice(list(substanceDict.keys()))
+            held_back_metabolites = [random.choice(list(substanceDict.keys())) for i in range (2)]
             print(
-                f"Selected '{held_back_metabolite}' as held-back metabolite for testing"
+                f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
             )
 
             # Extract spectrum IDs for each combination
@@ -251,32 +267,32 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
 
             # Save generated data for future use
             save_spectra_data(
-                spectra, held_back_metabolite, combinations, cache_key
+                spectra, held_back_metabolites, combinations, cache_key
             )
         else:
             print('Using cached spectra data.')
-            if held_back_metabolite is None:
+            if held_back_metabolites is None:
                 # If old cache format, select and save new held-back metabolite
-                held_back_metabolite = random.choice(
+                held_back_metabolites = random.choice(
                     list(substanceDict.keys())
                 )
                 print(
-                    f"Cache missing held-back metabolite. Selected '{held_back_metabolite}' and updating cache..."
+                    f"Cache missing held-back metabolite. Selected '{held_back_metabolites}' and updating cache..."
                 )
                 save_spectra_data(
-                    spectra, held_back_metabolite, combinations, cache_key
+                    spectra, held_back_metabolites, combinations, cache_key
                 )
             print(f'Using {len(combinations)} combinations from cache')
 
-        return spectra, held_back_metabolite, combinations
+        return spectra, held_back_metabolites, combinations
 
     # Generate cache key for current configuration
     cache_key = generate_cache_key(substanceDict, combo_number, count)
 
     # Try to load existing data first
-    spectra, held_back_metabolite, combinations = load_spectra_data(cache_key)
-    spectra, held_back_metabolite, combinations = check_loaded_data(
-        spectra, held_back_metabolite, combinations
+    spectra, held_back_metabolites, combinations = load_spectra_data(cache_key, substanceDict)
+    spectra, held_back_metabolites, combinations = check_loaded_data(
+        spectra, held_back_metabolites, combinations
     )
 
     # Extract spectrum IDs for each combination (needed for later processing)
@@ -310,11 +326,12 @@ def _(Nonelinalg, cache_dir, combo_number, count, substanceDict):
         combinations,
         components_shape,
         createTrainingData,
-        held_back_metabolite,
+        held_back_metabolites,
         intensities_shape,
         mp,
         np,
         positions_shape,
+        random,
         sample_scales_preview,
         spectra,
         tqdm,
@@ -683,10 +700,11 @@ def _(graph_count, plt, preprocessed_spectra, spectra):
 
 @app.cell
 def _(
-    held_back_metabolite,
+    held_back_metabolites,
     np,
     preprocessed_reference_spectra,
     preprocessed_spectra,
+    random,
     substanceDict,
     torch,
 ):
@@ -701,7 +719,7 @@ def _(
     def get_training_data_mlp(
         spectra,
         reference_spectra,
-        held_back_metabolite,
+        held_back_metabolites,
         train_ratio=0.7,
         val_ratio=0.15,
         test_ratio=0.15,  # Add explicit test ratio
@@ -715,52 +733,71 @@ def _(
         labels = []
         data_test = []
         labels_test = []
+        data_val = []
+        labels_val = []
 
-        held_back_key = substanceDict[held_back_metabolite][0]
+        held_back_key_test = substanceDict[held_back_metabolites[0]][0]
+        held_back_key_validation = substanceDict[held_back_metabolites[1]][0]
         print(
-            f'Using held-back metabolite: {held_back_metabolite} (key: {held_back_key})'
+            f'Using held-back metabolites: {[x for x in held_back_metabolites]} (testkey: {held_back_key_test}, valkey: {held_back_key_validation})'
         )
 
         # Separate spectra based on held-back metabolite presence
-        train_val_spectra = (
+        train_spectra = (
             []
         )  # Spectra without held-back metabolite for train/val
+        val_with_holdback = (
+            []
+        )
+        val_without_holdback = (
+            []
+        )
         test_with_holdback = (
             []
         )  # Spectra with held-back metabolite for testing
         test_without_holdback = (
             []
         )  # Spectra without held-back metabolite for testing
+        data_train = (
+            []
+        )
+        labels_train = (
+            []
+        )
 
         for spectrum in spectra:
-            if held_back_key in spectrum['ratios']:
+            if held_back_key_test in spectrum['ratios']:
                 # This spectrum contains the held-back metabolite - use for testing
                 test_with_holdback.append(spectrum)
+            elif held_back_key_validation in spectrum['ratios']:
+                val_with_holdback.append(spectrum)
             else:
                 # This spectrum doesn't contain held-back metabolite
-                train_val_spectra.append(spectrum)
+                train_spectra.append(spectrum)
 
         # Split the non-holdback spectra into train/val and additional test data
         # Reserve some of the non-holdback data for testing to evaluate generalization
-        total_train_val = len(train_val_spectra)
-        test_size = int(total_train_val * test_ratio)
+        train_size = len(train_spectra)
+        test_size = int(train_size * test_ratio)
+        val_size = int(train_size * val_ratio)
 
-        # Randomly sample some non-holdback spectra for testing
-        import random
+        all_indices = list(range(train_size))
+        random.seed(42)
+        random.shuffle(all_indices)
 
-        random.seed(42)  # For reproducibility
-        test_indices = random.sample(
-            range(total_train_val), min(test_size, total_train_val)
-        )
+        test_indices = set(all_indices[:test_size])
+        val_indices = set(all_indices[test_size:test_size + val_size])
+        train_indices = set(all_indices[test_size + val_size:])
 
-        for i, spectrum in enumerate(train_val_spectra):
+        for i, spectrum in enumerate(train_spectra):
             if i in test_indices:
                 test_without_holdback.append(spectrum)
-            else:
-                # Use for training/validation
+            elif i in val_indices:
+                val_without_holdback.append(spectrum)
+            elif i in train_indices:
                 for substance in reference_spectra:
                     if (
-                        substance != held_back_key
+                        substance not in [held_back_key_test, held_back_key_validation]
                     ):  # Skip held-back substance in training
                         temp_data = np.concatenate(
                             [
@@ -774,20 +811,31 @@ def _(
                         else:
                             temp_label = [0, 0]
 
-                        data.append(temp_data)
-                        labels.append(temp_label)
+                        data_train.append(temp_data)
+                        labels_train.append(temp_label)
 
         # Create test data from spectra WITH held-back metabolite
         for spectrum in test_with_holdback:
             temp_data = np.concatenate(
                 [
                     spectrum['intensities'],
-                    reference_spectra[held_back_key],
+                    reference_spectra[held_back_key_test],
                 ]
             )
-            temp_label = [1, spectrum['ratios'][held_back_key]]
+            temp_label = [1, spectrum['ratios'][held_back_key_test]]
             data_test.append(temp_data)
             labels_test.append(temp_label)
+
+        for spectrum in val_with_holdback:
+            temp_data = np.concatenate(
+                [
+                    spectrum['intensities'],
+                    reference_spectra[held_back_key_validation],
+                ]
+            )
+            temp_label = [1, spectrum['ratios'][held_back_key_validation]]
+            data_val.append(temp_data)
+            labels_val.append(temp_label)
 
         # Create test data from spectra WITHOUT held-back metabolite
         # Test the model's ability to correctly predict absence
@@ -795,7 +843,7 @@ def _(
             temp_data = np.concatenate(
                 [
                     spectrum['intensities'],
-                    reference_spectra[held_back_key],
+                    reference_spectra[held_back_key_test],
                 ]
             )
             # The held-back metabolite should be absent (label = [0, 0])
@@ -803,26 +851,45 @@ def _(
             data_test.append(temp_data)
             labels_test.append(temp_label)
 
+        for spectrum in val_without_holdback:
+            temp_data = np.concatenate(
+                [
+                    spectrum['intensities'],
+                    reference_spectra[held_back_key_validation],
+                ]
+            )
+            # The held-back metabolite should be absent (label = [0, 0])
+            temp_label = [0, 0]
+            data_val.append(temp_data)
+            labels_val.append(temp_label)
+
         print(
-            f'Training/validation spectra: {len(train_val_spectra) - test_size}'
+            f'Training spectra: {len(train_spectra) - test_size - val_size}'
         )
         print(
-            f'Test spectra with {held_back_metabolite}: {len(test_with_holdback)}'
+            f'Test spectra with {held_back_metabolites[0]}: {len(test_with_holdback)}'
         )
         print(
-            f'Test spectra without {held_back_metabolite}: {len(test_without_holdback)}'
+            f'Test spectra without {held_back_metabolites[0]}: {len(test_without_holdback)}'
         )
         print(f'Total test samples: {len(data_test)}')
+        print(
+            f'validation spectra with {held_back_metabolites[1]}: {len(val_with_holdback)}'
+        )
+        print(
+            f'Validation spectra without {held_back_metabolites[1]}: {len(val_without_holdback)}'
+        )
+        print(f'Total validation samples: {len(data_val)}')
 
         # Split training data into train/validation
-        data = np.array(data)
-        data_train, data_val, labels_train, labels_val = train_test_split(
-            data,
-            labels,
-            train_size=train_ratio / (train_ratio + val_ratio),
-            shuffle=True,
-            random_state=42,
-        )
+        # data = np.array(data)
+        # data_train, data_val, labels_train, labels_val = train_test_split(
+        #     data,
+        #     labels,
+        #     train_size=train_ratio / (train_ratio + val_ratio),
+        #     shuffle=True,
+        #     random_state=42,
+        # )
 
         # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
@@ -846,7 +913,7 @@ def _(
     training_data = get_training_data_mlp(
         spectra=preprocessed_spectra,
         reference_spectra=preprocessed_reference_spectra,
-        held_back_metabolite=held_back_metabolite,
+        held_back_metabolites=held_back_metabolites,
     )
 
     print([training_data[x].shape for x in training_data])
@@ -1522,7 +1589,7 @@ def _(mo, optuna, study):
 
     - Training: Spectra without held-back metabolite
     - Validation: 15% of training data (used for hyperparameter optimization)
-    - Test: Spectra containing held-back metabolite ({study.best_trial.user_attrs.get('held_back_metabolite', 'N/A')})
+    - Test: Spectra containing held-back metabolite ({study.best_trial.user_attrs.get('held_back_metabolites', 'N/A')})
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
     """
@@ -1589,7 +1656,7 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
     study = optuna.create_study(
         direction='minimize',  # Maximize the negative combined error (minimize error)
         study_name=cache_key,  # Use cache key for unique study identification
-        storage=f'sqlite:///{cache_dir}/{cache_key}.db',  # Use cache key for database filename
+        storage=f'sqlite:///{cache_dir}/{cache_key}-new.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
