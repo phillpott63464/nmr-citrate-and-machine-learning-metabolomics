@@ -218,33 +218,91 @@ def generatePeaklists(matrices_top, frequency, width):
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
 
-    peaklists_top = []
+    # Execute the three functions in sequence
+    hamiltonians_and_tm = generate_hamiltonians_and_transition_moments(matrices_top, frequency)
+    peaklists_raw_data = calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm)
+    peaklists_top = normalize_and_process_peaklists(peaklists_raw_data, frequency, width)
 
-    # First loop: generate all raw peaklists
-    peaklists_raw_top = []
+    sys.stdout = output
+    return peaklists_top
 
+
+def generate_hamiltonians_and_transition_moments(matrices_top, frequency):
+    """Function 1: Generate Hamiltonians and transition moments for all matrices"""
+    hamiltonians_and_tm = []
+    
     for matrices_row in matrices_top:
-        peaklists_raw = []
+        row_data = []
         for matrices in matrices_row:
-            peaklist = [
-                item
-                for ssm in matrices
-                for item in secondorder_sparse(
-                    [ssm[index][index] * frequency for index in range(len(ssm))],
-                    ssm,
-                )
-            ]
-            peaklists_raw.append(peaklist)
-        peaklists_raw_top.append(peaklists_raw)
+            matrices_data = []
+            for ssm in matrices:
+                freqs = [ssm[index][index] * frequency for index in range(len(ssm))]
+                nspins = len(freqs)
+                
+                # Function 1
+                H = hamiltonian_sparse(freqs, ssm).todense()
+                T = _tm_cache(nspins)
+                
+                matrices_data.append({
+                    'H': H,
+                    'T': T,
+                    'nspins': nspins,
+                    'freqs': freqs
+                })
+            row_data.append(matrices_data)
+        hamiltonians_and_tm.append(row_data)
+    
+    return hamiltonians_and_tm
 
 
-    # Second loop: postprocess all raw peaklists
+def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
+    """Function 2: Eigenvalue decomposition and intensity calculations"""
+    peaklists_raw_data = []
+    
+    for row_idx, matrices_row in enumerate(matrices_top):
+        row_peaklists = []
+        for col_idx, matrices in enumerate(matrices_row):
+            for mat_idx, ssm in enumerate(matrices):
+                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
+                H = data['H']
+                T = data['T']
+                cutoff = 0.001
+                
+                # Function 2
+                E, V = scipy.linalg.eigh(H.todense())
+                V = V.real
+                I = np.square(V.T.dot(T.dot(V)))
+                I_upper = np.triu(I)
+                E_matrix = np.abs(E[:, np.newaxis] - E)
+                E_upper = np.triu(E_matrix)
+                combo = np.stack([E_upper, I_upper])
+                iv = combo.reshape(2, I.shape[0] ** 2).T
+                peaklist = iv[iv[:, 1] >= cutoff]
+                
+                row_peaklists.append({
+                    'peaklist': peaklist,
+                    'nspins': data['nspins']
+                })
+        peaklists_raw_data.append(row_peaklists)
+    
+    return peaklists_raw_data
+
+
+def normalize_and_process_peaklists(peaklists_raw_data, frequency, width):
+    """Function 3: Normalization and final processing"""
     peaklists_top = []
-
-    for peaklists_raw in peaklists_raw_top:
+    
+    for row_idx, row_peaklists in enumerate(peaklists_raw_data):
         peaklists_processed = []
-        for peaklist in peaklists_raw:
-            peak_array = np.array(peaklist, dtype=np.float64)  # shape (N, 3)
+        for peaklist_data in row_peaklists:
+            peaklist = peaklist_data['peaklist']
+            nspins = peaklist_data['nspins']
+            
+            # Function 3 - Normalization
+            normalized_peaklist = normalize_peaklist(peaklist, nspins)
+            
+            # Final processing (same as original)
+            peak_array = np.array(normalized_peaklist, dtype=np.float64)  # shape (N, 3)
             width_column = np.full((peak_array.shape[0], 1), width)
             peak_array = np.hstack((peak_array, width_column))
 
@@ -255,11 +313,9 @@ def generatePeaklists(matrices_top, frequency, width):
             peak_array[:, 2] = width
 
             peaklists_processed.append(peak_array)
+        
         peaklists_top.append(peaklists_processed)
-
-
-    sys.stdout = output
-
+    
     return peaklists_top
 
 
