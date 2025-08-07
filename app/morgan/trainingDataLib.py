@@ -197,28 +197,7 @@ def add_gaussians(linspace, peaklist):
     return result
 
 
-def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
-    """
-    Numpy Arrays of the simulated lineshape for a peaklist.
-    Parameters
-    ----------
-    peaklist : [(float, float, float)...]
-        A list of (frequency, intensity, width) tuples.
-    y_min : float or int
-        Minimum intensity for the plot.
-    y_max : float or int
-        Maximum intensity for the plot.
-    points : int
-        Number of data points.
-    limits : (float, float)
-        Frequency limits for the plot.
-    function: string
-        Plotting function for the peak shape, either lorentzian or gaussian.
-    Returns
-    -------
-    x, y : numpy.array
-        Arrays for frequency (x) and intensity (y) for the simulated lineshape.
-    """
+def getMatrices(spinSystemMatrix):
     breaks = [
         index + 1
         for index in range(len(spinSystemMatrix) - 1)
@@ -231,35 +210,57 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
         ]
         for index, breakpoint in enumerate(breaks[:-1])
     ]
-    # Suppress the printing from qm
+
+    return matrices
+
+def generatePeaklists(matrices_top, frequency, width):
+    # Suppress printing from qm
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
-    peaklist = [
-        item
-        for sublist in [
-            secondorder_sparse(
-                [ssm[index][index] * frequency for index in range(len(ssm))],
-                ssm,
-            )
-            for ssm in matrices
-        ]
-        for item in sublist
-    ]
+
+    peaklists_top = []
+
+    # First loop: generate all raw peaklists
+    peaklists_raw_top = []
+
+    for matrices_row in matrices_top:
+        peaklists_raw = []
+        for matrices in matrices_row:
+            peaklist = [
+                item
+                for ssm in matrices
+                for item in secondorder_sparse(
+                    [ssm[index][index] * frequency for index in range(len(ssm))],
+                    ssm,
+                )
+            ]
+            peaklists_raw.append(peaklist)
+        peaklists_raw_top.append(peaklists_raw)
+
+
+    # Second loop: postprocess all raw peaklists
+    peaklists_top = []
+
+    for peaklists_raw in peaklists_raw_top:
+        peaklists_processed = []
+        for peaklist in peaklists_raw:
+            peak_array = np.array(peaklist, dtype=np.float64)  # shape (N, 3)
+            width_column = np.full((peak_array.shape[0], 1), width)
+            peak_array = np.hstack((peak_array, width_column))
+
+            # Normalize first column
+            peak_array[:, 0] /= frequency
+
+            # Replace third column by width
+            peak_array[:, 2] = width
+
+            peaklists_processed.append(peak_array)
+        peaklists_top.append(peaklists_processed)
+
+
     sys.stdout = output
 
-    peak_array = np.array(peaklist, dtype=np.float64)  # shape (N, 3)
-    width_column = np.full((peak_array.shape[0], 1), width)
-    peak_array = np.hstack((peak_array, width_column))
-
-    # Divide first column by frequency
-    peak_array[:, 0] = peak_array[:, 0] / frequency
-
-    # Replace third column by width
-    peak_array[:, 2] = width
-
-    peaklist_out = peak_array
-    # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])
-    return peaklist_out
+    return peaklists_top
 
 
 ##### NMRSIMM #####
@@ -283,44 +284,16 @@ SPARSE = True  # the sparse library is available
 
 
 def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
-    """
-    Calculates second-order spectral data (frequency and intensity of signals)
-    for *n* spin-half nuclei.
-
-    Parameters
-    ---------
-    freqs : [float...]
-        a list of *n* nuclei frequencies in Hz
-    couplings : array-like
-        an *n, n* array of couplings in Hz. The order
-        of nuclei in the list corresponds to the column and row order in the
-        matrix, e.g. couplings[0][1] and [1]0] are the J coupling between
-        the nuclei of freqs[0] and freqs[1].
-    normalize: bool
-        True if the intensities should be normalized so that total intensity
-        equals the total number of nuclei.
-
-    Returns
-    -------
-    peaklist : [[float, float]...] numpy 2D array
-        of [frequency, intensity] pairs.
-
-    Other Parameters
-    ----------------
-    cutoff : float
-        The intensity cutoff for reporting signals (default is 0.001).
-    """
     nspins = len(freqs)
-    ###Precompute this
+    ###Function 1
     H = hamiltonian_sparse(freqs, couplings)
-
-    ###Torch this
-    E, V = scipy.linalg.eigh(H)
-    V = V.real
     T = _tm_cache(nspins)
-    I = np.square(V.T.dot(T.dot(V)))
-    # return _compile_peaklist(I, E, **kwargs)
+    cutoff = 0.001
 
+    ###Function 2
+    E, V = scipy.linalg.eigh(H.todense())
+    V = V.real
+    I = np.square(V.T.dot(T.dot(V)))
     I_upper = np.triu(I)
     E_matrix = np.abs(E[:, np.newaxis] - E)
     E_upper = np.triu(E_matrix)
@@ -329,7 +302,7 @@ def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
     peaklist = iv[iv[:, 1] >= cutoff]
     ###
 
-    ###This can be done later
+    ###Function 3
     if normalize:
         peaklist = normalize_peaklist(peaklist, nspins)
     return peaklist
@@ -356,9 +329,6 @@ def hamiltonian_sparse(v, J):
     nspins = len(v)
     Lz, Lproduct = _so_sparse(nspins)  # noqa
     # TODO: remove the following lines once tests pass
-    print('From hamiltonian_sparse:')
-    print('Lz is type: ', type(Lz))
-    print('Lproduct is type: ', type(Lproduct))
     assert isinstance(Lz, (sparse.COO, np.ndarray, scipy.sparse.spmatrix))
     # On large spin systems, converting v and J to sparse improved speed of
     # sparse.tensordot calls with them.

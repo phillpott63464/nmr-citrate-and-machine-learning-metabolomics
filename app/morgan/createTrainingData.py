@@ -5,7 +5,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
-from .trainingDataLib import createLineshape, peakListFromSpinSystemMatrix, _createLineshape_numba
+from .trainingDataLib import createLineshape, _createLineshape_numba, getMatrices, generatePeaklists
 from numba import njit
 from numba.typed import List
 
@@ -154,14 +154,16 @@ def createTrainingData(
             ) for spectrumId in substanceSpectrumIds]
         ssms_top.append(ssms)
 
-    peaklists_top = []
+    matrices_top = []
 
-    for ssms in tqdm(ssms_top, desc='Generating peaklists'):
-        peaklists = []
+    for ssms in tqdm(ssms_top, desc='Generating matrices'):
+        matricesrow = []
         for ssm in ssms:
-            peakList = peakListFromSpinSystemMatrix(ssm, frequency, peakWidth)
-            peaklists.append(peakList)
-        peaklists_top.append(peaklists)
+            matrices = getMatrices(ssm)
+            matricesrow.append(matrices)
+        matrices_top.append(matricesrow)
+
+    peaklists_top = generatePeaklists(matrices_top, frequency, peakWidth)
 
     scales_top = []
 
@@ -249,7 +251,7 @@ def _get_lineshapes_numba(
 
 
 def generateSignal(ssm, peakWidth, frequency, points, limits, scale):
-    peakvars = peakListFromSpinSystemMatrix(ssm, frequency, peakWidth)
+    peakvars = generatePeaklists([[getMatrices(ssm)]], frequency, peakWidth)[0][0]
 
     # Get parameters for _createLineshape_numba from createLineshape
     params = createLineshape(peakvars, points=points, limits=limits)
