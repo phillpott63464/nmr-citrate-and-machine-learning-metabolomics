@@ -311,8 +311,25 @@ def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
         The intensity cutoff for reporting signals (default is 0.001).
     """
     nspins = len(freqs)
+    ###Precompute this
     H = hamiltonian_sparse(freqs, couplings)
-    peaklist = solve_hamiltonian(H.todense(), nspins, **kwargs)
+
+    ###Torch this
+    E, V = scipy.linalg.eigh(H)
+    V = V.real
+    T = _tm_cache(nspins)
+    I = np.square(V.T.dot(T.dot(V)))
+    # return _compile_peaklist(I, E, **kwargs)
+
+    I_upper = np.triu(I)
+    E_matrix = np.abs(E[:, np.newaxis] - E)
+    E_upper = np.triu(E_matrix)
+    combo = np.stack([E_upper, I_upper])
+    iv = combo.reshape(2, I.shape[0] ** 2).T
+    peaklist = iv[iv[:, 1] >= cutoff]
+    ###
+
+    ###This can be done later
     if normalize:
         peaklist = normalize_peaklist(peaklist, nspins)
     return peaklist
@@ -354,32 +371,6 @@ def hamiltonian_sparse(v, J):
     scalars = 0.5 * sparse.COO(J)
     H += sparse.tensordot(scalars, Lproduct, axes=2)
     return H
-
-
-def solve_hamiltonian(H, nspins, **kwargs):
-    """
-    Calculates frequencies and intensities of signals from a spin Hamiltonian
-    and number of spins.
-
-    Parameters
-    ----------
-    H : numpy.ndarray (2D)
-        The spin Hamiltonian
-    nspins : int
-        The number of spins in the system
-
-    Returns
-    -------
-    [[float, float]...] numpy 2D array of frequency, intensity pairs.
-
-    Other Parameters
-    ----------------
-    cutoff : float
-        The intensity cutoff for reporting signals (default is 0.001).
-    """
-    I, E = _intensity_and_energy(H, nspins)
-    return _compile_peaklist(I, E, **kwargs)
-
 
 def _so_sparse(nspins):
     """
@@ -434,31 +425,6 @@ def _so_sparse(nspins):
     sparse.save_npz(path_Lproduct, Lproduct_sparse)
 
     return Lz_sparse, Lproduct_sparse
-
-
-def _intensity_and_energy(H, nspins):
-    """
-    Calculate intensity matrix and energies (eigenvalues) from Hamiltonian.
-
-    Parameters
-    ----------
-    H :  numpy.ndarray
-        Spin Hamiltonian
-    nspins : int
-        number of spins in spin system
-
-    Returns
-    -------
-    (I, E) : (numpy.ndarray, numpy.ndarray) tuple of:
-        I : (relative) intensity 2D array
-        V : 1-D array of relative energies.
-    """
-    E, V = scipy.linalg.eigh(H)
-    V = V.real
-    T = _tm_cache(nspins)
-    I = np.square(V.T.dot(T.dot(V)))
-    return I, E
-
 
 def _compile_peaklist(I, E, cutoff=0.001):
     """
