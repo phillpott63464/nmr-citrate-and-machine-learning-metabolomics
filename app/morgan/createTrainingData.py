@@ -104,24 +104,10 @@ def createTrainingData(
         ]
         for ssid in substanceSpectrumIds + [referenceSubstanceSpectrumId]
     }
-    untransformedComponentsList = []
-    transformedComponentsList = []
     peakWidth = peakWidth / frequency
 
-    reference = generateSignal(
-        referenceData.loc[referenceSubstanceSpectrumId, 'ssm'],
-        peakWidth,
-        frequency,
-        points,
-        limits,
-        1,
-    )
-
-    positions_temp, _ = reference
-    positions = positions_temp.copy()
-
-    sampleNumbers = sampleNumber
-
+    # Generate untransformed components data (without random offsets)
+    untransformed_ssms = []
     for spectrumId in substanceSpectrumIds:
         ssm = getSsmData(
             spectrumId=spectrumId,
@@ -131,15 +117,19 @@ def createTrainingData(
             transform=False,
             multipletOffsetCap=multipletOffsetCap,
         )
-        x, substanceY = generateSignal(
-            ssm,
-            peakWidth,
-            frequency,
-            points,
-            limits,
-            1,
-        )
-        untransformedComponentsList.append(substanceY)
+        untransformed_ssms.append(ssm)
+
+    # Add reference SSM for untransformed components
+    reference_ssm = referenceData.loc[referenceSubstanceSpectrumId, 'ssm']
+    untransformed_ssms.append(reference_ssm)
+
+    # Generate matrices for untransformed components
+    untransformed_matrices = []
+    for ssm in untransformed_ssms:
+        matrices = getMatrices(ssm)
+        untransformed_matrices.append(matrices)
+
+    sampleNumbers = sampleNumber
 
     ssms_top = []
 
@@ -163,7 +153,30 @@ def createTrainingData(
             matricesrow.append(matrices)
         matrices_top.append(matricesrow)
 
-    peaklists_top = generatePeaklists(matrices_top, frequency, peakWidth)
+    # Combine untransformed matrices with main matrices for single generatePeaklists call
+    all_matrices = [untransformed_matrices] + matrices_top
+    all_peaklists = generatePeaklists(all_matrices, frequency, peakWidth)
+    
+    # Extract untransformed peaklists and main peaklists
+    untransformed_peaklists = all_peaklists[0]
+    peaklists_top = all_peaklists[1:]
+
+    # Create lineshapes for untransformed components
+    untransformedComponentsList = []
+    reference_y = None
+    positions = None
+    
+    for i, peaklist in enumerate(untransformed_peaklists):
+        params = createLineshape(peaklist, points=points, limits=limits)
+        x, y = _createLineshape_numba(*params)
+        
+        if i == len(substanceSpectrumIds):  # This is the reference
+            reference_y = y.copy()
+            positions = x.copy()
+        else:  # These are the substance components
+            untransformedComponentsList.append(y)
+
+    reference = (positions, reference_y)
 
     scales_top = []
 

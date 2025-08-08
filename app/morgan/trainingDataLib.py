@@ -9,6 +9,13 @@ import pandas as pd
 import numba as nb
 import scipy
 
+# Add this at the top of your file, before importing jax
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.5'  # Use only 50% of GPU memory
+
+import jax.numpy as jnp
+from jax import jit, vmap
+
 
 @nb.njit(parallel=True)
 def _createLineshape_numba(
@@ -278,13 +285,15 @@ def pad_to_shape(matrix, shape):
     padded = padded.at[:matrix.shape[0], :matrix.shape[1]].set(matrix)
     return padded
 
-def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
+import jax
+import gc
+
+def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm, batch_size=10):
     """Wrapper that prepares inputs for JAX calculation and returns output in original format"""
     H_list = []
     T_list = []
     nspins_list = []
-    shapes = []
-
+    
     # Flatten and collect all H, T, nspins
     for row_idx, matrices_row in enumerate(matrices_top):
         for col_idx, matrices in enumerate(matrices_row):
@@ -293,19 +302,38 @@ def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
                 H_list.append(data['H'])
                 T_list.append(data['T'])
                 nspins_list.append(data['nspins'])
-                shapes.append((row_idx, col_idx))
 
-    max_dim = max(H.shape[0] for H in H_list)
-    max_shape = tuple(max(t.shape[i] for t in T_list) for i in range(2))
+    # max_dim = max(H.shape[0] for H in H_list)
+    # max_shape = tuple(max(t.shape[i] for t in T_list) for i in range(2))
+    val = 1024
+    max_dim = val
+    max_shape = (val,val)
+
     
-
-    # Convert to JAX arrays
-    H_batch = jnp.stack([pad_to_shape(jnp.array(H), (max_dim, max_dim)) for H in H_list])
-    T_batch = jnp.stack([pad_to_shape(jnp.array(T), max_shape) for T in T_list])
-
-    # Call the batched JAX function
-    iv_batch, mask_batch = _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch)
-
+    # Process in batches
+    all_iv = []
+    all_masks = []
+    
+    for i in range(0, len(H_list), batch_size):
+        batch_end = min(i + batch_size, len(H_list))
+        H_batch = jnp.stack([pad_to_shape(jnp.array(H_list[j]), (max_dim, max_dim)) 
+                            for j in range(i, batch_end)])
+        T_batch = jnp.stack([pad_to_shape(jnp.array(T_list[j]), max_shape) 
+                            for j in range(i, batch_end)])
+        
+        iv_batch, mask_batch = _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch)
+        all_iv.extend(iv_batch)
+        all_masks.extend(mask_batch)
+        
+        # Force memory cleanup after each batch
+        del H_batch, T_batch, iv_batch, mask_batch
+        jax.clear_caches()
+        gc.collect()
+    
+    # Final cleanup
+    jax.clear_caches()
+    gc.collect()
+    
     # Convert back to Python and reassemble structure
     peaklists_raw_data = []
     idx = 0
@@ -313,8 +341,8 @@ def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
         row_peaklists = []
         for col_idx, matrices in enumerate(matrices_row):
             for _ in matrices:
-                iv = np.array(iv_batch[idx])
-                mask = np.array(mask_batch[idx])
+                iv = np.array(all_iv[idx])
+                mask = np.array(all_masks[idx])
                 peaklist = iv[mask]
                 row_peaklists.append({
                     'peaklist': peaklist,
