@@ -261,98 +261,44 @@ def generate_hamiltonians_and_transition_moments(matrices_top, frequency):
     
     return hamiltonians_and_tm
 
-import jax.numpy as jnp
-from jax import jit, vmap
+def _calculate_eigenvalues_and_intensities_single(H, T, cutoff=0.001):
+    """Single calculation without JAX batching"""
+    E, V = jnp.linalg.eigh(H)
+    E = np.array(E)
+    V = np.array(V).real
+    I = np.square(V.T @ (T @ V))
+    I_upper = np.triu(I)
+    E_matrix = np.abs(E[:, None] - E)
+    E_upper = np.triu(E_matrix)
+    combo = np.stack([E_upper, I_upper])
+    iv = combo.reshape(2, -1).T
+    mask = iv[:, 1] >= cutoff
+    return iv[mask]
 
-@jit
-def _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch, cutoff=0.001):
-    def single_calc(H, T):
-        E, V = jnp.linalg.eigh(H)
-        V = V.real
-        I = jnp.square(V.T @ (T @ V))
-        I_upper = jnp.triu(I)
-        E_matrix = jnp.abs(E[:, None] - E)
-        E_upper = jnp.triu(E_matrix)
-        combo = jnp.stack([E_upper, I_upper])
-        iv = combo.reshape(2, -1).T
-        mask = iv[:, 1] >= cutoff
-        return iv, mask
+def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
+    """Wrapper that runs single calculations in a normal loop"""
     
-    return vmap(single_calc)(H_batch, T_batch)
-
-def pad_to_shape(matrix, shape):
-    padded = jnp.zeros(shape)
-    padded = padded.at[:matrix.shape[0], :matrix.shape[1]].set(matrix)
-    return padded
-
-import jax
-import gc
-
-def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm, batch_size=10):
-    """Wrapper that prepares inputs for JAX calculation and returns output in original format"""
-    H_list = []
-    T_list = []
-    nspins_list = []
-    
-    # Flatten and collect all H, T, nspins
-    for row_idx, matrices_row in enumerate(matrices_top):
-        for col_idx, matrices in enumerate(matrices_row):
-            for mat_idx, _ in enumerate(matrices):
-                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
-                H_list.append(data['H'])
-                T_list.append(data['T'])
-                nspins_list.append(data['nspins'])
-
-    # max_dim = max(H.shape[0] for H in H_list)
-    # max_shape = tuple(max(t.shape[i] for t in T_list) for i in range(2))
-    val = 1024
-    max_dim = val
-    max_shape = (val,val)
-
-    
-    # Process in batches
-    all_iv = []
-    all_masks = []
-    
-    for i in range(0, len(H_list), batch_size):
-        batch_end = min(i + batch_size, len(H_list))
-        H_batch = jnp.stack([pad_to_shape(jnp.array(H_list[j]), (max_dim, max_dim)) 
-                            for j in range(i, batch_end)])
-        T_batch = jnp.stack([pad_to_shape(jnp.array(T_list[j]), max_shape) 
-                            for j in range(i, batch_end)])
-        
-        iv_batch, mask_batch = _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch)
-        all_iv.extend(iv_batch)
-        all_masks.extend(mask_batch)
-        
-        # Force memory cleanup after each batch
-        del H_batch, T_batch, iv_batch, mask_batch
-        jax.clear_caches()
-        gc.collect()
-    
-    # Final cleanup
-    jax.clear_caches()
-    gc.collect()
-    
-    # Convert back to Python and reassemble structure
+    # Initialize result structure
     peaklists_raw_data = []
-    idx = 0
     for row_idx, matrices_row in enumerate(matrices_top):
         row_peaklists = []
         for col_idx, matrices in enumerate(matrices_row):
-            for _ in matrices:
-                iv = np.array(all_iv[idx])
-                mask = np.array(all_masks[idx])
-                peaklist = iv[mask]
+            for mat_idx, _ in enumerate(matrices):
+                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
+                H = np.array(data['H'])
+                T = np.array(data['T'])
+                
+                # Single calculation
+                peaklist = _calculate_eigenvalues_and_intensities_single(H, T)
+                
                 row_peaklists.append({
                     'peaklist': peaklist,
-                    'nspins': nspins_list[idx]
+                    'nspins': data['nspins']
                 })
-                idx += 1
+        
         peaklists_raw_data.append(row_peaklists)
-
+    
     return peaklists_raw_data
-
 
 def normalize_and_process_peaklists(peaklists_raw_data, frequency, width):
     """Function 3: Normalization and final processing"""
