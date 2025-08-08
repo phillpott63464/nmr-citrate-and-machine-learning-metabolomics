@@ -9,6 +9,13 @@ import pandas as pd
 import numba as nb
 import scipy
 
+# Add this at the top of your file, before importing jax
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.5'  # Use only 50% of GPU memory
+
+import jax.numpy as jnp
+from jax import jit, vmap
+
 
 @nb.njit(parallel=True)
 def _createLineshape_numba(
@@ -197,28 +204,7 @@ def add_gaussians(linspace, peaklist):
     return result
 
 
-def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
-    """
-    Numpy Arrays of the simulated lineshape for a peaklist.
-    Parameters
-    ----------
-    peaklist : [(float, float, float)...]
-        A list of (frequency, intensity, width) tuples.
-    y_min : float or int
-        Minimum intensity for the plot.
-    y_max : float or int
-        Maximum intensity for the plot.
-    points : int
-        Number of data points.
-    limits : (float, float)
-        Frequency limits for the plot.
-    function: string
-        Plotting function for the peak shape, either lorentzian or gaussian.
-    Returns
-    -------
-    x, y : numpy.array
-        Arrays for frequency (x) and intensity (y) for the simulated lineshape.
-    """
+def getMatrices(spinSystemMatrix):
     breaks = [
         index + 1
         for index in range(len(spinSystemMatrix) - 1)
@@ -231,35 +217,118 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
         ]
         for index, breakpoint in enumerate(breaks[:-1])
     ]
-    # Suppress the printing from qm
+
+    return matrices
+
+def generatePeaklists(matrices_top, frequency, width):
+    # Suppress printing from qm
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
-    peaklist = [
-        item
-        for sublist in [
-            secondorder_sparse(
-                [ssm[index][index] * frequency for index in range(len(ssm))],
-                ssm,
-            )
-            for ssm in matrices
-        ]
-        for item in sublist
-    ]
+
+    # Execute the three functions in sequence
+    hamiltonians_and_tm = generate_hamiltonians_and_transition_moments(matrices_top, frequency)
+    peaklists_raw_data = calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm)
+    peaklists_top = normalize_and_process_peaklists(peaklists_raw_data, frequency, width)
+
     sys.stdout = output
+    return peaklists_top
 
-    peak_array = np.array(peaklist, dtype=np.float64)  # shape (N, 3)
-    width_column = np.full((peak_array.shape[0], 1), width)
-    peak_array = np.hstack((peak_array, width_column))
 
-    # Divide first column by frequency
-    peak_array[:, 0] = peak_array[:, 0] / frequency
+def generate_hamiltonians_and_transition_moments(matrices_top, frequency):
+    """Function 1: Generate Hamiltonians and transition moments for all matrices"""
+    hamiltonians_and_tm = []
+    
+    for matrices_row in matrices_top:
+        row_data = []
+        for matrices in matrices_row:
+            matrices_data = []
+            for ssm in matrices:
+                freqs = [ssm[index][index] * frequency for index in range(len(ssm))]
+                nspins = len(freqs)
+                
+                # Function 1
+                H = hamiltonian_sparse(freqs, ssm).todense()
+                T = _tm_cache(nspins).todense()
+                
+                matrices_data.append({
+                    'H': H,
+                    'T': T,
+                    'nspins': nspins,
+                    'freqs': freqs
+                })
+            row_data.append(matrices_data)
+        hamiltonians_and_tm.append(row_data)
+    
+    return hamiltonians_and_tm
 
-    # Replace third column by width
-    peak_array[:, 2] = width
+def _calculate_eigenvalues_and_intensities_single(H, T, cutoff=0.001):
+    """Single calculation without JAX batching"""
+    E, V = jnp.linalg.eigh(H)
+    E = np.array(E)
+    V = np.array(V).real
+    I = np.square(V.T @ (T @ V))
+    I_upper = np.triu(I)
+    E_matrix = np.abs(E[:, None] - E)
+    E_upper = np.triu(E_matrix)
+    combo = np.stack([E_upper, I_upper])
+    iv = combo.reshape(2, -1).T
+    mask = iv[:, 1] >= cutoff
+    return iv[mask]
 
-    peaklist_out = peak_array
-    # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])
-    return peaklist_out
+def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
+    """Wrapper that runs single calculations in a normal loop"""
+    
+    # Initialize result structure
+    peaklists_raw_data = []
+    for row_idx, matrices_row in enumerate(matrices_top):
+        row_peaklists = []
+        for col_idx, matrices in enumerate(matrices_row):
+            for mat_idx, _ in enumerate(matrices):
+                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
+                H = np.array(data['H'])
+                T = np.array(data['T'])
+                
+                # Single calculation
+                peaklist = _calculate_eigenvalues_and_intensities_single(H, T)
+                
+                row_peaklists.append({
+                    'peaklist': peaklist,
+                    'nspins': data['nspins']
+                })
+        
+        peaklists_raw_data.append(row_peaklists)
+    
+    return peaklists_raw_data
+
+def normalize_and_process_peaklists(peaklists_raw_data, frequency, width):
+    """Function 3: Normalization and final processing"""
+    peaklists_top = []
+    
+    for row_idx, row_peaklists in enumerate(peaklists_raw_data):
+        peaklists_processed = []
+        for peaklist_data in row_peaklists:
+            peaklist = peaklist_data['peaklist']
+            nspins = peaklist_data['nspins']
+            
+            # Function 3 - Normalization
+            normalized_peaklist = normalize_peaklist(peaklist, nspins)
+            
+            # Final processing (same as original)
+            peak_array = np.array(normalized_peaklist, dtype=np.float64)  # shape (N, 3)
+            width_column = np.full((peak_array.shape[0], 1), width)
+            peak_array = np.hstack((peak_array, width_column))
+
+            # Normalize first column
+            peak_array[:, 0] /= frequency
+
+            # Replace third column by width
+            peak_array[:, 2] = width
+
+            peaklists_processed.append(peak_array)
+        
+        peaklists_top.append(peaklists_processed)
+    
+    return peaklists_top
 
 
 ##### NMRSIMM #####
@@ -283,44 +352,16 @@ SPARSE = True  # the sparse library is available
 
 
 def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
-    """
-    Calculates second-order spectral data (frequency and intensity of signals)
-    for *n* spin-half nuclei.
-
-    Parameters
-    ---------
-    freqs : [float...]
-        a list of *n* nuclei frequencies in Hz
-    couplings : array-like
-        an *n, n* array of couplings in Hz. The order
-        of nuclei in the list corresponds to the column and row order in the
-        matrix, e.g. couplings[0][1] and [1]0] are the J coupling between
-        the nuclei of freqs[0] and freqs[1].
-    normalize: bool
-        True if the intensities should be normalized so that total intensity
-        equals the total number of nuclei.
-
-    Returns
-    -------
-    peaklist : [[float, float]...] numpy 2D array
-        of [frequency, intensity] pairs.
-
-    Other Parameters
-    ----------------
-    cutoff : float
-        The intensity cutoff for reporting signals (default is 0.001).
-    """
     nspins = len(freqs)
-    ###Precompute this
+    ###Function 1
     H = hamiltonian_sparse(freqs, couplings)
-
-    ###Torch this
-    E, V = scipy.linalg.eigh(H)
-    V = V.real
     T = _tm_cache(nspins)
-    I = np.square(V.T.dot(T.dot(V)))
-    # return _compile_peaklist(I, E, **kwargs)
+    cutoff = 0.001
 
+    ###Function 2
+    E, V = scipy.linalg.eigh(H.todense())
+    V = V.real
+    I = np.square(V.T.dot(T.dot(V)))
     I_upper = np.triu(I)
     E_matrix = np.abs(E[:, np.newaxis] - E)
     E_upper = np.triu(E_matrix)
@@ -329,7 +370,7 @@ def secondorder_sparse(freqs, couplings, normalize=True, **kwargs):
     peaklist = iv[iv[:, 1] >= cutoff]
     ###
 
-    ###This can be done later
+    ###Function 3
     if normalize:
         peaklist = normalize_peaklist(peaklist, nspins)
     return peaklist
@@ -356,9 +397,6 @@ def hamiltonian_sparse(v, J):
     nspins = len(v)
     Lz, Lproduct = _so_sparse(nspins)  # noqa
     # TODO: remove the following lines once tests pass
-    print('From hamiltonian_sparse:')
-    print('Lz is type: ', type(Lz))
-    print('Lproduct is type: ', type(Lproduct))
     assert isinstance(Lz, (sparse.COO, np.ndarray, scipy.sparse.spmatrix))
     # On large spin systems, converting v and J to sparse improved speed of
     # sparse.tensordot calls with them.
