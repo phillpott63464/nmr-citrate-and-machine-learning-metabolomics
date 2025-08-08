@@ -241,7 +241,7 @@ def generate_hamiltonians_and_transition_moments(matrices_top, frequency):
                 
                 # Function 1
                 H = hamiltonian_sparse(freqs, ssm).todense()
-                T = _tm_cache(nspins)
+                T = _tm_cache(nspins).todense()
                 
                 matrices_data.append({
                     'H': H,
@@ -254,37 +254,75 @@ def generate_hamiltonians_and_transition_moments(matrices_top, frequency):
     
     return hamiltonians_and_tm
 
+import jax.numpy as jnp
+from jax import jit, vmap
+
+@jit
+def _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch, cutoff=0.001):
+    def single_calc(H, T):
+        E, V = jnp.linalg.eigh(H)
+        V = V.real
+        I = jnp.square(V.T @ (T @ V))
+        I_upper = jnp.triu(I)
+        E_matrix = jnp.abs(E[:, None] - E)
+        E_upper = jnp.triu(E_matrix)
+        combo = jnp.stack([E_upper, I_upper])
+        iv = combo.reshape(2, -1).T
+        mask = iv[:, 1] >= cutoff
+        return iv, mask
+    
+    return vmap(single_calc)(H_batch, T_batch)
+
+def pad_to_shape(matrix, shape):
+    padded = jnp.zeros(shape)
+    padded = padded.at[:matrix.shape[0], :matrix.shape[1]].set(matrix)
+    return padded
 
 def calculate_eigenvalues_and_intensities(matrices_top, hamiltonians_and_tm):
-    """Function 2: Eigenvalue decomposition and intensity calculations"""
-    peaklists_raw_data = []
+    """Wrapper that prepares inputs for JAX calculation and returns output in original format"""
+    H_list = []
+    T_list = []
+    nspins_list = []
+    shapes = []
+
+    # Flatten and collect all H, T, nspins
+    for row_idx, matrices_row in enumerate(matrices_top):
+        for col_idx, matrices in enumerate(matrices_row):
+            for mat_idx, _ in enumerate(matrices):
+                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
+                H_list.append(data['H'])
+                T_list.append(data['T'])
+                nspins_list.append(data['nspins'])
+                shapes.append((row_idx, col_idx))
+
+    max_dim = max(H.shape[0] for H in H_list)
+    max_shape = tuple(max(t.shape[i] for t in T_list) for i in range(2))
     
+
+    # Convert to JAX arrays
+    H_batch = jnp.stack([pad_to_shape(jnp.array(H), (max_dim, max_dim)) for H in H_list])
+    T_batch = jnp.stack([pad_to_shape(jnp.array(T), max_shape) for T in T_list])
+
+    # Call the batched JAX function
+    iv_batch, mask_batch = _calculate_eigenvalues_and_intensities_jax(H_batch, T_batch)
+
+    # Convert back to Python and reassemble structure
+    peaklists_raw_data = []
+    idx = 0
     for row_idx, matrices_row in enumerate(matrices_top):
         row_peaklists = []
         for col_idx, matrices in enumerate(matrices_row):
-            for mat_idx, ssm in enumerate(matrices):
-                data = hamiltonians_and_tm[row_idx][col_idx][mat_idx]
-                H = data['H']
-                T = data['T']
-                cutoff = 0.001
-                
-                # Function 2
-                E, V = scipy.linalg.eigh(H.todense())
-                V = V.real
-                I = np.square(V.T.dot(T.dot(V)))
-                I_upper = np.triu(I)
-                E_matrix = np.abs(E[:, np.newaxis] - E)
-                E_upper = np.triu(E_matrix)
-                combo = np.stack([E_upper, I_upper])
-                iv = combo.reshape(2, I.shape[0] ** 2).T
-                peaklist = iv[iv[:, 1] >= cutoff]
-                
+            for _ in matrices:
+                iv = np.array(iv_batch[idx])
+                mask = np.array(mask_batch[idx])
+                peaklist = iv[mask]
                 row_peaklists.append({
                     'peaklist': peaklist,
-                    'nspins': data['nspins']
+                    'nspins': nspins_list[idx]
                 })
+                idx += 1
         peaklists_raw_data.append(row_peaklists)
-    
+
     return peaklists_raw_data
 
 
