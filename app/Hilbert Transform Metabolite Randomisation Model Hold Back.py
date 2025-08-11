@@ -213,9 +213,8 @@ def _(cache_dir, combo_number, count, substanceDict):
             print(f'Generated {len(combinations)} random combinations')
 
             # Select random metabolite to hold back for testing
-            held_back_metabolites = [
-                random.choice(list(substanceDict.keys())) for i in range(2)
-            ]
+            held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
+            
             print(
                 f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
             )
