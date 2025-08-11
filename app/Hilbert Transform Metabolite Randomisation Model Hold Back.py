@@ -214,7 +214,6 @@ def _(cache_dir, combo_number, count, substanceDict):
 
             # Select random metabolite to hold back for testing
             held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
-
             print(
                 f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
             )
