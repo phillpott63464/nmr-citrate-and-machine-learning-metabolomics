@@ -1,3 +1,30 @@
+10 samples of 
+
+substanceDict = {
+    'L-Alanine': ['SP:3208'],
+    'L-Arginine': ['SP:3212', 'SP:3285', 'SP:3360', 'SP:3388'],
+    'L-Asparagine': ['SP:3408', 'SP:3597'],
+    'L-Aspartic_Acid': ['SP:3526', 'SP:3603'],
+    'L-Cysteine': ['SP:3723', 'SP:3725'],
+    'L-Glutamic_Acid': ['SP:3412', 'SP:3690'],
+    'L-Glutamine': ['SP:3108'],
+    'L-Histidine': ['SP:3099', 'SP:3684'],
+    'L-Isoleucine': ['SP:3390', 'SP:3502'],
+    'L-Leucine': ['SP:3551'],
+    'L-Lysine': ['SP:3506', 'SP:3560'],
+    'L-Methionine': ['SP:3456', 'SP:3509'],
+    'L-Proline': ['SP:3140', 'SP:3406'],
+    'L-Phenylalanine': ['SP:3326', 'SP:3462', 'SP:3507'],
+    'L-Serine': ['SP:3324', 'SP:3427', 'SP:3732'],
+    'L-Threonine': ['SP:3327', 'SP:3437'],
+    'L-Tryptophan': ['SP:3342', 'SP:3455'],
+    'L-Tyrosine': ['SP:3464'],
+    'L-Valine': ['SP:3413', 'SP:3490'],
+    'Glycine': ['SP:3365', 'SP:3682'],
+}
+
+---
+
 Fri Aug  8 17:09:51 2025    morgan/output.prof
 
          11416057 function calls (10957785 primitive calls) in 45.597 seconds
@@ -5881,5 +5908,6 @@ Fri Aug  8 17:09:51 2025    morgan/output.prof
         1    0.000    0.000    0.000    0.000 /home/sp970/sam/notes/app/.venv/lib/python3.10/site-packages/nvidia/cuda_cupti/__init__.py:1(<module>)
         1    0.000    0.000    0.000    0.000 /home/sp970/sam/notes/app/.venv/lib/python3.10/site-packages/nvidia/cusparse/__init__.py:1(<module>)
         1    0.000    0.000    0.000    0.000 /home/sp970/sam/notes/app/.venv/lib/python3.10/site-packages/nvidia/cuda_runtime/__init__.py:1(<module>)
+
 
 
