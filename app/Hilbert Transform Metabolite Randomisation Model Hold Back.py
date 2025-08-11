@@ -44,7 +44,7 @@ def _():
     # global variables
 
     count = 100
-    trials = 1000
+    trials = 10
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'
     cache_dir = f'./data_cache/{notebook_name}'
@@ -942,7 +942,7 @@ def _(data_length, device, mo, sample_ratio, training_data):
 
 
 @app.cell
-def _(np, torch, tqdm, training_data):
+def _(np, predictions, torch, tqdm, training_data):
     import copy
     import torch.optim as optim
     import torch.nn as nn
@@ -1002,151 +1002,152 @@ def _(np, torch, tqdm, training_data):
                 'total_parameters': sum(p.numel() for p in self.parameters()),
             }
 
-    class TransformerRegressor(nn.Module):
+    class ImprovedTransformerRegressor(nn.Module):
         def __init__(self, input_size, trial=None, **kwargs):
             """
-            Transformer model for regression tasks.
-
-            Args:
-                input_size: Number of input features
-                trial: Optuna trial object for hyperparameter suggestion
-                **kwargs: Manual hyperparameter overrides
+            Improved Transformer model for NMR spectral analysis.
             """
-            super(TransformerRegressor, self).__init__()
+            super(ImprovedTransformerRegressor, self).__init__()
 
-            # Get hyperparameters from trial or use provided values
+            # Get hyperparameters
             if trial is not None:
-                self.d_model = int(
-                    trial.suggest_categorical('d_model', [64, 128, 256, 512])
-                )
-                self.nhead = int(
-                    trial.suggest_categorical('nhead', [4, 8, 16])
-                )
-                self.num_layers = int(trial.suggest_int('num_layers', 2, 8))
-                self.dim_feedforward = int(
-                    trial.suggest_categorical(
-                        'dim_feedforward', [256, 512, 1024, 2048]
-                    )
-                )
-                self.dropout = trial.suggest_float('dropout', 0.1, 0.5)
-                self.max_seq_len = int(
-                    trial.suggest_categorical('max_seq_len', [512, 1024, 2048])
-                )
+                self.d_model = int(trial.suggest_categorical('d_model', [128, 256, 512]))
+                self.nhead = int(trial.suggest_categorical('nhead', [8, 16]))
+                self.num_layers = int(trial.suggest_int('num_layers', 3, 6))
+                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [512, 1024, 2048]))
+                # Remove dropout from hyperparameter search
+                # Better sequence length strategy
+                self.target_seq_len = int(trial.suggest_categorical('target_seq_len', [64, 128, 256]))
             else:
-                # Default values or manual overrides
                 self.d_model = kwargs.get('d_model', 256)
                 self.nhead = kwargs.get('nhead', 8)
                 self.num_layers = kwargs.get('num_layers', 4)
-                self.dim_feedforward = kwargs.get('dim_feedforward', 512)
-                self.dropout = kwargs.get('dropout', 0.1)
-                self.max_seq_len = kwargs.get('max_seq_len', 1024)
+                self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
+                # Remove dropout parameter
+                self.target_seq_len = kwargs.get('target_seq_len', 128)
 
             # Ensure nhead divides d_model evenly
             while self.d_model % self.nhead != 0:
                 self.nhead = max(1, self.nhead - 1)
 
-            # Calculate sequence length based on input size and d_model
-            # Fix: Ensure we have at least one sequence element
-            self.seq_len = max(
-                1, min(input_size // self.d_model, self.max_seq_len)
+            # Use linear projection instead of patch embedding to preserve all data
+            self.spectrum_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len)
+            self.reference_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len)
+
+            # Set actual sequence length to target (no data reduction)
+            self.actual_seq_len = self.target_seq_len
+
+            # Separate embeddings for spectrum and reference (no dropout)
+            self.spectrum_pos_encoding = PositionalEncoding(self.d_model, 0.0, self.actual_seq_len)
+
+            # Cross-attention between spectrum and reference (no dropout)
+            self.cross_attention = nn.MultiheadAttention(
+                embed_dim=self.d_model,
+                num_heads=self.nhead,
+                dropout=0.0,  # Remove dropout
+                batch_first=True
             )
 
-            # Fix: If input is smaller than d_model, adjust d_model
-            if input_size < self.d_model:
-                self.d_model = input_size
-                self.seq_len = 1
-                # Re-adjust nhead to divide d_model evenly
-                while self.d_model % self.nhead != 0:
-                    self.nhead = max(1, self.nhead - 1)
-
-            # Actual input size after reshaping - this should match the transformer input
-            self.actual_input_size = self.seq_len * self.d_model
-
-            # Fix: Input projection should map from actual input_size to our target size
-            self.input_projection = nn.Linear(
-                input_size, self.actual_input_size
-            )
-
-            # Positional encoding
-            self.pos_encoding = PositionalEncoding(
-                self.d_model, self.dropout, self.seq_len
-            )
-
-            # Transformer encoder
+            # Self-attention transformer (no dropout)
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.d_model,
                 nhead=self.nhead,
                 dim_feedforward=self.dim_feedforward,
-                dropout=self.dropout,
-                activation='relu',
+                dropout=0.0,  # Remove dropout
+                activation='gelu',
                 batch_first=True,
             )
             self.transformer_encoder = nn.TransformerEncoder(
                 encoder_layer, num_layers=self.num_layers
             )
 
-            # Output layers
-            self.global_pool = nn.AdaptiveAvgPool1d(1)
-            self.output_projection = nn.Sequential(
-                nn.Linear(self.d_model, self.d_model // 2),
-                nn.ReLU(),
-                nn.Dropout(self.dropout),
-                nn.Linear(self.d_model // 2, 2),  # Changed from 1 to 2 outputs
+            # Multi-scale feature extraction (preserve all data)
+            self.multi_scale_conv = nn.ModuleList([
+                nn.Conv1d(self.d_model, self.d_model // 4, kernel_size=k, padding=k//2)
+                for k in [3, 7, 15]  # Different receptive fields
+            ])
+
+            # Attention-based pooling instead of simple average
+            self.attention_pool = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 4),
+                nn.Tanh(),
+                nn.Linear(self.d_model // 4, 1)
             )
 
-            # Store architecture info
-            self.architecture_info = {
-                'd_model': self.d_model,
-                'nhead': self.nhead,
-                'num_layers': self.num_layers,
-                'dim_feedforward': self.dim_feedforward,
-                'dropout': self.dropout,
-                'seq_len': self.seq_len,
-                'max_seq_len': self.max_seq_len,
-                'input_size': input_size,
-                'actual_input_size': self.actual_input_size,
-                'total_parameters': sum(p.numel() for p in self.parameters()),
-            }
+            # Task-specific heads with residual connections (no dropout)
+            self.presence_head = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 2),
+                nn.LayerNorm(self.d_model // 2),
+                nn.GELU(),
+                # Remove dropout
+                nn.Linear(self.d_model // 2, 1)
+            )
+
+            self.concentration_head = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 2),
+                nn.LayerNorm(self.d_model // 2),
+                nn.GELU(),
+                # Remove dropout
+                nn.Linear(self.d_model // 2, self.d_model // 4),
+                nn.GELU(),
+                nn.Linear(self.d_model // 4, 1)
+            )
 
         def forward(self, x):
-            # Project input to match expected size
-            x = self.input_projection(x)  # [batch_size, actual_input_size]
+            batch_size = x.size(0)
+
+            # Split input into spectrum and reference (assuming concatenated)
+            mid_point = x.size(1) // 2
+            spectrum = x[:, :mid_point]  # [batch, seq_len]
+            reference = x[:, mid_point:]
+
+            # Project to transformer dimensions without data loss
+            spectrum_projected = self.spectrum_projection(spectrum)  # [batch, d_model * target_seq_len]
+            reference_projected = self.reference_projection(reference)
 
             # Reshape to sequence format
-            batch_size = x.size(0)
-            x = x.view(
-                batch_size, self.seq_len, self.d_model
-            )  # [batch_size, seq_len, d_model]
+            spectrum_patches = spectrum_projected.view(batch_size, self.target_seq_len, self.d_model)
+            reference_patches = reference_projected.view(batch_size, self.target_seq_len, self.d_model)
 
-            # Add positional encoding
-            x = self.pos_encoding(x)
+            # Add positional encoding (no dropout)
+            spectrum_patches = self.spectrum_pos_encoding(spectrum_patches)
+            reference_patches = self.spectrum_pos_encoding(reference_patches)
 
-            # Pass through transformer encoder
-            x = self.transformer_encoder(x)  # [batch_size, seq_len, d_model]
+            # Cross-attention between spectrum and reference
+            attended_spectrum, _ = self.cross_attention(
+                spectrum_patches, reference_patches, reference_patches
+            )
 
-            # Global average pooling over sequence dimension
-            x = x.transpose(1, 2)  # [batch_size, d_model, seq_len]
-            x = self.global_pool(x)  # [batch_size, d_model, 1]
-            x = x.squeeze(-1)  # [batch_size, d_model]
+            # Self-attention on attended spectrum
+            encoded = self.transformer_encoder(attended_spectrum)
 
-            # Final output projection
-            x = self.output_projection(
-                x
-            )  # [batch_size, 2] - Changed from 1 to 2
+            # Multi-scale feature extraction
+            encoded_transposed = encoded.transpose(1, 2)  # [batch, d_model, seq_len]
+            multi_scale_features = []
+            for conv in self.multi_scale_conv:
+                multi_scale_features.append(conv(encoded_transposed))
 
-            return x
+            # Combine multi-scale features
+            combined_features = torch.cat(multi_scale_features, dim=1)  # [batch, 3*d_model//4, seq_len]
+            combined_features = combined_features.transpose(1, 2)  # [batch, seq_len, 3*d_model//4]
 
-        def get_architecture_info(self):
-            """Return information about the model architecture"""
-            return self.architecture_info
+            # Attention-based pooling
+            attention_weights = self.attention_pool(encoded)  # [batch, seq_len, 1]
+            attention_weights = torch.softmax(attention_weights, dim=1)
+            pooled_features = torch.sum(encoded * attention_weights, dim=1)  # [batch, d_model]
+
+            # Task-specific predictions
+            presence_logits = self.presence_head(pooled_features)  # [batch, 1]
+            concentration_pred = self.concentration_head(pooled_features)  # [batch, 1]
+
+            return torch.cat([presence_logits, concentration_pred], dim=1)  # [batch, 2]
 
     class PositionalEncoding(nn.Module):
         """Positional encoding for transformer input sequences"""
 
         def __init__(self, d_model, dropout=0.1, max_len=5000):
             super(PositionalEncoding, self).__init__()
-            self.dropout = nn.Dropout(p=dropout)
-
+            # Remove dropout completely
             pe = torch.zeros(max_len, d_model)
             position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
             div_term = torch.exp(
@@ -1164,7 +1165,54 @@ def _(np, torch, tqdm, training_data):
             # x shape: [batch_size, seq_len, d_model]
             seq_len = x.size(1)
             x = x + self.pe[:seq_len, :].transpose(0, 1)
-            return self.dropout(x)
+            return x
+
+    def improved_compute_loss(predictions, targets, epoch=0, max_epochs=200):
+        """
+        Improved loss function with curriculum learning and adaptive weighting.
+        """
+        presence_logits = predictions[:, 0]
+        concentration_pred = predictions[:, 1]
+        presence_true = targets[:, 0]
+        concentration_true = targets[:, 1]
+
+        # Classification loss
+        classification_loss = nn.BCEWithLogitsLoss()(presence_logits, presence_true)
+
+        # Curriculum learning: gradually increase concentration loss weight
+        curriculum_weight = min(1.0, epoch / (max_epochs * 0.3))
+
+        # Adaptive concentration loss based on presence confidence
+        presence_prob = torch.sigmoid(presence_logits)
+        present_mask = presence_true == 1
+
+        if present_mask.sum() > 0:
+            # Weight concentration loss by presence confidence
+            confidence_weights = presence_prob[present_mask]
+
+            # Huber loss for robustness to outliers
+            concentration_diff = concentration_pred[present_mask] - concentration_true[present_mask]
+            huber_loss = nn.SmoothL1Loss()(
+                concentration_pred[present_mask], 
+                concentration_true[present_mask]
+            )
+
+            # Calculate MAE and RMSE for monitoring
+            concentration_mae = torch.mean(torch.abs(concentration_diff))
+            concentration_rmse = torch.sqrt(torch.mean(concentration_diff ** 2))
+
+            # Scale-aware loss: relative error for different concentration ranges
+            relative_error = torch.abs(concentration_diff) / (concentration_true[present_mask] + 1e-8)
+            concentration_loss = torch.mean(confidence_weights * (huber_loss + 0.1 * relative_error))
+        else:
+            concentration_loss = torch.tensor(0.0, device=predictions.device)
+            concentration_mae = torch.tensor(0.0, device=predictions.device)
+            concentration_rmse = torch.tensor(0.0, device=predictions.device)
+
+        # Adaptive loss weighting
+        total_loss = classification_loss + curriculum_weight * concentration_loss
+
+        return total_loss, classification_loss, concentration_mae, concentration_rmse
 
     def train_model(training_data, trial, model_type='mlp'):
         from torch.utils.data import TensorDataset, DataLoader
@@ -1195,7 +1243,7 @@ def _(np, torch, tqdm, training_data):
         input_length = len(training_data['data_train'][0])
 
         if model_type == 'transformer':
-            model = TransformerRegressor(
+            model = ImprovedTransformerRegressor(
                 input_size=input_length, trial=trial
             ).to(device)
         else:  # default to MLP
@@ -1317,9 +1365,11 @@ def _(np, torch, tqdm, training_data):
                     # Mini-batch training
                     data_batch = data_train[start : start + batch_size]
                     labels_batch = labels_train[start : start + batch_size]
+
                     predictions = model(data_batch)
-                    total_loss, class_loss, conc_mae, conc_rmse = compute_loss(
-                        predictions, labels_batch
+
+                    total_loss, class_loss, conc_mae, conc_rmse = improved_compute_loss(
+                        predictions, labels_batch, epoch, max_epochs
                     )
 
                     # Backpropagation
@@ -1339,8 +1389,8 @@ def _(np, torch, tqdm, training_data):
                 model.eval()
                 with torch.no_grad():
                     predictions = model(data_val)
-                    val_loss, _, _, _ = compute_loss(
-                        predictions, labels_val
+                    val_loss, _, _, _ = improved_compute_loss(
+                        predictions, labels_val, epoch, max_epochs
                     )  # Fixed: expecting 4 values
                     val_loss = float(val_loss)
 
@@ -1511,8 +1561,197 @@ def _(device_info, gpu_name, mo):
     return
 
 
+@app.cell
+def _(cache_dir, cache_key, torch, tqdm, train_model, training_data, trials):
+    import optuna
+    from functools import partial
+
+    def objective(training_data, trial, model_type='transformer'):
+        """
+        Optuna objective function for hyperparameter optimization with GPU memory handling.
+        """
+        try:
+            (
+                val_accuracy,
+                val_conc_r2,
+                val_conc_mae,
+                val_conc_rmse,
+                test_accuracy,
+                test_conc_r2,
+                test_conc_mae,
+                test_conc_rmse,
+            ) = train_model(training_data, trial, model_type)
+
+            # Store all metrics in trial for later analysis
+            trial.set_user_attr('val_accuracy', val_accuracy)
+            trial.set_user_attr('val_conc_r2', val_conc_r2)
+            trial.set_user_attr('val_conc_mae', val_conc_mae)
+            trial.set_user_attr('val_conc_rmse', val_conc_rmse)
+            trial.set_user_attr('test_accuracy', test_accuracy)
+            trial.set_user_attr('test_conc_r2', test_conc_r2)
+            trial.set_user_attr('test_conc_mae', test_conc_mae)
+            trial.set_user_attr('test_conc_rmse', test_conc_rmse)
+            trial.set_user_attr('model_type', model_type)
+
+            # Calculate classification error (1 - accuracy)
+            val_classification_error = 1.0 - val_accuracy
+
+            # Use the new optimization formula
+            combined_score = 0.5 * val_classification_error + 0.5 * (
+                0.5 * val_conc_mae + 0.5 * val_conc_rmse
+            )
+
+            return combined_score
+
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+            # Clear GPU cache immediately
+            torch.cuda.empty_cache()
+
+            # Check if it's specifically a memory error
+            if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+                # Log this as a memory failure
+                trial.set_user_attr('memory_error', True)
+                trial.set_user_attr('error_message', str(e))
+
+                # Return a penalty score that's worse than any reasonable performance
+                # but not so bad that it completely dominates the search space
+                penalty_score = 2.0  # Worse than worst possible (1.0 classification error + 1.0 regression error)
+
+                return penalty_score
+            else:
+                # Re-raise other RuntimeErrors as they might be actual bugs
+                raise e
+
+        except Exception as e:
+            # Clear GPU cache for any other errors too
+            torch.cuda.empty_cache()
+
+            # Log the error for debugging
+            trial.set_user_attr('general_error', True)
+            trial.set_user_attr('error_message', str(e))
+
+            # Return a different penalty for non-memory errors
+            penalty_score = 1.5
+
+            return penalty_score
+
+    # Set model type here - change to 'mlp' to use MLP model
+    MODEL_TYPE = 'transformer'  # or 'mlp'
+
+    # Create or load existing Optuna study with persistent SQLite storage
+    study = optuna.create_study(
+        direction='minimize',  # Maximize the negative combined error (minimize error)
+        study_name=cache_key,  # Use cache key for unique study identification
+        storage=f'sqlite:///{cache_dir}/{cache_key}-new.db',  # Use cache key for database filename
+        load_if_exists=True,  # Resume previous optimization if study exists
+    )
+
+    # Count completed trials for progress tracking
+    completed_trials = len(
+        [
+            t
+            for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ]
+    )
+
+    # Run hyperparameter optimization if more trials are needed
+    if trials - completed_trials > 0:
+        with tqdm.tqdm(
+            total=trials - completed_trials, desc='Optimizing'
+        ) as pbar:
+
+            def callback(study, trial):
+                """Progress callback for Optuna optimization"""
+                pbar.update(1)
+
+            # Resume or start hyperparameter optimization
+            study.optimize(
+                partial(objective, training_data, model_type=MODEL_TYPE),
+                callbacks=[
+                    optuna.study.MaxTrialsCallback(
+                        trials, states=(optuna.trial.TrialState.COMPLETE,)
+                    ),
+                    callback,
+                ],
+            )
+
+    return optuna, study
+
+
 @app.cell(hide_code=True)
-def _(mo, optuna, study):
+def _(optuna, study):
+    # Analyze failed trials for debugging
+    failed_trials = [
+        t for t in study.trials 
+        if t.state in [optuna.trial.TrialState.FAIL, optuna.trial.TrialState.PRUNED]
+    ]
+
+    error_trials = [
+        t for t in study.trials
+        if t.user_attrs.get('memory_error', False) or t.user_attrs.get('general_error', False)
+    ]
+
+    if failed_trials or error_trials:
+        error_summary = f"""
+    ## Trial Error Analysis
+
+    **Failed Trials Summary:**
+    - **Total Failed/Pruned Trials:** {len(failed_trials)}
+    - **Memory Error Trials:** {len([t for t in error_trials if t.user_attrs.get('memory_error', False)])}
+    - **General Error Trials:** {len([t for t in error_trials if t.user_attrs.get('general_error', False)])}
+
+    **Error Details:**
+    """
+
+        # Group errors by type and message
+        error_groups = {}
+        for trial in error_trials:
+            error_type = "Memory Error" if trial.user_attrs.get('memory_error', False) else "General Error"
+            error_msg = trial.user_attrs.get('error_message', 'Unknown error')
+
+            # Truncate long error messages
+            if len(error_msg) > 200:
+                error_msg = error_msg[:200] + "..."
+
+            key = f"{error_type}: {error_msg}"
+            if key not in error_groups:
+                error_groups[key] = []
+            error_groups[key].append(trial.number)
+
+        for error_desc, trial_numbers in error_groups.items():
+            error_summary += f"\n**{error_desc}**\n- Trials: {trial_numbers[:10]}{'...' if len(trial_numbers) > 10 else ''} ({len(trial_numbers)} total)\n"
+
+        # Add parameter analysis for memory errors
+        memory_error_trials = [t for t in error_trials if t.user_attrs.get('memory_error', False)]
+        if memory_error_trials:
+            error_summary += "\n**Memory Error Parameter Analysis:**\n"
+
+            # Analyze common parameters in memory errors
+            if memory_error_trials[0].params:
+                param_ranges = {}
+                for trial in memory_error_trials:
+                    for param, value in trial.params.items():
+                        if param not in param_ranges:
+                            param_ranges[param] = []
+                        param_ranges[param].append(value)
+
+                for param, values in param_ranges.items():
+                    if isinstance(values[0], (int, float)):
+                        error_summary += f"- **{param}:** {min(values):.3f} - {max(values):.3f} (avg: {sum(values)/len(values):.3f})\n"
+                    else:
+                        unique_vals = list(set(values))
+                        error_summary += f"- **{param}:** {unique_vals}\n"
+
+        print(error_summary)
+    else:
+        print("## Trial Error Analysis\n\n✅ **No failed trials detected** - All optimization trials completed successfully!")
+
+    return
+
+
+@app.cell(hide_code=True)
+def _(held_back_metabolites, mo, optuna, study):
     # Determine model type from best trial parameters
     model_type = (
         'Transformer' if 'd_model' in study.best_trial.params else 'MLP'
@@ -1526,8 +1765,7 @@ def _(mo, optuna, study):
     - **Number of Attention Heads:** {study.best_trial.params['nhead']}
     - **Number of Encoder Layers:** {study.best_trial.params['num_layers']}
     - **Feedforward Dimension:** {study.best_trial.params['dim_feedforward']}
-    - **Dropout Rate:** {study.best_trial.params['dropout']:.3f}
-    - **Maximum Sequence Length:** {study.best_trial.params['max_seq_len']}
+    - **Target Sequence Length:** {study.best_trial.params['target_seq_len']}
 
     **Model Architecture:**
 
@@ -1584,134 +1822,11 @@ def _(mo, optuna, study):
 
     - Training: Spectra without held-back metabolite
     - Validation: 15% of training data (used for hyperparameter optimization)
-    - Test: Spectra containing held-back metabolite ({study.best_trial.user_attrs.get('held_back_metabolites', 'N/A')})
+    - Test: Spectra containing held-back metabolite ({held_back_metabolites})
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
     """
     )
-    return
-
-
-@app.cell
-def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
-    import optuna
-    from functools import partial
-
-    def objective(training_data, trial, model_type='transformer'):
-        """
-        Optuna objective function for hyperparameter optimization with GPU memory handling.
-        """
-        try:
-            (
-                val_accuracy,
-                val_conc_r2,
-                val_conc_mae,
-                val_conc_rmse,
-                test_accuracy,
-                test_conc_r2,
-                test_conc_mae,
-                test_conc_rmse,
-            ) = train_model(training_data, trial, model_type)
-
-            # Store all metrics in trial for later analysis
-            trial.set_user_attr('val_accuracy', val_accuracy)
-            trial.set_user_attr('val_conc_r2', val_conc_r2)
-            trial.set_user_attr('val_conc_mae', val_conc_mae)
-            trial.set_user_attr('val_conc_rmse', val_conc_rmse)
-            trial.set_user_attr('test_accuracy', test_accuracy)
-            trial.set_user_attr('test_conc_r2', test_conc_r2)
-            trial.set_user_attr('test_conc_mae', test_conc_mae)
-            trial.set_user_attr('test_conc_rmse', test_conc_rmse)
-            trial.set_user_attr('model_type', model_type)
-
-            # Calculate classification error (1 - accuracy)
-            val_classification_error = 1.0 - val_accuracy
-
-            # Use the new optimization formula
-            combined_score = 0.5 * val_classification_error + 0.5 * (
-                0.5 * val_conc_mae + 0.5 * val_conc_rmse
-            )
-
-            return combined_score
-
-        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
-            # Clear GPU cache immediately
-            torch.cuda.empty_cache()
-            
-            # Check if it's specifically a memory error
-            if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
-                # Log this as a memory failure
-                trial.set_user_attr('memory_error', True)
-                trial.set_user_attr('error_message', str(e))
-                
-                # Return a penalty score that's worse than any reasonable performance
-                # but not so bad that it completely dominates the search space
-                penalty_score = 2.0  # Worse than worst possible (1.0 classification error + 1.0 regression error)
-                
-                return penalty_score
-            else:
-                # Re-raise other RuntimeErrors as they might be actual bugs
-                raise e
-        
-        except Exception as e:
-            # Clear GPU cache for any other errors too
-            torch.cuda.empty_cache()
-            
-            # Log the error for debugging
-            trial.set_user_attr('general_error', True)
-            trial.set_user_attr('error_message', str(e))
-            
-            # Return a different penalty for non-memory errors
-            penalty_score = 1.5
-            
-            return penalty_score
-
-    # Set model type here - change to 'mlp' to use MLP model
-    MODEL_TYPE = 'transformer'  # or 'mlp'
-
-    # Create or load existing Optuna study with persistent SQLite storage
-    study = optuna.create_study(
-        direction='minimize',  # Maximize the negative combined error (minimize error)
-        study_name=cache_key,  # Use cache key for unique study identification
-        storage=f'sqlite:///{cache_dir}/{cache_key}-new.db',  # Use cache key for database filename
-        load_if_exists=True,  # Resume previous optimization if study exists
-    )
-
-    # Count completed trials for progress tracking
-    completed_trials = len(
-        [
-            t
-            for t in study.trials
-            if t.state == optuna.trial.TrialState.COMPLETE
-        ]
-    )
-
-    # Run hyperparameter optimization if more trials are needed
-    if trials - completed_trials > 0:
-        with tqdm.tqdm(
-            total=trials - completed_trials, desc='Optimizing'
-        ) as pbar:
-
-            def callback(study, trial):
-                """Progress callback for Optuna optimization"""
-                pbar.update(1)
-
-            # Resume or start hyperparameter optimization
-            study.optimize(
-                partial(objective, training_data, model_type=MODEL_TYPE),
-                callbacks=[
-                    optuna.study.MaxTrialsCallback(
-                        trials, states=(optuna.trial.TrialState.COMPLETE,)
-                    ),
-                    callback,
-                ],
-            )
-
-    return optuna, study
-
-
-@app.cell
-def _():
     return
 
 
