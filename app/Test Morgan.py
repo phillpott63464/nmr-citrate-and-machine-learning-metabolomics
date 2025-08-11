@@ -16,8 +16,12 @@ def _():
     import cProfile
     import pstats
     from morgan.createTrainingData import createTrainingData
+    import jax
+    # from jax.config import config
 
-    return cProfile, pstats
+    # config.update('jax_platform_name', 'rocm')
+    print(jax.devices())
+    return createTrainingData, pstats
 
 
 @app.cell
@@ -47,17 +51,17 @@ def _():
     substanceSpectrumIds = [
         substanceDict[substance][-1] for substance in substanceDict
     ]
-    return
+    return (substanceSpectrumIds,)
 
 
 @app.cell
-def _(cProfile):
-    sampleNumber = 10
+def _():
+    sampleNumber = 100
 
-    cProfile.run(
-        'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
-        'morgan/output.prof',
-    )
+    # cProfile.run(
+    #     'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
+    #     'morgan/output.prof',
+    # )
 
     return
 
@@ -70,6 +74,16 @@ def _(pstats):
         # stats.sort_stats('cumulative')
         # stats.sort_stats('ncalls')
         stats.print_stats()
+    return
+
+
+@app.cell
+def _(createTrainingData, substanceSpectrumIds):
+    substance = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5)
+
+    import matplotlib.pyplot as plt
+
+    plt.plot(substance['positions'], substance['intensities'][0])
     return
 
 

@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.13'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -13,9 +13,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing."""
-    )
+    mo.md(r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing.""")
     return
 
 
@@ -52,15 +50,16 @@ def _(data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""- Define a model. This is a 4 layer MLP using ReLU activation."""
-    )
+    mo.md(r"""- Define a model. This is a 4 layer MLP using ReLU activation.""")
     return
 
 
 @app.cell
 def _():
     import torch.nn as nn
+    import torch
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Define the model
     model = nn.Sequential(
@@ -71,15 +70,13 @@ def _():
         nn.Linear(12, 6),
         nn.ReLU(),
         nn.Linear(6, 1),
-    )
-    return model, nn
+    ).to(device)
+    return device, model, nn, torch
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""- Define a loss function (mean square error) and optimizer (adam)"""
-    )
+    mo.md(r"""- Define a loss function (mean square error) and optimizer (adam)""")
     return
 
 
@@ -106,8 +103,7 @@ def _(mo):
 
 
 @app.cell
-def _(X, y):
-    import torch
+def _(X, device, torch, y):
     from sklearn.model_selection import train_test_split
 
     train_ratio = 0.7   # 70% of the data is used for training, 30% for testing
@@ -115,11 +111,11 @@ def _(X, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, train_size=train_ratio, shuffle=True
     )
-    X_train = torch.tensor(X_train, dtype=torch.float32)
-    y_train = torch.tensor(y_train, dtype=torch.float32).reshape(-1, 1)
-    X_test = torch.tensor(X_test, dtype=torch.float32)
-    y_test = torch.tensor(y_test, dtype=torch.float32).reshape(-1, 1)
-    return X_test, X_train, torch, y_test, y_train
+    X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
+    y_train = torch.tensor(y_train, dtype=torch.float32).reshape(-1, 1).to(device)
+    X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
+    y_test = torch.tensor(y_test, dtype=torch.float32).reshape(-1, 1).to(device)
+    return X_test, X_train, y_test, y_train
 
 
 @app.cell(hide_code=True)
@@ -234,5 +230,5 @@ def _():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -43,8 +43,8 @@ def _(mo):
 def _():
     # global variables
 
-    count = 1000
-    trials = 10
+    count = 100
+    trials = 1000
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'
     cache_dir = f'./data_cache/{notebook_name}'
@@ -91,7 +91,8 @@ def _(cache_dir, combo_number, count, substanceDict):
     import numpy as np
     import tqdm
     import itertools
-    import multiprocessing as mp
+    # Remove multiprocessing import
+    # import multiprocessing as mp
     import os
     import pickle
     from pathlib import Path
@@ -225,26 +226,17 @@ def _(cache_dir, combo_number, count, substanceDict):
                 for combination in combinations
             ]
 
-            # Prepare multiprocessing arguments - one batch per substance combination
+            # Prepare arguments for sequential processing
             mp_args = [
                 (substances, count) for substances in substanceSpectrumIds
             ]
 
-            # Use multiprocessing to parallelize data generation across CPU cores
-            num_processes = max(1, mp.cpu_count() - 1)
-            print(f'Using {num_processes} processes for data generation')
+            # Sequential data generation with progress bar
+            print(f'Generating data sequentially...')
 
             batch_data = []
-            if len(mp_args) > 1:
-                with mp.Pool(processes=num_processes) as pool:
-                    batch_data = list(
-                        tqdm.tqdm(
-                            pool.imap_unordered(create_batch_data, mp_args),
-                            total=len(mp_args),
-                        )
-                    )
-            else:
-                batch_data = [create_batch_data(mp_args[0])]
+            for arg in tqdm.tqdm(mp_args, desc="Generating batches"):
+                batch_data.append(create_batch_data(arg))
 
             print(f'Generated {len(batch_data)} batches')
 
@@ -340,7 +332,7 @@ def _(cache_dir, combo_number, count, substanceDict):
         createTrainingData,
         held_back_metabolites,
         intensities_shape,
-        mp,
+        # Remove mp from return tuple
         np,
         positions_shape,
         random,
@@ -484,6 +476,7 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
 def _(mp, np, plt, reference_spectra, spectra, substanceDict):
     ## Preprocessing
 
+    import multiprocessing as mp
     from scipy.signal import resample, hilbert
     from scipy.interpolate import interp1d
     from scipy.fft import ifft, irfft
@@ -1214,10 +1207,10 @@ def _(np, torch, tqdm, training_data):
                 device
             )
 
-        try:
-            model = torch.compile(model)
-        except Exception:
-            print('Compilation failed — using uncompiled model.')
+        # try:
+        #     model = torch.compile(model)
+        # except Exception:
+        #     print('Compilation failed — using uncompiled model.')
 
         # model.output_projection = nn.Sequential(
         #     nn.Linear(model.d_model, model.d_model // 2),
@@ -1356,7 +1349,7 @@ def _(np, torch, tqdm, training_data):
                     val_loss = float(val_loss)
 
                     # Simple early stopping logic
-                    if val_loss < best_val_loss:
+                    if val_loss < best_val_loss - min_delta:  
                         best_val_loss = val_loss
                         best_weights = copy.deepcopy(model.state_dict())
                         epochs_without_improvement = 0
@@ -1656,7 +1649,7 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
         return combined_score
 
     # Set model type here - change to 'mlp' to use MLP model
-    MODEL_TYPE = 'mlp'  # or 'mlp'
+    MODEL_TYPE = 'transformer'  # or 'mlp'
 
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
@@ -1704,5 +1697,5 @@ def _():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

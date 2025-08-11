@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -48,9 +48,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Use the SpinSystem to create the peak list, and get the peak list"""
-    )
+    mo.md(r"""Use the SpinSystem to create the peak list, and get the peak list""")
     return
 
 
@@ -562,7 +560,7 @@ app._unparsable_cell(
         return best_loss, best_weights, history, accuracy
 
     """,
-    name='_',
+    name="_"
 )
 
 
@@ -827,5 +825,5 @@ def _(mixed_peaks, np, plt):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
