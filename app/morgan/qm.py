@@ -54,8 +54,10 @@ import sparse  # noqa: E402
 
 import jax.numpy as jnp
 
-import nmrsim.bin  # noqa: E402
-from nmrsim.math import normalize_peaklist  # noqa: E402
+# import nmrsim.bin  # noqa: E402
+# from nmrsim.math import normalize_peaklist  # noqa: E402
+
+import morgan.bin
 
 CACHE = True  # saving of partial solutions is allowed
 SPARSE = True  # the sparse library is available
@@ -63,7 +65,7 @@ SPARSE = True  # the sparse library is available
 
 def _bin_path():
     """Return a Path to the nmrsim/bin directory."""
-    init_path_context = resources.path(nmrsim.bin, "__init__.py")
+    init_path_context = resources.path(morgan.bin, "__init__.py")
     with init_path_context as p:
         init_path = p
     bin_path = init_path.parent
@@ -535,3 +537,35 @@ def qm_spinsystem(*args, cache=CACHE, sparse=SPARSE, **kwargs):
     if not (cache and sparse):
         return secondorder_dense(*args, **kwargs)
     return secondorder_sparse(*args, **kwargs)
+
+def _normalize(intensities, n=1):
+    """
+    Scale a list of intensities so that they sum to the total number of
+    nuclei.
+
+    Parameters
+    ---------
+    intensities : [float...]
+        A list of intensities.
+    n : int (optional)
+        Number of nuclei (default = 1).
+    """
+    factor = n / sum(intensities)
+    intensities[:] = [factor * i for i in intensities]
+
+
+def normalize_peaklist(peaklist, n=1):
+    """
+    Normalize the intensities in a peaklist so that total intensity equals
+    value n (nominally the number of nuclei giving rise to the signal).
+
+    Parameters
+    ---------
+    peaklist : [(float, float)...]
+        a list of (frequency, intensity) tuples.
+    n : int or float (optional)
+        total intensity to normalize to (default = 1).
+    """
+    freq, int_ = [x for x, y in peaklist], [y for x, y in peaklist]
+    _normalize(int_, n)
+    return list(zip(freq, int_))
