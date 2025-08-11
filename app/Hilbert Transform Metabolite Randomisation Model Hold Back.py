@@ -200,7 +200,7 @@ def _(cache_dir, combo_number, count, substanceDict):
             # Generate all possible combinations of substances (4 to n substances)
             # This creates training data for different metabolite mixtures
             all_combinations = []
-            for r in range(4, len(substances) + 1):
+            for r in range(len(substances) // 3, len(substances) + 1):
                 for combo in itertools.combinations(substances, r):
                     combo_dict = {
                         substance: substanceDict[substance]
@@ -213,9 +213,8 @@ def _(cache_dir, combo_number, count, substanceDict):
             print(f'Generated {len(combinations)} random combinations')
 
             # Select random metabolite to hold back for testing
-            held_back_metabolites = [
-                random.choice(list(substanceDict.keys())) for i in range(2)
-            ]
+            held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
+
             print(
                 f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
             )
