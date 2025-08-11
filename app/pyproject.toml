@@ -8,6 +8,7 @@ dependencies = [
     "blue>=0.9.1",
     "chempy>=0.9.0",
     "jax[cuda]>=0.6.2",
+    "jaxlib>=0.6.2",
     "marimo>=0.14.13",
     "matplotlib>=3.10.3",
     "numba>=0.61.2",
@@ -19,26 +20,17 @@ dependencies = [
     "scipy>=1.15.3",
     "setuptools>=80.9.0",
     "sparse>=0.17.0",
-    "tensorboard>=2.20.0",
-    "torch>=2.7.1",
-    "torchaudio",
-    "torchvision",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
     "tqdm>=4.67.1",
     "wheel>=0.45.1",
 ]
 
-[[tool.uv.index]]
-url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
-package = "torch"
-explicit = true
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = {index = "pytorch" }
 
 [[tool.uv.index]]
-url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
-package = "torchvision"
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
-
-[[tool.uv.index]]
-url = "https://download.pytorch.org/whl/nightly/rocm6.0/"
-package = "torchaudio"
-explicit = true
-
