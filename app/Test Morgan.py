@@ -21,7 +21,7 @@ def _():
 
     # config.update('jax_platform_name', 'rocm')
     print(jax.devices())
-    return createTrainingData, pstats
+    return cProfile, createTrainingData, pstats
 
 
 @app.cell
@@ -55,19 +55,26 @@ def _():
 
 
 @app.cell
-def _():
+def _(cProfile, createTrainingData, substanceSpectrumIds):
     sampleNumber = 100
 
-    # cProfile.run(
-    #     'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
-    #     'morgan/output.prof',
-    # )
+    _ = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1) #Prebuild before everything
 
-    return
+    cProfile.run(
+        'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
+        'morgan/output.prof',
+    )
+
+    dumbvar = True
+
+    return (dumbvar,)
 
 
 @app.cell
-def _(pstats):
+def _(dumbvar, pstats):
+    if dumbvar:
+        pass
+
     with open('morgan/results.txt', 'w') as f:
         stats = pstats.Stats('morgan/output.prof', stream=f)
         stats.sort_stats('tottime')

@@ -332,7 +332,6 @@ def _(cache_dir, combo_number, count, substanceDict):
         createTrainingData,
         held_back_metabolites,
         intensities_shape,
-        # Remove mp from return tuple
         np,
         positions_shape,
         random,
@@ -473,7 +472,7 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
 
 
 @app.cell
-def _(mp, np, plt, reference_spectra, spectra, substanceDict):
+def _(np, plt, reference_spectra, spectra, substanceDict):
     ## Preprocessing
 
     import multiprocessing as mp
@@ -690,10 +689,9 @@ def _(graph_count, plt, preprocessed_spectra, spectra):
     for graphcounter2 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter2)
         # Original spectrum
-        plt.plot(
-            spectra[graphcounter2]['positions'],
-            spectra[graphcounter2]['intensities'][0],
-        )
+        # plt.plot(
+        #     spectra[graphcounter2]['intensities'][0],
+        # )
         # Preprocessed spectrum (downsampled + baseline corrected)
         plt.plot(
             preprocessed_spectra[graphcounter2]['intensities'],
@@ -1603,50 +1601,72 @@ def _(cache_dir, cache_key, tqdm, train_model, training_data, trials):
 
     def objective(training_data, trial, model_type='transformer'):
         """
-        Optuna objective function for hyperparameter optimization.
-
-        Optimizes the new combined loss: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
-
-        Args:
-            training_data: Training/validation/test splits
-            trial: Optuna trial object for hyperparameter suggestions
-            model_type: 'transformer' or 'mlp'
-
-        Returns:
-            Combined score for optimization (lower is better, so we negate it)
+        Optuna objective function for hyperparameter optimization with GPU memory handling.
         """
-        (
-            val_accuracy,
-            val_conc_r2,
-            val_conc_mae,
-            val_conc_rmse,
-            test_accuracy,
-            test_conc_r2,
-            test_conc_mae,
-            test_conc_rmse,
-        ) = train_model(training_data, trial, model_type)
+        try:
+            (
+                val_accuracy,
+                val_conc_r2,
+                val_conc_mae,
+                val_conc_rmse,
+                test_accuracy,
+                test_conc_r2,
+                test_conc_mae,
+                test_conc_rmse,
+            ) = train_model(training_data, trial, model_type)
 
-        # Store all metrics in trial for later analysis
-        trial.set_user_attr('val_accuracy', val_accuracy)
-        trial.set_user_attr('val_conc_r2', val_conc_r2)
-        trial.set_user_attr('val_conc_mae', val_conc_mae)
-        trial.set_user_attr('val_conc_rmse', val_conc_rmse)
-        trial.set_user_attr('test_accuracy', test_accuracy)
-        trial.set_user_attr('test_conc_r2', test_conc_r2)
-        trial.set_user_attr('test_conc_mae', test_conc_mae)
-        trial.set_user_attr('test_conc_rmse', test_conc_rmse)
-        trial.set_user_attr('model_type', model_type)  # Store model type
+            # Store all metrics in trial for later analysis
+            trial.set_user_attr('val_accuracy', val_accuracy)
+            trial.set_user_attr('val_conc_r2', val_conc_r2)
+            trial.set_user_attr('val_conc_mae', val_conc_mae)
+            trial.set_user_attr('val_conc_rmse', val_conc_rmse)
+            trial.set_user_attr('test_accuracy', test_accuracy)
+            trial.set_user_attr('test_conc_r2', test_conc_r2)
+            trial.set_user_attr('test_conc_mae', test_conc_mae)
+            trial.set_user_attr('test_conc_rmse', test_conc_rmse)
+            trial.set_user_attr('model_type', model_type)
 
-        # Calculate classification error (1 - accuracy)
-        val_classification_error = 1.0 - val_accuracy
+            # Calculate classification error (1 - accuracy)
+            val_classification_error = 1.0 - val_accuracy
 
-        # Use the new optimization formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
-        combined_score = 0.5 * val_classification_error + 0.5 * (
-            0.5 * val_conc_mae + 0.5 * val_conc_rmse
-        )
+            # Use the new optimization formula
+            combined_score = 0.5 * val_classification_error + 0.5 * (
+                0.5 * val_conc_mae + 0.5 * val_conc_rmse
+            )
 
-        # Return negative score since Optuna maximizes but we want to minimize the error
-        return combined_score
+            return combined_score
+
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+            # Clear GPU cache immediately
+            torch.cuda.empty_cache()
+            
+            # Check if it's specifically a memory error
+            if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+                # Log this as a memory failure
+                trial.set_user_attr('memory_error', True)
+                trial.set_user_attr('error_message', str(e))
+                
+                # Return a penalty score that's worse than any reasonable performance
+                # but not so bad that it completely dominates the search space
+                penalty_score = 2.0  # Worse than worst possible (1.0 classification error + 1.0 regression error)
+                
+                return penalty_score
+            else:
+                # Re-raise other RuntimeErrors as they might be actual bugs
+                raise e
+        
+        except Exception as e:
+            # Clear GPU cache for any other errors too
+            torch.cuda.empty_cache()
+            
+            # Log the error for debugging
+            trial.set_user_attr('general_error', True)
+            trial.set_user_attr('error_message', str(e))
+            
+            # Return a different penalty for non-memory errors
+            penalty_score = 1.5
+            
+            return penalty_score
 
     # Set model type here - change to 'mlp' to use MLP model
     MODEL_TYPE = 'transformer'  # or 'mlp'
