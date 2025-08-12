@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = '0.14.13'
+__generated_with = '0.14.16'
 app = marimo.App(width='medium')
 
 
@@ -18,7 +18,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo, stocks, volumes):
+def _(mo, output, stocks):
     mo.md(
         rf"""
     ## Stocks:
@@ -26,7 +26,7 @@ def _(mo, stocks, volumes):
     - Acid concentration: {round(stocks['acid']['molarity'], 5)}, target = 0.001
 
     ## Total volume eppendorfs:
-    {volumes}
+    {output}
     """
     )
     return
@@ -37,7 +37,6 @@ def _():
     import pandas as pd
 
     out_dir = 'experimental'
-
     acid_molecular_weight = 192.12   # g/mol
     base_molecular_weight = 258.07   # g/mol
     dss_molecular_weight = 224.36   # g/mol
@@ -49,12 +48,21 @@ def _():
         round((x - y) / 1000, 6)
         for x, y in zip(imported['acid'], imported['weight'])
     ]
+
+    acid_vol[0] = 0.0006
+    acid_vol[-1] = 0.0
+
     base_vol = [
         round((x - y) / 1000, 6)
         for x, y in zip(imported['base'], imported['acid'])
     ]
 
+    base_vol[0] = 0.0
+    base_vol[-1] = 0.0006
+
     total_vol = [round(x + y, 6) for x, y in zip(acid_vol, base_vol)]
+
+    phs = [x for x in imported['ph']]
 
     stocks = {
         'base': {
@@ -83,13 +91,23 @@ def _():
             / (stocks[stock_type]['volume'] / 1000)  # L
         )
 
-    volumes = '\n\n'.join([f'{round(x * 1000, 2)} ml' for x in total_vol])
+    output = '\n\n'.join(
+        [
+            f"""Total Volume: {round(x * 1000, 2)} ml,
+            pH: {y},
+            Acid ratio={round(((z*1000)/0.6), 2)},
+            BaseRatio = {round(((i*1000)/0.6), 2)}"""
+            for idx, (x, y, z, i) in enumerate(
+                zip(total_vol, phs, acid_vol, base_vol)
+            )
+        ]
+    )
 
     print(acid_vol[4] * 1000)
     print(base_vol[4] * 1000)
     print(total_vol[4] * 1000)
 
-    return stocks, volumes
+    return output, stocks
 
 
 if __name__ == '__main__':
