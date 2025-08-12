@@ -44,12 +44,13 @@ def _():
     # global variables
 
     count = 100
-    trials = 10
+    trials = 1000
     combo_number = 30
-    notebook_name = 'randomisation_hold_back_fid'
+    notebook_name = 'randomisation_hold_back'
     MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
     downsample = None  # Target resolution for ML model
-    cache_dir = f'./data_cache/{notebook_name}-{downsample}-{MODEL_TYPE}'
+    reverse = False
+    cache_dir = f'./data_cache/{notebook_name}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -73,6 +74,7 @@ def _():
         combo_number,
         count,
         downsample,
+        reverse,
         substanceDict,
         trials,
     )
@@ -477,7 +479,7 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
 
 
 @app.cell
-def _(downsample, np, plt, reference_spectra, spectra, substanceDict):
+def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
     ## Preprocessing
 
     import multiprocessing as mp
@@ -505,6 +507,9 @@ def _(downsample, np, plt, reference_spectra, spectra, substanceDict):
             reverse: Boolean to reverse fourier transform data or not
         """
 
+        new_positions = positions #Default
+        new_intensities = intensities #Default, in the case of no transformation
+    
         if reverse == True:
             fid = ifft(hilbert(intensities))
             fid[0] = 0
@@ -586,6 +591,7 @@ def _(downsample, np, plt, reference_spectra, spectra, substanceDict):
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
             downsample=downsample,  #
+            reverse=reverse,
         )
 
     def process_single_reference(spectrum_key):
@@ -594,6 +600,7 @@ def _(downsample, np, plt, reference_spectra, spectra, substanceDict):
             positions=spectra[0]['positions'],
             intensities=reference_spectra[spectrum_key],
             downsample=downsample,
+            reverse=reverse,
         )
         return (spectrum_key, pos_int[1])
 
