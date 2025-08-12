@@ -47,7 +47,9 @@ def _():
     trials = 10
     combo_number = 30
     notebook_name = 'randomisation_hold_back_fid'
-    cache_dir = f'./data_cache/{notebook_name}'
+    MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
+    downsample = None  # Target resolution for ML model
+    cache_dir = f'./data_cache/{notebook_name}-{downsample}-{MODEL_TYPE}'
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -65,7 +67,15 @@ def _():
         'L-Valine': ['SP:3490'],
         'Glycine': ['SP:3682'],
     }
-    return cache_dir, combo_number, count, substanceDict, trials
+    return (
+        MODEL_TYPE,
+        cache_dir,
+        combo_number,
+        count,
+        downsample,
+        substanceDict,
+        trials,
+    )
 
 
 @app.cell(hide_code=True)
@@ -91,8 +101,6 @@ def _(cache_dir, combo_number, count, substanceDict):
     import numpy as np
     import tqdm
     import itertools
-    # Remove multiprocessing import
-    # import multiprocessing as mp
     import os
     import pickle
     from pathlib import Path
@@ -324,7 +332,6 @@ def _(cache_dir, combo_number, count, substanceDict):
     components_shape = spectra[0]['components'].shape
 
     return (
-        cache_key,
         combinations,
         components_shape,
         createTrainingData,
@@ -470,7 +477,7 @@ def _(mo, preprocessedfigure, preprocessedreferencefigure):
 
 
 @app.cell
-def _(np, plt, reference_spectra, spectra, substanceDict):
+def _(downsample, np, plt, reference_spectra, spectra, substanceDict):
     ## Preprocessing
 
     import multiprocessing as mp
@@ -570,7 +577,6 @@ def _(np, plt, reference_spectra, spectra, substanceDict):
     # Preprocessing configuration
     ranges = [[-100, 100]]  # Full spectral range in ppm
     baseline_distortion = True  # Add realistic experimental artifacts
-    downsample = int(2**11)  # Target resolution for ML model
 
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
@@ -587,7 +593,7 @@ def _(np, plt, reference_spectra, spectra, substanceDict):
         pos_int = preprocess_peaks(
             positions=spectra[0]['positions'],
             intensities=reference_spectra[spectrum_key],
-            downsample=2048,
+            downsample=downsample,
         )
         return (spectrum_key, pos_int[1])
 
@@ -709,13 +715,23 @@ def _(
     substanceDict,
     torch,
 ):
+    from torch.utils.data import Dataset, DataLoader
     from sklearn.model_selection import train_test_split
 
-    # Configure device for GPU acceleration if available
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Using device: {device}')
-    if torch.cuda.is_available():
-        print(f'GPU: {torch.cuda.get_device_name(0)}')
+    class NMRDataset(Dataset):
+        """Custom dataset for NMR spectral data that loads batches on demand"""
+
+        def __init__(self, data, labels):
+            # Keep data on CPU until needed
+            self.data = data.cpu() if data.is_cuda else data
+            self.labels = labels.cpu() if data.is_cuda else labels
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, idx):
+            # Return individual samples - DataLoader will handle batching
+            return self.data[idx], self.labels[idx]
 
     def get_training_data_mlp(
         spectra,
@@ -723,12 +739,11 @@ def _(
         held_back_metabolites,
         train_ratio=0.7,
         val_ratio=0.15,
-        test_ratio=0.15,  # Add explicit test ratio
+        test_ratio=0.15,
         axes=0,
     ):
         """
-        Improved data splitting to prevent data leakage and overfitting.
-        Now includes test data both with and without the held-back metabolite.
+        Improved data splitting with CPU-based datasets for memory efficiency.
         """
         data = []
         labels = []
@@ -744,32 +759,23 @@ def _(
         )
 
         # Separate spectra based on held-back metabolite presence
-        train_spectra = (
-            []
-        )  # Spectra without held-back metabolite for train/val
+        train_spectra = []
         val_with_holdback = []
         val_without_holdback = []
-        test_with_holdback = (
-            []
-        )  # Spectra with held-back metabolite for testing
-        test_without_holdback = (
-            []
-        )  # Spectra without held-back metabolite for testing
+        test_with_holdback = []
+        test_without_holdback = []
         data_train = []
         labels_train = []
 
         for spectrum in spectra:
             if held_back_key_test in spectrum['ratios']:
-                # This spectrum contains the held-back metabolite - use for testing
                 test_with_holdback.append(spectrum)
             elif held_back_key_validation in spectrum['ratios']:
                 val_with_holdback.append(spectrum)
             else:
-                # This spectrum doesn't contain held-back metabolite
                 train_spectra.append(spectrum)
 
         # Split the non-holdback spectra into train/val and additional test data
-        # Reserve some of the non-holdback data for testing to evaluate generalization
         train_size = len(train_spectra)
         test_size = int(train_size * test_ratio)
         val_size = int(train_size * val_ratio)
@@ -792,7 +798,7 @@ def _(
                     if substance not in [
                         held_back_key_test,
                         held_back_key_validation,
-                    ]:  # Skip held-back substance in training
+                    ]:
                         temp_data = np.concatenate(
                             [
                                 spectrum['intensities'],
@@ -832,7 +838,6 @@ def _(
             labels_val.append(temp_label)
 
         # Create test data from spectra WITHOUT held-back metabolite
-        # Test the model's ability to correctly predict absence
         for spectrum in test_without_holdback:
             temp_data = np.concatenate(
                 [
@@ -840,7 +845,6 @@ def _(
                     reference_spectra[held_back_key_test],
                 ]
             )
-            # The held-back metabolite should be absent (label = [0, 0])
             temp_label = [0, 0]
             data_test.append(temp_data)
             labels_test.append(temp_label)
@@ -852,7 +856,6 @@ def _(
                     reference_spectra[held_back_key_validation],
                 ]
             )
-            # The held-back metabolite should be absent (label = [0, 0])
             temp_label = [0, 0]
             data_val.append(temp_data)
             labels_val.append(temp_label)
@@ -873,33 +876,23 @@ def _(
         )
         print(f'Total validation samples: {len(data_val)}')
 
-        # Split training data into train/validation
-        # data = np.array(data)
-        # data_train, data_val, labels_train, labels_val = train_test_split(
-        #     data,
-        #     labels,
-        #     train_size=train_ratio / (train_ratio + val_ratio),
-        #     shuffle=True,
-        #     random_state=42,
-        # )
+        # Convert to tensors but keep on CPU
+        data_train = torch.tensor(data_train, dtype=torch.float32)
+        labels_train = torch.tensor(labels_train, dtype=torch.float32)
+        data_val = torch.tensor(data_val, dtype=torch.float32)
+        labels_val = torch.tensor(labels_val, dtype=torch.float32)
+        data_test = torch.tensor(data_test, dtype=torch.float32)
+        labels_test = torch.tensor(labels_test, dtype=torch.float32)
 
-        # Convert to tensors
-        data_train = torch.tensor(data_train, dtype=torch.float32).to(device)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32).to(
-            device
-        )
-        data_val = torch.tensor(data_val, dtype=torch.float32).to(device)
-        labels_val = torch.tensor(labels_val, dtype=torch.float32).to(device)
-        data_test = torch.tensor(data_test, dtype=torch.float32).to(device)
-        labels_test = torch.tensor(labels_test, dtype=torch.float32).to(device)
+        # Create datasets (data stays on CPU)
+        train_dataset = NMRDataset(data_train, labels_train)
+        val_dataset = NMRDataset(data_val, labels_val)
+        test_dataset = NMRDataset(data_test, labels_test)
 
         return {
-            'data_train': data_train,
-            'data_val': data_val,
-            'data_test': data_test,
-            'labels_train': labels_train,
-            'labels_val': labels_val,
-            'labels_test': labels_test,
+            'train_dataset': train_dataset,
+            'val_dataset': val_dataset,
+            'test_dataset': test_dataset,
         }
 
     training_data = get_training_data_mlp(
@@ -908,24 +901,20 @@ def _(
         held_back_metabolites=held_back_metabolites,
     )
 
-    print([training_data[x].shape for x in training_data])
-    print(len(training_data['data_train'][0]))
+    print([len(training_data[x]) for x in training_data])
+    print(len(training_data['train_dataset'][0][0]))
 
     sample_ratio = preprocessed_spectra[0]['ratios']
-    data_length = len(training_data['data_train'][0])
+    data_length = len(training_data['train_dataset'][0][0])
 
-    return data_length, device, sample_ratio, training_data
+    return DataLoader, data_length, sample_ratio, training_data
 
 
 @app.cell(hide_code=True)
-def _(data_length, device, mo, sample_ratio, training_data):
+def _(data_length, mo, sample_ratio, training_data):
     mo.md(
         rf"""
     ## Training Data Preparation
-
-    **Device Information:**
-
-    - **Using Device:** {device}
 
     **Sample Information:**
 
@@ -942,7 +931,7 @@ def _(data_length, device, mo, sample_ratio, training_data):
 
 
 @app.cell
-def _(np, torch, tqdm, training_data):
+def _(DataLoader, np, torch, tqdm):
     import copy
     import torch.optim as optim
     import torch.nn as nn
@@ -1252,67 +1241,67 @@ def _(np, torch, tqdm, training_data):
         return total_loss, classification_loss, concentration_mae, concentration_rmse
 
     def train_model(training_data, trial, model_type='mlp'):
-        from torch.utils.data import TensorDataset, DataLoader
-
         """
-        Train a multi-task neural network for metabolite presence detection and concentration estimation.
-
-        Architecture: Multi-layer perceptron with progressively smaller layers
-        Tasks:
-        1. Binary classification for metabolite presence
-        2. Regression for concentration estimation
-
-        Args:
-            training_data: Dictionary with train/val/test splits
-            trial: Optuna trial object for hyperparameter optimization
-
-        Returns:
-            Tuple of validation and test metrics
+        Train a multi-task neural network using DataLoaders for memory efficiency.
         """
-        device = training_data['data_train'].device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         torch.cuda.empty_cache()
 
-        # Remove loss_weight from hyperparameter search since we're using fixed formula
-        max_epochs = 200  # Set a reasonable maximum
+        max_epochs = 200
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
-        # Remove loss_weight parameter - no longer needed
-        input_length = len(training_data['data_train'][0])
+
+        # Get input size from first sample
+        sample_data, _ = training_data['train_dataset'][0]
+        input_length = len(sample_data)
 
         if model_type == 'transformer':
             model = ImprovedTransformerRegressor(
                 input_size=input_length, trial=trial
             ).to(device)
         elif model_type == 'mlp':
-            model = MLPRegressor(input_size=input_length, trial=trial).to(
-                device
-            )
+            model = MLPRegressor(input_size=input_length, trial=trial).to(device)
         elif model_type == 'ensemble':
             model = HybridEnsembleRegressor(input_size=input_length, trial=trial).to(device)
 
-        # Dummy forward and backward pass to catch memory issues early
+        # Create DataLoaders with pin_memory for faster GPU transfer
+        train_loader = DataLoader(
+            training_data['train_dataset'], 
+            batch_size=batch_size, 
+            shuffle=True,
+            pin_memory=True,
+            num_workers=0  # Set to 0 to avoid multiprocessing issues
+        )
+        val_loader = DataLoader(
+            training_data['val_dataset'], 
+            batch_size=batch_size, 
+            shuffle=False,
+            pin_memory=True,
+            num_workers=0
+        )
+        test_loader = DataLoader(
+            training_data['test_dataset'], 
+            batch_size=batch_size, 
+            shuffle=False,
+            pin_memory=True,
+            num_workers=0
+        )
+
+        # Test model with a small batch to catch memory issues early
         try:
-            dummy_input = torch.randn(batch_size, input_length, device=device)
-            dummy_target = torch.randn(batch_size, 2, device=device)
+            sample_batch = next(iter(train_loader))
+            dummy_data, dummy_labels = sample_batch
+            dummy_data = dummy_data.to(device, non_blocking=True)
+            dummy_labels = dummy_labels.to(device, non_blocking=True)
 
-            # Forward pass
-            dummy_output = model(dummy_input)
-
-            # Compute dummy loss
-            dummy_loss = torch.nn.MSELoss()(dummy_output, dummy_target)
-
-            # Backward pass to allocate gradient memory
+            dummy_output = model(dummy_data)
+            dummy_loss = torch.nn.MSELoss()(dummy_output, dummy_labels)
             dummy_loss.backward()
-
-            # Clear gradients
             model.zero_grad()
 
-            # Clean up dummy tensors
-            del dummy_input, dummy_target, dummy_output, dummy_loss
+            del dummy_data, dummy_labels, dummy_output, dummy_loss
             torch.cuda.empty_cache()
-
         except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
-            # Clean up and re-raise to trigger graceful failure handling
             del model
             torch.cuda.empty_cache()
             raise e
@@ -1322,100 +1311,12 @@ def _(np, torch, tqdm, training_data):
         except Exception:
             print('Compilation failed — using uncompiled model.')
 
-        # model.output_projection = nn.Sequential(
-        #     nn.Linear(model.d_model, model.d_model // 2),
-        #     nn.ReLU(),
-        #     nn.Dropout(model.dropout),
-        #     nn.Linear(model.d_model // 2, 2)  # 2 outputs: presence logit + concentration
-        # ).to(device)
-
-        # Extract data tensors (already on GPU)
-        data_train = training_data['data_train']
-        data_val = training_data['data_val']
-        data_test = training_data['data_test']
-        labels_train = training_data['labels_train']
-        labels_val = training_data['labels_val']
-        labels_test = training_data['labels_test']
-
-        batch_start = torch.arange(0, len(data_train), batch_size)
-
-        # Multi-task loss functions
-        bce_loss = nn.BCEWithLogitsLoss()  # Binary cross-entropy for presence
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
-        def compute_loss(predictions, targets):
-            """
-            Compute weighted multi-task loss combining classification and regression.
-
-            Returns:
-                total_loss: Combined weighted loss using classification error + concentration MAE + RMSE
-                classification_loss: BCE loss for presence prediction
-                concentration_mae: MAE loss for concentration
-                concentration_rmse: RMSE loss for concentration
-            """
-            presence_logits = predictions[
-                :, 0
-            ]    # Raw logits for binary classification
-            concentration_pred = predictions[:, 1]  # Concentration predictions
-
-            presence_true = targets[:, 0]      # Ground truth presence (0 or 1)
-            concentration_true = targets[:, 1]   # Ground truth concentration
-
-            # Classification loss for presence detection
-            classification_loss = bce_loss(presence_logits, presence_true)
-
-            # Convert logits to probabilities for error calculation
-            presence_pred = torch.sigmoid(presence_logits)
-            presence_binary = (presence_pred > 0.5).float()
-
-            # Use BCE loss directly instead of manual error calculation to maintain gradients
-            classification_error = (
-                classification_loss  # This maintains gradients
-            )
-
-            # Regression losses for concentration (only when substance is present)
-            present_mask = presence_true == 1
-            if present_mask.sum() > 0:
-                concentration_mae = torch.mean(
-                    torch.abs(
-                        concentration_pred[present_mask]
-                        - concentration_true[present_mask]
-                    )
-                )
-                concentration_rmse = torch.sqrt(
-                    torch.mean(
-                        (
-                            concentration_pred[present_mask]
-                            - concentration_true[present_mask]
-                        )
-                        ** 2
-                    )
-                )
-            else:
-                # Ensure these maintain gradients by using tensor operations on predictions
-                concentration_mae = (
-                    torch.mean(torch.abs(concentration_pred)) * 0.0
-                )  # Maintains gradient
-                concentration_rmse = (
-                    torch.mean(concentration_pred) * 0.0
-                )  # Maintains gradient
-
-            # New combined loss formula: classification error * 0.5 + (0.5*MAE + 0.5*RMSE)
-            total_loss = 0.5 * classification_error + 0.5 * (
-                0.5 * concentration_mae + 0.5 * concentration_rmse
-            )
-
-            return (
-                total_loss,
-                classification_loss,
-                concentration_mae,
-                concentration_rmse,
-            )
-
-        # Early stopping parameters - simplified and more reliable
-        early_stop_patience = 15  # Number of epochs without improvement
-        min_delta = 1e-6  # Minimum improvement to qualify as better
-        validation_interval = 5  # Validate every 5 epochs instead of 10
+        # Early stopping parameters
+        early_stop_patience = 15
+        min_delta = 1e-6
+        validation_interval = 5
 
         best_val_loss = np.inf
         epochs_without_improvement = 0
@@ -1423,22 +1324,20 @@ def _(np, torch, tqdm, training_data):
 
         for epoch in range(max_epochs):
             model.train()
-            with tqdm.tqdm(
-                batch_start, unit='batch', mininterval=0, disable=True
-            ) as bar:
+
+            # Training loop with DataLoader
+            with tqdm.tqdm(train_loader, unit='batch', mininterval=0, disable=True) as bar:
                 bar.set_description(f'Epoch {epoch}')
-                for start in bar:
-                    # Mini-batch training
-                    data_batch = data_train[start : start + batch_size]
-                    labels_batch = labels_train[start : start + batch_size]
+                for data_batch, labels_batch in bar:
+                    # Move batch to GPU only when needed
+                    data_batch = data_batch.to(device, non_blocking=True)
+                    labels_batch = labels_batch.to(device, non_blocking=True)
 
                     predictions = model(data_batch)
-
                     total_loss, class_loss, conc_mae, conc_rmse = improved_compute_loss(
                         predictions, labels_batch, epoch, max_epochs
                     )
 
-                    # Backpropagation
                     optimizer.zero_grad()
                     total_loss.backward()
                     optimizer.step()
@@ -1450,159 +1349,99 @@ def _(np, torch, tqdm, training_data):
                         conc_rmse=float(conc_rmse),
                     )
 
-            # Validate more frequently for better early stopping
+            # Validation
             if epoch % validation_interval == 0 or epoch == max_epochs - 1:
                 model.eval()
+                val_losses = []
+
                 with torch.no_grad():
-                    predictions = model(data_val)
-                    val_loss, _, _, _ = improved_compute_loss(
-                        predictions, labels_val, epoch, max_epochs
-                    )  # Fixed: expecting 4 values
-                    val_loss = float(val_loss)
+                    for data_batch, labels_batch in val_loader:
+                        data_batch = data_batch.to(device, non_blocking=True)
+                        labels_batch = labels_batch.to(device, non_blocking=True)
 
-                    # Simple early stopping logic
-                    if val_loss < best_val_loss - min_delta:  
-                        best_val_loss = val_loss
-                        best_weights = copy.deepcopy(model.state_dict())
-                        epochs_without_improvement = 0
-                    else:
-                        epochs_without_improvement += validation_interval
-
-                    # Early stopping check
-                    if epochs_without_improvement >= early_stop_patience:
-                        print(
-                            f'Early stopping at epoch {epoch}: '
-                            f'No improvement for {epochs_without_improvement} epochs'
+                        predictions = model(data_batch)
+                        val_loss, _, _, _ = improved_compute_loss(
+                            predictions, labels_batch, epoch, max_epochs
                         )
-                        break
+                        val_losses.append(float(val_loss))
 
-        # Load best weights for final evaluation
+                avg_val_loss = np.mean(val_losses)
+
+                if avg_val_loss < best_val_loss - min_delta:
+                    best_val_loss = avg_val_loss
+                    best_weights = copy.deepcopy(model.state_dict())
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += validation_interval
+
+                if epochs_without_improvement >= early_stop_patience:
+                    print(f'Early stopping at epoch {epoch}')
+                    break
+
+        # Load best weights
         model.load_state_dict(best_weights)
         model.eval()
-        with torch.no_grad():
-            # Validation metrics computation
-            val_pred = model(data_val)
-            val_presence_logits = val_pred[:, 0]
-            val_concentration_pred = val_pred[:, 1]
-            val_presence_pred = torch.sigmoid(
-                val_presence_logits
-            )  # Convert to probabilities
 
-            val_presence_true = labels_val[:, 0]
-            val_concentration_true = labels_val[:, 1]
+        # Compute final metrics using DataLoaders
+        def compute_metrics(data_loader):
+            all_predictions = []
+            all_targets = []
 
-            # Classification metrics (presence detection)
-            val_presence_binary = (val_presence_pred > 0.5).float()
-            val_accuracy = torch.mean(
-                (val_presence_binary == val_presence_true).float()
-            )
+            with torch.no_grad():
+                for data_batch, labels_batch in data_loader:
+                    data_batch = data_batch.to(device, non_blocking=True)
+                    labels_batch = labels_batch.to(device, non_blocking=True)
 
-            # Regression metrics (concentration estimation, only for present substances)
-            present_mask = val_presence_true == 1
+                    predictions = model(data_batch)
+                    all_predictions.append(predictions)
+                    all_targets.append(labels_batch)
+
+            # Concatenate all batches
+            all_predictions = torch.cat(all_predictions, dim=0)
+            all_targets = torch.cat(all_targets, dim=0)
+
+            presence_logits = all_predictions[:, 0]
+            concentration_pred = all_predictions[:, 1]
+            presence_pred = torch.sigmoid(presence_logits)
+
+            presence_true = all_targets[:, 0]
+            concentration_true = all_targets[:, 1]
+
+            # Classification metrics
+            presence_binary = (presence_pred > 0.5).float()
+            accuracy = torch.mean((presence_binary == presence_true).float())
+
+            # Regression metrics
+            present_mask = presence_true == 1
             if present_mask.sum() > 0:
-                val_conc_mae = torch.mean(
-                    torch.abs(
-                        val_concentration_pred[present_mask]
-                        - val_concentration_true[present_mask]
-                    )
+                conc_mae = torch.mean(
+                    torch.abs(concentration_pred[present_mask] - concentration_true[present_mask])
                 )
-                val_conc_rmse = torch.sqrt(
-                    torch.mean(
-                        (
-                            val_concentration_pred[present_mask]
-                            - val_concentration_true[present_mask]
-                        )
-                        ** 2
-                    )
+                conc_rmse = torch.sqrt(
+                    torch.mean((concentration_pred[present_mask] - concentration_true[present_mask]) ** 2)
                 )
-                # R-squared coefficient of determination
-                ss_res_val = torch.sum(
-                    (
-                        val_concentration_true[present_mask]
-                        - val_concentration_pred[present_mask]
-                    )
-                    ** 2
-                )
-                ss_tot_val = torch.sum(
-                    (
-                        val_concentration_true[present_mask]
-                        - torch.mean(val_concentration_true[present_mask])
-                    )
-                    ** 2
-                )
-                val_conc_r2 = 1 - (ss_res_val / ss_tot_val)
+                ss_res = torch.sum((concentration_true[present_mask] - concentration_pred[present_mask]) ** 2)
+                ss_tot = torch.sum((concentration_true[present_mask] - torch.mean(concentration_true[present_mask])) ** 2)
+                conc_r2 = 1 - (ss_res / ss_tot)
             else:
-                val_conc_mae = torch.tensor(0.0)
-                val_conc_rmse = torch.tensor(0.0)
-                val_conc_r2 = torch.tensor(0.0)
+                conc_mae = torch.tensor(0.0)
+                conc_rmse = torch.tensor(0.0)
+                conc_r2 = torch.tensor(0.0)
 
-            # Test metrics computation (same structure as validation)
-            test_pred = model(data_test)
-            test_presence_logits = test_pred[:, 0]
-            test_concentration_pred = test_pred[:, 1]
-            test_presence_pred = torch.sigmoid(test_presence_logits)
+            return float(accuracy), float(conc_r2), float(conc_mae), float(conc_rmse)
 
-            test_presence_true = labels_test[:, 0]
-            test_concentration_true = labels_test[:, 1]
+        # Compute validation and test metrics
+        val_accuracy, val_conc_r2, val_conc_mae, val_conc_rmse = compute_metrics(val_loader)
+        test_accuracy, test_conc_r2, test_conc_mae, test_conc_rmse = compute_metrics(test_loader)
 
-            test_presence_binary = (test_presence_pred > 0.5).float()
-            test_accuracy = torch.mean(
-                (test_presence_binary == test_presence_true).float()
-            )
-
-            test_present_mask = test_presence_true == 1
-            if test_present_mask.sum() > 0:
-                test_conc_mae = torch.mean(
-                    torch.abs(
-                        test_concentration_pred[test_present_mask]
-                        - test_concentration_true[test_present_mask]
-                    )
-                )
-                test_conc_rmse = torch.sqrt(
-                    torch.mean(
-                        (
-                            test_concentration_pred[test_present_mask]
-                            - test_concentration_true[test_present_mask]
-                        )
-                        ** 2
-                    )
-                )
-                ss_res_test = torch.sum(
-                    (
-                        test_concentration_true[test_present_mask]
-                        - test_concentration_pred[test_present_mask]
-                    )
-                    ** 2
-                )
-                ss_tot_test = torch.sum(
-                    (
-                        test_concentration_true[test_present_mask]
-                        - torch.mean(
-                            test_concentration_true[test_present_mask]
-                        )
-                    )
-                    ** 2
-                )
-                test_conc_r2 = 1 - (ss_res_test / ss_tot_test)
-            else:
-                test_conc_mae = torch.tensor(0.0)
-                test_conc_rmse = torch.tensor(0.0)
-                test_conc_r2 = torch.tensor(0.0)
-
-        # Return validation metrics for optimization and test metrics for final evaluation
         return (
-            float(val_accuracy),  # Primary metric for Optuna optimization
-            float(val_conc_r2),
-            float(val_conc_mae),
-            float(val_conc_rmse),
-            float(test_accuracy),  # Final test performance
-            float(test_conc_r2),
-            float(test_conc_mae),
-            float(test_conc_rmse),
+            val_accuracy, val_conc_r2, val_conc_mae, val_conc_rmse,
+            test_accuracy, test_conc_r2, test_conc_mae, test_conc_rmse,
         )
 
     # Store device info for display
-    device_info = training_data['data_train'].device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device_info = device
     gpu_name = ''
     if torch.cuda.is_available():
         gpu_name = f' ({torch.cuda.get_device_name(0)})'
@@ -1628,7 +1467,7 @@ def _(device_info, gpu_name, mo):
 
 
 @app.cell
-def _(cache_dir, cache_key, torch, tqdm, train_model, training_data, trials):
+def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
     import optuna
     from functools import partial
 
@@ -1701,14 +1540,11 @@ def _(cache_dir, cache_key, torch, tqdm, train_model, training_data, trials):
 
             return penalty_score
 
-    # Set model type here - change to 'mlp' to use MLP model
-    MODEL_TYPE = 'ensemble'  # or 'mlp'
-
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
         direction='minimize',  # Maximize the negative combined error (minimize error)
-        study_name=f'{cache_key}-{MODEL_TYPE}',  # Use cache key for unique study identification
-        storage=f'sqlite:///{cache_dir}/{cache_key}-new.db',  # Use cache key for database filename
+        study_name='study',  # Use cache key for unique study identification
+        storage=f'sqlite:///{cache_dir}/database.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
@@ -1824,7 +1660,7 @@ def _(held_back_metabolites, mo, optuna, study):
     )
 
     # Create model-specific parameter display
-    if model_type == 'Transformer':
+    if (model_type == 'Transformer'):
         model_params_md = f"""
     **Transformer Architecture:**
     - **Model Dimension (d_model):** {study.best_trial.params['d_model']}
