@@ -942,7 +942,7 @@ def _(data_length, device, mo, sample_ratio, training_data):
 
 
 @app.cell
-def _(np, predictions, torch, tqdm, training_data):
+def _(np, torch, tqdm, training_data):
     import copy
     import torch.optim as optim
     import torch.nn as nn
@@ -1067,30 +1067,31 @@ def _(np, predictions, torch, tqdm, training_data):
                 for k in [3, 7, 15]  # Different receptive fields
             ])
 
-            # Attention-based pooling instead of simple average
+            # Calculate enriched feature size
+            enriched_feature_size = self.d_model + (3 * self.d_model // 4)
+
+            # Attention-based pooling for enriched features
             self.attention_pool = nn.Sequential(
-                nn.Linear(self.d_model, self.d_model // 4),
+                nn.Linear(enriched_feature_size, enriched_feature_size // 4),
                 nn.Tanh(),
-                nn.Linear(self.d_model // 4, 1)
+                nn.Linear(enriched_feature_size // 4, 1)
             )
 
-            # Task-specific heads with residual connections (no dropout)
+            # Update task-specific heads to use enriched features
             self.presence_head = nn.Sequential(
-                nn.Linear(self.d_model, self.d_model // 2),
-                nn.LayerNorm(self.d_model // 2),
+                nn.Linear(enriched_feature_size, enriched_feature_size // 2),
+                nn.LayerNorm(enriched_feature_size // 2),
                 nn.GELU(),
-                # Remove dropout
-                nn.Linear(self.d_model // 2, 1)
+                nn.Linear(enriched_feature_size // 2, 1)
             )
 
             self.concentration_head = nn.Sequential(
-                nn.Linear(self.d_model, self.d_model // 2),
-                nn.LayerNorm(self.d_model // 2),
+                nn.Linear(enriched_feature_size, enriched_feature_size // 2),
+                nn.LayerNorm(enriched_feature_size // 2),
                 nn.GELU(),
-                # Remove dropout
-                nn.Linear(self.d_model // 2, self.d_model // 4),
+                nn.Linear(enriched_feature_size // 2, enriched_feature_size // 4),
                 nn.GELU(),
-                nn.Linear(self.d_model // 4, 1)
+                nn.Linear(enriched_feature_size // 4, 1)
             )
 
         def forward(self, x):
@@ -1131,10 +1132,13 @@ def _(np, predictions, torch, tqdm, training_data):
             combined_features = torch.cat(multi_scale_features, dim=1)  # [batch, 3*d_model//4, seq_len]
             combined_features = combined_features.transpose(1, 2)  # [batch, seq_len, 3*d_model//4]
 
-            # Attention-based pooling
-            attention_weights = self.attention_pool(encoded)  # [batch, seq_len, 1]
+            # FIXED: Concatenate original transformer features with multi-scale features
+            enriched_features = torch.cat([encoded, combined_features], dim=2)  # [batch, seq_len, d_model + 3*d_model//4]
+
+            # Attention-based pooling using enriched features
+            attention_weights = self.attention_pool(enriched_features)  # [batch, seq_len, 1]
             attention_weights = torch.softmax(attention_weights, dim=1)
-            pooled_features = torch.sum(encoded * attention_weights, dim=1)  # [batch, d_model]
+            pooled_features = torch.sum(enriched_features * attention_weights, dim=1)  # [batch, d_model + 3*d_model//4]
 
             # Task-specific predictions
             presence_logits = self.presence_head(pooled_features)  # [batch, 1]
@@ -1166,6 +1170,39 @@ def _(np, predictions, torch, tqdm, training_data):
             seq_len = x.size(1)
             x = x + self.pe[:seq_len, :].transpose(0, 1)
             return x
+
+    class HybridEnsembleRegressor(nn.Module):
+        def __init__(self, input_size, trial=None, **kwargs):
+            super(HybridEnsembleRegressor, self).__init__()
+
+            # Initialize both models
+            self.mlp = MLPRegressor(input_size, trial, **kwargs)
+            self.transformer = ImprovedTransformerRegressor(input_size, trial, **kwargs)
+
+            # Learnable ensemble weights
+            if trial is not None:
+                self.classification_weight = trial.suggest_float('class_ensemble_weight', 0.1, 0.9)
+                self.concentration_weight = trial.suggest_float('conc_ensemble_weight', 0.1, 0.9)
+            else:
+                self.classification_weight = kwargs.get('class_ensemble_weight', 0.3)  # Favor transformer
+                self.concentration_weight = kwargs.get('conc_ensemble_weight', 0.7)   # Favor MLP
+
+        def forward(self, x):
+            mlp_output = self.mlp(x)
+            transformer_output = self.transformer(x)
+
+            # Weighted ensemble for each task
+            classification_pred = (
+                self.classification_weight * mlp_output[:, 0] + 
+                (1 - self.classification_weight) * transformer_output[:, 0]
+            )
+
+            concentration_pred = (
+                self.concentration_weight * mlp_output[:, 1] + 
+                (1 - self.concentration_weight) * transformer_output[:, 1]
+            )
+
+            return torch.stack([classification_pred, concentration_pred], dim=1)
 
     def improved_compute_loss(predictions, targets, epoch=0, max_epochs=200):
         """
@@ -1246,15 +1283,44 @@ def _(np, predictions, torch, tqdm, training_data):
             model = ImprovedTransformerRegressor(
                 input_size=input_length, trial=trial
             ).to(device)
-        else:  # default to MLP
+        elif model_type == 'mlp':
             model = MLPRegressor(input_size=input_length, trial=trial).to(
                 device
             )
+        elif model_type == 'ensemble':
+            model = HybridEnsembleRegressor(input_size=input_length, trial=trial).to(device)
 
-        # try:
-        #     model = torch.compile(model)
-        # except Exception:
-        #     print('Compilation failed — using uncompiled model.')
+        # Dummy forward and backward pass to catch memory issues early
+        try:
+            dummy_input = torch.randn(batch_size, input_length, device=device)
+            dummy_target = torch.randn(batch_size, 2, device=device)
+
+            # Forward pass
+            dummy_output = model(dummy_input)
+
+            # Compute dummy loss
+            dummy_loss = torch.nn.MSELoss()(dummy_output, dummy_target)
+
+            # Backward pass to allocate gradient memory
+            dummy_loss.backward()
+
+            # Clear gradients
+            model.zero_grad()
+
+            # Clean up dummy tensors
+            del dummy_input, dummy_target, dummy_output, dummy_loss
+            torch.cuda.empty_cache()
+
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+            # Clean up and re-raise to trigger graceful failure handling
+            del model
+            torch.cuda.empty_cache()
+            raise e
+
+        try:
+            model = torch.compile(model)
+        except Exception:
+            print('Compilation failed — using uncompiled model.')
 
         # model.output_projection = nn.Sequential(
         #     nn.Linear(model.d_model, model.d_model // 2),
@@ -1636,12 +1702,12 @@ def _(cache_dir, cache_key, torch, tqdm, train_model, training_data, trials):
             return penalty_score
 
     # Set model type here - change to 'mlp' to use MLP model
-    MODEL_TYPE = 'transformer'  # or 'mlp'
+    MODEL_TYPE = 'ensemble'  # or 'mlp'
 
     # Create or load existing Optuna study with persistent SQLite storage
     study = optuna.create_study(
         direction='minimize',  # Maximize the negative combined error (minimize error)
-        study_name=cache_key,  # Use cache key for unique study identification
+        study_name=f'{cache_key}-{MODEL_TYPE}',  # Use cache key for unique study identification
         storage=f'sqlite:///{cache_dir}/{cache_key}-new.db',  # Use cache key for database filename
         load_if_exists=True,  # Resume previous optimization if study exists
     )
