@@ -48,13 +48,13 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 10                  # Number of hyperparameter optimization trials
+    trials = 1                  # Number of hyperparameter optimization trials
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
     MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
-    downsample = 2**13             # Target resolution for ML model (None = no downsampling)
+    downsample = 2**11             # Target resolution for ML model (None = no downsampling)
     reverse = True                # Apply Hilbert transform (time domain analysis)
 
     # Cache directory structure
@@ -1574,9 +1574,9 @@ def _(MLPRegressor, TransformerRegressor, nn, torch):
 def _(nn, torch):
     """Advanced loss function with curriculum learning and adaptive weighting"""
 
-    def improved_compute_loss(predictions, targets, epoch=0, max_epochs=200):
+    def compute_loss(predictions, targets, epoch=0, max_epochs=200):
         """
-        Multi-task loss with adaptive weighting and curriculum learning
+        Multi-task loss with balanced weighting
         """
         # Ensure all tensors are float32 for loss computation
         if predictions.dtype.is_complex:
@@ -1584,7 +1584,6 @@ def _(nn, torch):
         if targets.dtype.is_complex:
             targets = targets.real
 
-        # Ensure float32 explicitly
         predictions = predictions.float()
         targets = targets.float()
 
@@ -1593,46 +1592,36 @@ def _(nn, torch):
         presence_true = targets[:, 0]
         concentration_true = targets[:, 1]
 
-        # Rest of the function remains the same...
         # Binary classification loss
         classification_loss = nn.BCEWithLogitsLoss()(presence_logits, presence_true)
 
-        # Curriculum learning: gradually increase concentration loss weight
-        curriculum_weight = min(1.0, epoch / (max_epochs * 0.3))
+        # More aggressive curriculum learning - start with 0.5 weight instead of 0
+        curriculum_weight = min(1.0, 0.5 + epoch / (max_epochs * 0.5))
 
-        # Adaptive concentration loss based on presence confidence
-        presence_prob = torch.sigmoid(presence_logits)
         present_mask = presence_true == 1
 
         if present_mask.sum() > 0:
-            # Weight concentration loss by presence confidence
-            confidence_weights = presence_prob[present_mask]
-
-            # Huber loss for robustness to outliers
-            concentration_diff = concentration_pred[present_mask] - concentration_true[present_mask]
-            huber_loss = nn.SmoothL1Loss()(
+            # Simpler concentration loss without confidence weighting
+            concentration_loss = nn.SmoothL1Loss()(
                 concentration_pred[present_mask], 
                 concentration_true[present_mask]
             )
 
             # Calculate monitoring metrics
+            concentration_diff = concentration_pred[present_mask] - concentration_true[present_mask]
             concentration_mae = torch.mean(torch.abs(concentration_diff))
             concentration_rmse = torch.sqrt(torch.mean(concentration_diff ** 2))
-
-            # Scale-aware loss: relative error for different concentration ranges
-            relative_error = torch.abs(concentration_diff) / (concentration_true[present_mask] + 1e-8)
-            concentration_loss = torch.mean(confidence_weights * (huber_loss + 0.1 * relative_error))
         else:
             concentration_loss = torch.tensor(0.0, device=predictions.device)
             concentration_mae = torch.tensor(0.0, device=predictions.device)
             concentration_rmse = torch.tensor(0.0, device=predictions.device)
 
-        # Adaptive loss weighting
-        total_loss = classification_loss + curriculum_weight * concentration_loss
+        # Balanced weighting: equal importance to both tasks
+        total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
 
         return total_loss, classification_loss, concentration_mae, concentration_rmse
 
-    return (improved_compute_loss,)
+    return (compute_loss,)
 
 
 @app.cell(hide_code=True)
@@ -1659,8 +1648,8 @@ def _(
     HybridEnsembleRegressor,
     MLPRegressor,
     TransformerRegressor,
+    compute_loss,
     copy,
-    improved_compute_loss,
     np,
     optim,
     torch,
@@ -1735,7 +1724,7 @@ def _(
             dummy_output = model(dummy_data)
 
             # Use your proper loss function instead of raw MSELoss
-            dummy_loss, _, _, _ = improved_compute_loss(dummy_output, dummy_labels, 0, 200)
+            dummy_loss, _, _, _ = compute_loss(dummy_output, dummy_labels, 0, 200)
             dummy_loss.backward()
             model.zero_grad()
 
@@ -1774,7 +1763,7 @@ def _(
                     labels_batch = labels_batch.to(device, non_blocking=True)
 
                     predictions = model(data_batch)
-                    total_loss, class_loss, conc_mae, conc_rmse = improved_compute_loss(
+                    total_loss, class_loss, conc_mae, conc_rmse = compute_loss(
                         predictions, labels_batch, epoch, max_epochs
                     )
 
@@ -1800,7 +1789,7 @@ def _(
                         labels_batch = labels_batch.to(device, non_blocking=True)
 
                         predictions = model(data_batch)
-                        val_loss, _, _, _ = improved_compute_loss(
+                        val_loss, _, _, _ = compute_loss(
                             predictions, labels_batch, epoch, max_epochs
                         )
                         val_losses.append(float(val_loss))
