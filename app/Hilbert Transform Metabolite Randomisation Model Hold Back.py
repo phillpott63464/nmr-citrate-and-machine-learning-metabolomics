@@ -9,8 +9,6 @@ def _():
     import marimo as mo
     import torch
 
-    torch.set_float32_matmul_precision('high')
-
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
     cuda_built = torch.backends.cuda.is_built()
@@ -48,7 +46,7 @@ def _():
     combo_number = 30
     notebook_name = 'randomisation_hold_back'
     MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
-    downsample = 2048  # Target resolution for ML model
+    downsample = None  # Target resolution for ML model
     reverse = True
     cache_dir = f'./data_cache/{notebook_name}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
@@ -518,7 +516,7 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             threshold = 1e-16
             fid[np.abs(fid) < threshold] = 0
             fid = fid[fid != 0]
-            new_intensities = fid.astype(np.float32)
+            new_intensities = fid.astype(np.complex64)
             new_positions = [0, 0]
 
         if downsample == None:
@@ -755,8 +753,8 @@ def _(
         def __getitem__(self, idx):
             # Load individual samples on demand
             with h5py.File(self.file_path, 'r') as f:
-                data = torch.tensor(f[f'{self.dataset_name}_data'][idx], dtype=torch.float32)
-                labels = torch.tensor(f[f'{self.dataset_name}_labels'][idx], dtype=torch.float32)
+                data = torch.tensor(f[f'{self.dataset_name}_data'][idx], dtype=torch.complex64)
+                labels = torch.tensor(f[f'{self.dataset_name}_labels'][idx], dtype=torch.complex64)
             return data, labels
 
     def save_datasets_to_files(train_data, train_labels, val_data, val_labels, test_data, test_labels, cache_dir, cache_key):
@@ -972,12 +970,12 @@ def _(
         print(f'Total validation samples: {len(data_val)}')
 
         # Convert to tensors
-        data_train = torch.tensor(data_train, dtype=torch.float32)
-        labels_train = torch.tensor(labels_train, dtype=torch.float32)
-        data_val = torch.tensor(data_val, dtype=torch.float32)
-        labels_val = torch.tensor(labels_val, dtype=torch.float32)
-        data_test = torch.tensor(data_test, dtype=torch.float32)
-        labels_test = torch.tensor(labels_test, dtype=torch.float32)
+        data_train = torch.tensor(data_train, dtype=torch.complex64)
+        labels_train = torch.tensor(labels_train, dtype=torch.complex64)
+        data_val = torch.tensor(data_val, dtype=torch.complex64)
+        labels_val = torch.tensor(labels_val, dtype=torch.complex64)
+        data_test = torch.tensor(data_test, dtype=torch.complex64)
+        labels_test = torch.tensor(labels_test, dtype=torch.complex64)
 
         # Save datasets to files
         file_path = save_datasets_to_files(
