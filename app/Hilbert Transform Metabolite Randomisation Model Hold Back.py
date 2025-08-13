@@ -48,8 +48,8 @@ def _():
     combo_number = 30
     notebook_name = 'randomisation_hold_back'
     MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
-    downsample = None  # Target resolution for ML model
-    reverse = False
+    downsample = 2048  # Target resolution for ML model
+    reverse = True
     cache_dir = f'./data_cache/{notebook_name}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
     # Define metabolites and their spectrum IDs for NMR simulation
@@ -103,10 +103,10 @@ def _(cache_dir, combo_number, count, substanceDict):
     import numpy as np
     import tqdm
     import itertools
-    import os
+    import random
     import pickle
     from pathlib import Path
-    import random
+    import os
 
     substances = list(substanceDict.keys())
 
@@ -334,12 +334,14 @@ def _(cache_dir, combo_number, count, substanceDict):
     components_shape = spectra[0]['components'].shape
 
     return (
+        cache_key,
         combinations,
         components_shape,
         createTrainingData,
         held_back_metabolites,
         intensities_shape,
         np,
+        os,
         positions_shape,
         random,
         sample_scales_preview,
@@ -721,44 +723,123 @@ def _(graph_count, plt, preprocessed_spectra, spectra):
 
 @app.cell
 def _(
+    cache_dir,
+    cache_key,
     held_back_metabolites,
     np,
+    os,
     preprocessed_reference_spectra,
     preprocessed_spectra,
     random,
     substanceDict,
     torch,
 ):
+
     from torch.utils.data import Dataset, DataLoader
-    from sklearn.model_selection import train_test_split
+    import h5py
 
-    class NMRDataset(Dataset):
-        """Custom dataset for NMR spectral data that loads batches on demand"""
+    class StreamableNMRDataset(Dataset):
+        """Streamable dataset that loads data from HDF5 files on demand"""
 
-        def __init__(self, data, labels):
-            # Keep data on CPU until needed
-            self.data = data.cpu() if data.is_cuda else data
-            self.labels = labels.cpu() if data.is_cuda else labels
+        def __init__(self, file_path, dataset_name):
+            self.file_path = file_path
+            self.dataset_name = dataset_name
+
+            # Open file once to get length and verify structure
+            with h5py.File(self.file_path, 'r') as f:
+                self.length = f[f'{dataset_name}_data'].shape[0]
 
         def __len__(self):
-            return len(self.data)
+            return self.length
 
         def __getitem__(self, idx):
-            # Return individual samples - DataLoader will handle batching
-            return self.data[idx], self.labels[idx]
+            # Load individual samples on demand
+            with h5py.File(self.file_path, 'r') as f:
+                data = torch.tensor(f[f'{self.dataset_name}_data'][idx], dtype=torch.float32)
+                labels = torch.tensor(f[f'{self.dataset_name}_labels'][idx], dtype=torch.float32)
+            return data, labels
+
+    def save_datasets_to_files(train_data, train_labels, val_data, val_labels, test_data, test_labels, cache_dir, cache_key):
+        """Save datasets to HDF5 files for streamable access"""
+        os.makedirs(cache_dir, exist_ok=True)
+        file_path = f'{cache_dir}/{cache_key}_datasets.h5'
+
+        print(f"Saving datasets to {file_path}...")
+
+        with h5py.File(file_path, 'w') as f:
+            # Save training data
+            f.create_dataset('train_data', data=train_data.numpy(), compression='gzip', compression_opts=9)
+            f.create_dataset('train_labels', data=train_labels.numpy(), compression='gzip', compression_opts=9)
+
+            # Save validation data
+            f.create_dataset('val_data', data=val_data.numpy(), compression='gzip', compression_opts=9)
+            f.create_dataset('val_labels', data=val_labels.numpy(), compression='gzip', compression_opts=9)
+
+            # Save test data
+            f.create_dataset('test_data', data=test_data.numpy(), compression='gzip', compression_opts=9)
+            f.create_dataset('test_labels', data=test_labels.numpy(), compression='gzip', compression_opts=9)
+
+            # Save metadata
+            f.attrs['data_length'] = train_data.shape[1]
+            f.attrs['train_size'] = train_data.shape[0]
+            f.attrs['val_size'] = val_data.shape[0]
+            f.attrs['test_size'] = test_data.shape[0]
+
+        print(f"Datasets saved successfully. File size: {os.path.getsize(file_path) / (1024**2):.2f} MB")
+        return file_path
+
+    def load_datasets_from_files(file_path):
+        """Load streamable datasets from HDF5 files"""
+        if not os.path.exists(file_path):
+            return None
+
+        print(f"Loading datasets from {file_path}...")
+
+        # Create streamable datasets
+        train_dataset = StreamableNMRDataset(file_path, 'train')
+        val_dataset = StreamableNMRDataset(file_path, 'val')
+        test_dataset = StreamableNMRDataset(file_path, 'test')
+
+        # Load metadata
+        with h5py.File(file_path, 'r') as f:
+            data_length = f.attrs['data_length']
+            train_size = f.attrs['train_size']
+            val_size = f.attrs['val_size']
+            test_size = f.attrs['test_size']
+
+        print(f"Loaded streamable datasets - Train: {train_size}, Val: {val_size}, Test: {test_size}")
+        print(f"Data length: {data_length}")
+
+        return {
+            'train_dataset': train_dataset,
+            'val_dataset': val_dataset,
+            'test_dataset': test_dataset,
+        }, data_length
 
     def get_training_data_mlp(
         spectra,
         reference_spectra,
         held_back_metabolites,
+        cache_dir,
+        cache_key,
         train_ratio=0.7,
         val_ratio=0.15,
         test_ratio=0.15,
         axes=0,
     ):
         """
-        Improved data splitting with CPU-based datasets for memory efficiency.
+        Improved data splitting with streamable datasets for memory efficiency.
         """
+        # Check if streamable datasets already exist
+        datasets_file_path = f'{cache_dir}/{cache_key}_datasets.h5'
+        existing_datasets = load_datasets_from_files(datasets_file_path)
+
+        if existing_datasets is not None:
+            training_data, data_length = existing_datasets
+            return training_data, data_length
+
+        print("Creating new datasets...")
+
         data = []
         labels = []
         data_test = []
@@ -890,7 +971,7 @@ def _(
         )
         print(f'Total validation samples: {len(data_val)}')
 
-        # Convert to tensors but keep on CPU
+        # Convert to tensors
         data_train = torch.tensor(data_train, dtype=torch.float32)
         labels_train = torch.tensor(labels_train, dtype=torch.float32)
         data_val = torch.tensor(data_val, dtype=torch.float32)
@@ -898,28 +979,36 @@ def _(
         data_test = torch.tensor(data_test, dtype=torch.float32)
         labels_test = torch.tensor(labels_test, dtype=torch.float32)
 
-        # Create datasets (data stays on CPU)
-        train_dataset = NMRDataset(data_train, labels_train)
-        val_dataset = NMRDataset(data_val, labels_val)
-        test_dataset = NMRDataset(data_test, labels_test)
+        # Save datasets to files
+        file_path = save_datasets_to_files(
+            data_train, labels_train, 
+            data_val, labels_val, 
+            data_test, labels_test, 
+            cache_dir, cache_key
+        )
 
-        return {
-            'train_dataset': train_dataset,
-            'val_dataset': val_dataset,
-            'test_dataset': test_dataset,
-        }
+        # Clear memory
+        del data_train, labels_train, data_val, labels_val, data_test, labels_test
+        torch.cuda.empty_cache()
 
-    training_data = get_training_data_mlp(
+        # Load streamable datasets
+        training_data, data_length = load_datasets_from_files(file_path)
+
+        return training_data, data_length
+
+    # Update the main function call
+    training_data, data_length = get_training_data_mlp(
         spectra=preprocessed_spectra,
         reference_spectra=preprocessed_reference_spectra,
         held_back_metabolites=held_back_metabolites,
+        cache_dir=cache_dir,
+        cache_key=cache_key,
     )
 
     print([len(training_data[x]) for x in training_data])
-    print(len(training_data['train_dataset'][0][0]))
+    print(f"Data length: {data_length}")
 
     sample_ratio = preprocessed_spectra[0]['ratios']
-    data_length = len(training_data['train_dataset'][0][0])
 
     return DataLoader, data_length, sample_ratio, training_data
 
@@ -1256,7 +1345,7 @@ def _(DataLoader, np, torch, tqdm):
 
     def train_model(training_data, trial, model_type='mlp'):
         """
-        Train a multi-task neural network using DataLoaders for memory efficiency.
+        Train a multi-task neural network using streamable DataLoaders for memory efficiency.
         """
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         torch.cuda.empty_cache()
@@ -1265,7 +1354,7 @@ def _(DataLoader, np, torch, tqdm):
         batch_size = int(trial.suggest_float('batch_size', 10, 100, step=10))
         lr = trial.suggest_float('lr', 1e-5, 1e-1)
 
-        # Get input size from first sample
+        # Get input size from first sample of streamable dataset
         sample_data, _ = training_data['train_dataset'][0]
         input_length = len(sample_data)
 
@@ -1278,27 +1367,33 @@ def _(DataLoader, np, torch, tqdm):
         elif model_type == 'ensemble':
             model = HybridEnsembleRegressor(input_size=input_length, trial=trial).to(device)
 
-        # Create DataLoaders with pin_memory for faster GPU transfer
+        # Create DataLoaders with streamable datasets
+        # Increase num_workers for better I/O performance with file-based datasets
+        num_workers = min(4, max(1, torch.get_num_threads() // 2))
+
         train_loader = DataLoader(
             training_data['train_dataset'], 
             batch_size=batch_size, 
             shuffle=True,
             pin_memory=True,
-            num_workers=0  # Set to 0 to avoid multiprocessing issues
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False
         )
         val_loader = DataLoader(
             training_data['val_dataset'], 
             batch_size=batch_size, 
             shuffle=False,
             pin_memory=True,
-            num_workers=0
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False
         )
         test_loader = DataLoader(
             training_data['test_dataset'], 
             batch_size=batch_size, 
             shuffle=False,
             pin_memory=True,
-            num_workers=0
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False
         )
 
         # Test model with a small batch to catch memory issues early
@@ -1519,7 +1614,7 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
             combined_score = 0.5 * val_classification_error + 0.5 * (
                 0.5 * val_conc_mae + 0.5 * val_conc_rmse
             )
-        
+
             return combined_score
 
         except (torch.cuda.OutOfMemoryError, RuntimeError) as e:

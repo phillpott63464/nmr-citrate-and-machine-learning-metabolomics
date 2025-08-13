@@ -18,3 +18,4 @@ tqdm>=4.67.1
 wheel>=0.45.1
 watchdog
 jax[rocm]
+h5py
