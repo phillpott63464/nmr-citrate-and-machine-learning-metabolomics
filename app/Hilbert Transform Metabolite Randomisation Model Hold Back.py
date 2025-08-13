@@ -1,11 +1,12 @@
 import marimo
 
-__generated_with = "0.14.16"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
+    """Initial imports and hardware detection"""
     import marimo as mo
     import torch
 
@@ -14,6 +15,8 @@ def _():
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
 
+    torch.set_float32_matmul_precision('high') #Idk what this does but apparently its faster
+
     return cuda_built, gpu_count, hip_version, mo, torch
 
 
@@ -21,36 +24,43 @@ def _():
 def _(cuda_built, gpu_count, hip_version, mo):
     mo.md(
         f"""
-    ## PyTorch GPU Setup Information
+    # NMR Spectral Analysis with Hilbert Transform
+
+    ## Hardware Configuration
+
+    This notebook performs NMR spectral analysis using machine learning models with optional Hilbert transform preprocessing.
+
+    **GPU Setup Information:**
 
     - **HIP Version:** {hip_version}
     - **CUDA Built:** {cuda_built}
     - **GPU Device Count:** {gpu_count}
+
+    The system will automatically use GPU acceleration if available, falling back to CPU processing otherwise.
     """
     )
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""# NMR Sim Concentration Model""")
-    return
-
-
 @app.cell
 def _():
-    # global variables
+    """Configuration parameters for the entire analysis pipeline"""
 
-    count = 100
-    trials = 10
-    combo_number = 30
-    notebook_name = 'randomisation_hold_back'
-    MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
-    downsample = None  # Target resolution for ML model
-    reverse = True
+    # Experiment parameters
+    count = 100                    # Number of samples per metabolite combination
+    trials = 10                  # Number of hyperparameter optimization trials
+    combo_number = 30             # Number of random metabolite combinations to generate
+    notebook_name = 'randomisation_hold_back'  # Cache directory identifier
+
+    # Model configuration
+    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    downsample = 2**13             # Target resolution for ML model (None = no downsampling)
+    reverse = True                # Apply Hilbert transform (time domain analysis)
+
+    # Cache directory structure
     cache_dir = f'./data_cache/{notebook_name}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
-    # Define metabolites and their spectrum IDs for NMR simulation
+    # NMR metabolite database mapping (substance name -> spectrum ID)
     substanceDict = {
         'Citric acid': ['SP:3368'],
         'Succinic acid': ['SP:3211'],
@@ -66,6 +76,7 @@ def _():
         'L-Valine': ['SP:3490'],
         'Glycine': ['SP:3682'],
     }
+
     return (
         MODEL_TYPE,
         cache_dir,
@@ -79,23 +90,33 @@ def _():
 
 
 @app.cell(hide_code=True)
-def _(mo, spectrafigures, substanceDict):
+def _(mo, substanceDict):
     mo.md(
-        rf"""
-    ## Data Creation
+        f"""
+    ## Experimental Configuration
 
-    Create spectra using morgan's code overlaying nmrsim
+    **Metabolite Panel:**
 
-    Contains metabolites: {''.join(f"{x}, " for x in substanceDict)}
+    This analysis uses {len(substanceDict)} metabolites commonly found in biological samples:
 
-    {mo.as_html(spectrafigures)}
+    {chr(10).join([f"- **{name}:** {ids[0]}" for name, ids in substanceDict.items()])}
+
+    **Data Generation Strategy:**
+
+    - **Hold-back validation:** Two metabolites are randomly selected and excluded from training
+    - **Mixture complexity:** Combinations range from {len(substanceDict)//3} to {len(substanceDict)} metabolites
+    - **Concentration variability:** Random scaling applied to simulate biological variation
+    - **Reference standard:** TSP (trimethylsilyl propanoic acid) used for normalization
+
+    This approach tests the model's ability to detect and quantify metabolites it has never seen during training.
     """
     )
     return
 
 
 @app.cell
-def _(cache_dir, combo_number, count, substanceDict):
+def _():
+    """Import data generation dependencies"""
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np
@@ -106,13 +127,23 @@ def _(cache_dir, combo_number, count, substanceDict):
     from pathlib import Path
     import os
 
-    substances = list(substanceDict.keys())
+    return createTrainingData, itertools, np, os, pickle, random, tqdm
 
-    # Save/load functions for data persistence
-    def save_spectra_data(
-        spectra, held_back_metabolites, combinations, filename
-    ):
-        """Save generated spectra data, held-back metabolite, and combinations to pickle file"""
+
+@app.cell
+def _(cache_dir, os, pickle, random):
+    """Data persistence utilities for caching generated spectra"""
+
+    def save_spectra_data(spectra, held_back_metabolites, combinations, filename):
+        """
+        Save generated spectra data to persistent cache
+
+        Args:
+            spectra: List of spectrum dictionaries with intensities, positions, scales
+            held_back_metabolites: List of metabolites excluded from training
+            combinations: List of metabolite combinations used
+            filename: Cache file identifier
+        """
         os.makedirs(cache_dir, exist_ok=True)
         filepath = f'{cache_dir}/{filename}.pkl'
 
@@ -125,89 +156,117 @@ def _(cache_dir, combo_number, count, substanceDict):
         with open(filepath, 'wb') as f:
             pickle.dump(data_to_save, f)
         print(
-            f"Saved {len(spectra)} spectra, held-back metabolites '{[x for x in held_back_metabolites]}', and {len(combinations)} combinations to {filepath}"
+            f"Saved {len(spectra)} spectra, held-back metabolites '{[x for x in held_back_metabolites]}', "
+            f"and {len(combinations)} combinations to {filepath}"
         )
 
     def load_spectra_data(filename, substanceDict):
-        """Load generated spectra data, held-back metabolite, and combinations from pickle file"""
+        """
+        Load cached spectra data with backward compatibility
+
+        Returns:
+            tuple: (spectra, held_back_metabolites, combinations) or (None, None, None) if not found
+        """
         filepath = f'{cache_dir}/{filename}.pkl'
 
-        if os.path.exists(filepath):
-            with open(filepath, 'rb') as f:
-                data = pickle.load(f)
+        if not os.path.exists(filepath):
+            return None, None, None
 
-            # Handle both old and new cache formats
-            if isinstance(data, list):
-                # Old format - just spectra
-                print(
-                    f'Loaded {len(data)} spectra from {filepath} (old format)'
-                )
-                return data, None, None
-            elif 'combinations' not in data:
-                # Medium format - spectra + held_back_metabolites
-                spectra = data['spectra']
-                try:
-                    held_back_metabolites = data['held_back_metabolites']
-                except:
-                    held_back_metabolites = data['held_back_metabolite']
+        with open(filepath, 'rb') as f:
+            data = pickle.load(f)
 
-                # Check if held_back_metabolites is a string and convert to a list
-                if isinstance(held_back_metabolites, str):
-                    held_back_metabolites = [
-                        held_back_metabolites,
-                        random.choice(list(substanceDict.keys())),
-                    ]
+        # Handle legacy cache formats
+        if isinstance(data, list):
+            # Old format - just spectra
+            print(f'Loaded {len(data)} spectra from {filepath} (legacy format)')
+            return data, None, None
 
-                print(
-                    f"Loaded {len(spectra)} spectra and held-back metabolite '{held_back_metabolites}' from {filepath} (medium format)"
-                )
-                return spectra, held_back_metabolites, None
-            else:
-                # New format - spectra + held_back_metabolites + combinations
-                spectra = data['spectra']
-                try:
-                    held_back_metabolites = data['held_back_metabolites']
-                except:
-                    held_back_metabolites = data['held_back_metabolite']
-                combinations = data['combinations']
+        # Extract data with fallback for older formats
+        spectra = data['spectra']
 
-                # Check if held_back_metabolites is a string and convert to a list
-                if isinstance(held_back_metabolites, str):
-                    held_back_metabolites = [
-                        held_back_metabolites,
-                        random.choice(list(substanceDict.keys())),
-                    ]
+        # Handle held_back_metabolites field variations
+        held_back_metabolites = data.get('held_back_metabolites', 
+                                       data.get('held_back_metabolite', None))
 
-                print(
-                    f"Loaded {len(spectra)} spectra, held-back metabolite '{held_back_metabolites}', and {len(combinations)} combinations from {filepath}"
-                )
-                return spectra, held_back_metabolites, combinations
-        return None, None, None
+        # Ensure held_back_metabolites is a list
+        if isinstance(held_back_metabolites, str):
+            held_back_metabolites = [
+                held_back_metabolites,
+                random.choice(list(substanceDict.keys())),
+            ]
+
+        combinations = data.get('combinations', None)
+
+        format_type = "full" if combinations is not None else "partial"
+        print(f"Loaded {len(spectra)} spectra, held-back metabolites '{held_back_metabolites}', "
+              f"and {len(combinations) if combinations else 0} combinations from {filepath} ({format_type} format)")
+
+        return spectra, held_back_metabolites, combinations
 
     def generate_cache_key(substanceDict, combo_number, count):
-        """Generate unique cache key based on parameters"""
+        """Generate unique cache identifier based on experimental parameters"""
         substance_key = '_'.join(sorted(substanceDict.keys()))
         combo_key = f'combos_{combo_number}'
         count_key = f'count_{count}'
         return f'spectra_{substance_key}_{combo_key}_{count_key}'
 
+    return generate_cache_key, load_spectra_data, save_spectra_data
+
+
+@app.cell
+def _(createTrainingData):
+    """NMR spectrum generation utilities"""
+
     def create_batch_data(substances_and_count):
-        """Generate training data batch for specific substance combination with random scaling"""
+        """
+        Generate training data batch for specific substance combination
+
+        Args:
+            substances_and_count: Tuple of (substance_spectrum_ids, sample_count)
+
+        Returns:
+            dict: Batch containing intensities, positions, scales, and components
+        """
         substances, sample_count = substances_and_count
         return createTrainingData(
             substanceSpectrumIds=substances,
             sampleNumber=sample_count,
-            rondomlyScaleSubstances=True,  # Randomize concentrations for training diversity
-            referenceSubstanceSpectrumId='tsp',
+            rondomlyScaleSubstances=True,  # Enable concentration randomization
+            referenceSubstanceSpectrumId='tsp',  # Internal standard
         )
 
+    return (create_batch_data,)
+
+
+@app.cell
+def _(
+    combo_number,
+    count,
+    create_batch_data,
+    generate_cache_key,
+    itertools,
+    load_spectra_data,
+    random,
+    save_spectra_data,
+    substanceDict,
+    tqdm,
+):
+    """Main data generation pipeline with caching and hold-back selection"""
+
     def check_loaded_data(spectra, held_back_metabolites, combinations):
+        """
+        Generate new training data if not cached, otherwise use existing data
+
+        Returns:
+            tuple: (spectra, held_back_metabolites, combinations)
+        """
         if spectra is None:
             print('No cached data found. Generating new spectra...')
 
-            # Generate all possible combinations of substances (4 to n substances)
-            # This creates training data for different metabolite mixtures
+            # Generate all possible metabolite combinations (complexity: 4+ substances)
+            substances = list(substanceDict.keys())
             all_combinations = []
+
             for r in range(len(substances) // 3, len(substances) + 1):
                 for combo in itertools.combinations(substances, r):
                     combo_dict = {
@@ -216,30 +275,28 @@ def _(cache_dir, combo_number, count, substanceDict):
                     }
                     all_combinations.append(combo_dict)
 
+            # Randomly sample combinations to manage computational load
             if combo_number is not None:
                 combinations = random.sample(all_combinations, combo_number)
             print(f'Generated {len(combinations)} random combinations')
 
-            # Select random metabolite to hold back for testing
+            # Select two metabolites for hold-back validation
             held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
-            print(
-                f"Selected '{held_back_metabolites}' as held-back metabolite for testing"
-            )
+            print(f"Selected '{held_back_metabolites}' as held-back metabolites for testing")
 
-            # Extract spectrum IDs for each combination
+            # Extract spectrum IDs for NMR simulation
             substanceSpectrumIds = [
                 [combination[substance][-1] for substance in combination]
                 for combination in combinations
             ]
 
-            # Prepare arguments for sequential processing
+            # Prepare batch processing arguments
             mp_args = [
                 (substances, count) for substances in substanceSpectrumIds
             ]
 
-            # Sequential data generation with progress bar
-            print(f'Generating data sequentially...')
-
+            # Sequential processing with progress tracking
+            print(f'Generating {len(mp_args)} batches sequentially...')
             batch_data = []
             for arg in tqdm.tqdm(mp_args, desc="Generating batches"):
                 batch_data.append(create_batch_data(arg))
@@ -247,135 +304,90 @@ def _(cache_dir, combo_number, count, substanceDict):
             print(f'Generated {len(batch_data)} batches')
 
             # Reshape batch data into individual spectrum samples
-            # Each spectrum contains intensities, positions, scales, and component information
             spectra = []
-
             for batch in batch_data:
                 for i in range(count):
-                    # Extract individual sample scales (concentrations) from batch
+                    # Extract individual sample from batch
                     sample_scales = {
                         key: [values[i]]
                         for key, values in batch['scales'].items()
                     }
 
-                    # Create individual spectrum dictionary
                     spectrum = {
-                        'scales': sample_scales,
-                        'intensities': batch['intensities'][
-                            i : i + 1
-                        ],  # Keep 2D structure
-                        'positions': batch[
-                            'positions'
-                        ],  # Chemical shift positions (ppm)
-                        'components': batch[
-                            'components'
-                        ],  # Individual component spectra
+                        'scales': sample_scales,                    # Metabolite concentrations
+                        'intensities': batch['intensities'][i:i+1], # NMR signal intensities
+                        'positions': batch['positions'],            # Chemical shift positions (ppm)
+                        'components': batch['components'],          # Individual metabolite spectra
                     }
                     spectra.append(spectrum)
 
-            # Save generated data for future use
-            save_spectra_data(
-                spectra, held_back_metabolites, combinations, cache_key
-            )
+            # Cache generated data for future use
+            save_spectra_data(spectra, held_back_metabolites, combinations, cache_key)
         else:
             print('Using cached spectra data.')
             if held_back_metabolites is None:
-                # If old cache format, select and save new held-back metabolite
-                held_back_metabolites = random.choice(
-                    list(substanceDict.keys())
-                )
-                print(
-                    f"Cache missing held-back metabolite. Selected '{held_back_metabolites}' and updating cache..."
-                )
-                save_spectra_data(
-                    spectra, held_back_metabolites, combinations, cache_key
-                )
+                # Legacy cache: select new held-back metabolites
+                held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
+                print(f"Cache missing held-back metabolites. Selected '{held_back_metabolites}' and updating cache...")
+                save_spectra_data(spectra, held_back_metabolites, combinations, cache_key)
             print(f'Using {len(combinations)} combinations from cache')
 
         return spectra, held_back_metabolites, combinations
 
-    # Generate cache key for current configuration
+    # Generate cache key and attempt to load existing data
     cache_key = generate_cache_key(substanceDict, combo_number, count)
-
-    # Try to load existing data first
-    spectra, held_back_metabolites, combinations = load_spectra_data(
-        cache_key, substanceDict
-    )
+    spectra, held_back_metabolites, combinations = load_spectra_data(cache_key, substanceDict)
     spectra, held_back_metabolites, combinations = check_loaded_data(
         spectra, held_back_metabolites, combinations
     )
 
-    # Extract spectrum IDs for each combination (needed for later processing)
+    # Extract spectrum IDs for downstream processing
     substanceSpectrumIds = [
         [combination[substance][-1] for substance in combination]
         for combination in combinations
     ]
 
     print(f'Total combinations: {len(combinations)}')
-
-    # Display sample information for verification
     print('Sample scales preview:')
     print(''.join(f"{x['scales']}\n" for x in spectra[:5]))
     print(f"Intensities shape: {spectra[0]['intensities'].shape}")
     print(f"Positions shape: {spectra[0]['positions'].shape}")
     print(f"Components shape: {spectra[0]['components'].shape}")
 
-    # Prepare data for markdown display
-    sample_scales_preview = '\n'.join(
-        [
-            f"Sample {i+1}: {spectrum['scales']}"
-            for i, spectrum in enumerate(spectra[:5])
-        ]
-    )
-    intensities_shape = spectra[0]['intensities'].shape
-    positions_shape = spectra[0]['positions'].shape
-    components_shape = spectra[0]['components'].shape
-
-    return (
-        cache_key,
-        combinations,
-        components_shape,
-        createTrainingData,
-        held_back_metabolites,
-        intensities_shape,
-        np,
-        os,
-        positions_shape,
-        random,
-        sample_scales_preview,
-        spectra,
-        tqdm,
-    )
+    return cache_key, combinations, held_back_metabolites, spectra
 
 
 @app.cell(hide_code=True)
-def _(
-    combinations,
-    components_shape,
-    count,
-    intensities_shape,
-    mo,
-    positions_shape,
-    sample_scales_preview,
-):
+def _(combinations, count, held_back_metabolites, mo, spectra):
     mo.md(
-        rf"""
+        f"""
     ## Data Generation Results
 
-    **Generated {count} samples of {len(combinations)} combinations successfully**
+    **Successfully generated {count} samples for each of {len(combinations)} metabolite combinations**
+
+    **Hold-back Validation Setup:**
+
+    - **Test metabolite:** {held_back_metabolites[0]} (completely excluded from training)
+    - **Validation metabolite:** {held_back_metabolites[1]} (used for hyperparameter tuning)
 
     **Data Structure:**
 
-    - **Intensities Shape:** {intensities_shape} (Y axis)
+    - **Total spectra:** {len(spectra)}
+    - **Intensities shape:** {spectra[0]['intensities'].shape} (NMR signal data)
+    - **Positions shape:** {spectra[0]['positions'].shape} (chemical shift scale in ppm)
+    - **Components shape:** {spectra[0]['components'].shape} (individual metabolite contributions)
 
-    - **Positions Shape:** {positions_shape} (X axis) 
-
-    - **Components Shape:** {components_shape} (Peaks of all separate components)
-
-    **Sample Scales Preview (First 5 samples):**
+    **Sample Concentration Data (first 5 spectra):**
     ```
-    {sample_scales_preview}
+    {chr(10).join([f"Sample {i+1}: {spectrum['scales']}" for i, spectrum in enumerate(spectra[:5])])}
     ```
+
+    Each spectrum contains:
+
+    - **Scales:** Relative concentrations of each metabolite (normalized to TSP internal standard)
+    - **Intensities:** Combined NMR spectrum from all metabolites
+    - **Positions:** Chemical shift positions in parts per million (ppm)
+    - **Components:** Individual metabolite spectra for reference
     """
     )
     return
@@ -383,12 +395,13 @@ def _(
 
 @app.cell
 def _(spectra):
+    """Generate sample spectrum visualizations"""
     import matplotlib.pyplot as plt
 
-    print(len(spectra))
-    graph_count = 3
+    print(f"Total spectra available: {len(spectra)}")
+    graph_count = 3  # 3x3 grid of sample spectra
 
-    # Create visualization grid showing sample spectra
+    # Create visualization grid showing diverse sample spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
     for graphcounter in range(1, graph_count**2 + 1):
@@ -397,95 +410,152 @@ def _(spectra):
             spectra[graphcounter]['positions'],
             spectra[graphcounter]['intensities'][0],
         )
+        plt.title(f'Sample {graphcounter}')
+        plt.xlabel('Chemical Shift (ppm)')
+        plt.ylabel('Intensity')
 
+    plt.tight_layout()
     spectrafigures = plt.gca()
     return graph_count, plt, spectrafigures
 
 
 @app.cell(hide_code=True)
-def _(mo, spectra):
+def _(mo, spectra, spectrafigures):
     mo.md(
-        rf"""
-    ## Spectra Overview
+        f"""
+    ## Spectral Data Visualization
 
-    - **Total Spectra Generated:** {len(spectra)}
+    **Generated {len(spectra)} NMR spectra with varying metabolite compositions and concentrations**
+
+    The plots below show sample spectra from the generated dataset. Each spectrum represents a unique combination of metabolites at different concentrations, simulating the complexity found in real biological samples.
+
+    **Key Features:**
+    +
+    - **Peak diversity:** Different metabolites contribute characteristic peaks at specific chemical shifts
+    - **Intensity variation:** Random concentration scaling creates realistic amplitude differences
+    - **Baseline effects:** Simulated experimental artifacts for model robustness
+
+    {mo.as_html(spectrafigures)}
+
+    These spectra serve as training data for machine learning models to learn metabolite identification and quantification patterns.
     """
     )
     return
 
 
 @app.cell
-def _(mo, referencefigure):
-    mo.md(
-        rf"""
-    ## Extract Reference Spectra
-    Extract spectra of individual components as a reference for the model
+def _(createTrainingData, substanceDict):
+    def _():
+        """Generate pure component reference spectra for metabolite identification"""
 
-    {mo.as_html(referencefigure)}
-    """
-    )
-    return
+        # Extract individual metabolite spectrum IDs
+        referenceSpectrumIds = [
+            substanceDict[substance][-1] for substance in substanceDict
+        ]
 
-
-@app.cell
-def _(createTrainingData, plt, spectra, substanceDict):
-    # Generate pure component reference spectra (no random scaling)
-    # These serve as templates for identifying substances in mixtures
-    referenceSpectrumIds = [
-        substanceDict[substance][-1] for substance in substanceDict
-    ]
-
-    reference_spectra_raw = createTrainingData(
-        substanceSpectrumIds=referenceSpectrumIds,
-        sampleNumber=1,
-        rondomlyScaleSubstances=False,  # Keep original intensities for references
-    )
-
-    # Map substance names to their reference spectra
-    reference_spectra = {
-        substanceDict[substance][0]: reference_spectra_raw['components'][index]
-        for index, substance in enumerate(substanceDict)
-    }
-
-    print(reference_spectra)
-
-    # Visualize reference spectra for each substance
-    for substance in substanceDict:
-        plt.plot(
-            spectra[0]['positions'],
-            reference_spectra[substanceDict[substance][0]],
+        # Generate pure component spectra (no concentration randomization)
+        reference_spectra_raw = createTrainingData(
+            substanceSpectrumIds=referenceSpectrumIds,
+            sampleNumber=1,
+            rondomlyScaleSubstances=False,  # Preserve original intensities
         )
 
-    referencefigure = plt.gca()
+        # Map substance names to their reference spectra for easy lookup
+        reference_spectra = {
+            substanceDict[substance][0]: reference_spectra_raw['components'][index]
+            for index, substance in enumerate(substanceDict)
+        }
 
-    return reference_spectra, referencefigure
+        print("Generated reference spectra for metabolite identification:")
+        for substance, spectrum_id in reference_spectra.items():
+            print(f"  {substance}: {len(spectrum_id)} data points")
+
+        return reference_spectra
+
+    reference_spectra = _()
+    return (reference_spectra,)
 
 
 @app.cell
-def _(mo, preprocessedfigure, preprocessedreferencefigure):
+def _(plt, reference_spectra, spectra, substanceDict):
+    def _():
+        """Visualize reference spectra for each metabolite"""
+
+        plt.figure(figsize=(12, 8))
+
+        # Plot reference spectrum for each metabolite
+        for substance in substanceDict:
+            spectrum_id = substanceDict[substance][0]
+            plt.plot(
+                spectra[0]['positions'],
+                reference_spectra[spectrum_id],
+                label=substance,
+                alpha=0.7
+            )
+
+        plt.xlabel('Chemical Shift (ppm)')
+        plt.ylabel('Intensity')
+        plt.title('Reference Spectra for Individual Metabolites')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        return plt.gca()
+
+
+    referencefigure = _()
+    return (referencefigure,)
+
+
+@app.cell(hide_code=True)
+def _(mo, referencefigure, substanceDict):
     mo.md(
-        rf"""
-    ## Spectra Preprocessing
-    - Extract only the relevant parts of the spectra
-    - Add baseline distortion
-    - Extract ratio of citrate to reference
+        f"""
+    ## Reference Spectra Generation
 
-    {mo.as_html(preprocessedfigure)}
+    **Pure component spectra extracted for {len(substanceDict)} metabolites**
 
-    {mo.as_html(preprocessedreferencefigure)}
+    These reference spectra serve as templates for the machine learning model to identify individual metabolites within complex mixtures.
+
+    **Reference Spectrum Characteristics:**
+
+    - **No concentration scaling:** Original intensities preserved for consistent identification
+    - **Unique fingerprints:** Each metabolite has characteristic peak patterns
+    - **Chemical shift assignments:** Peaks appear at specific ppm values based on molecular structure
+
+    {mo.as_html(referencefigure)}
+
+    **Application in Machine Learning:**
+
+    The model receives both the mixture spectrum and a reference spectrum as input, learning to:
+
+    1. **Detect presence:** Binary classification of whether the reference metabolite exists in the mixture
+    2. **Quantify concentration:** Regression to predict relative concentration if present
+
+    This approach enables metabolite-specific analysis where the model can be queried for any metabolite of interest.
     """
     )
     return
 
 
 @app.cell
-def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
-    ## Preprocessing
-
+def _():
+    """Import preprocessing dependencies"""
     import multiprocessing as mp
     from scipy.signal import resample, hilbert
     from scipy.interpolate import interp1d
     from scipy.fft import ifft, irfft
+
+    # Preprocessing configuration
+    ranges = [[-100, 100]]  # Full spectral range in ppm
+    baseline_distortion = True  # Add realistic experimental artifacts
+
+    return baseline_distortion, irfft, mp, ranges
+
+
+@app.cell
+def _(irfft, np):
+    """Core spectrum preprocessing functions"""
 
     def preprocess_peaks(
         intensities,
@@ -496,7 +566,7 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
         reverse=False,
     ):
         """
-        Extract and preprocess spectral regions of interest.
+        Extract and preprocess spectral regions with optional Hilbert transform
 
         Args:
             intensities: Spectral intensity data
@@ -504,13 +574,19 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             ranges: List of [min, max] ppm ranges to extract
             baseline_distortion: Add realistic baseline drift
             downsample: Target number of points for downsampling
-            reverse: Boolean to reverse fourier transform data or not
-        """
+            reverse: Apply Hilbert transform for time-domain analysis
 
-        new_positions = positions #Default
-        new_intensities = intensities #Default, in the case of no transformation
+        Returns:
+            tuple: (new_positions, new_intensities)
+        """
+        new_positions = positions  # Default: keep original positions
+        new_intensities = intensities  # Default: keep original intensities
 
         if reverse:
+            # Apply Hilbert transform for time-domain representation
+            from scipy.signal import hilbert
+            from scipy.fft import ifft
+
             fid = ifft(hilbert(intensities))
             fid[0] = 0
             threshold = 1e-16
@@ -519,35 +595,55 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             new_intensities = fid.astype(np.complex64)
             new_positions = [0, 0]
 
-        if downsample == None:
-            return new_positions, new_intensities
+        # Apply downsampling if requested
+        if downsample is not None and len(new_intensities) > downsample:
+            step = len(new_intensities) // downsample
 
-        if len(new_intensities) > downsample:
-            step = (
-                len(new_intensities) // downsample
-            )  # integer division for downsampling factor
+            # Frequency domain filtering to prevent aliasing
             new_len = downsample
             new_nyquist = new_len // 2 + 1
-
             filtered = np.zeros_like(new_intensities)
             filtered[:new_nyquist] = new_intensities[:new_nyquist]
 
+            # Convert to time domain, then downsample
             time_domain = irfft(filtered, n=len(new_intensities))
-
-            downsampled = new_intensities[::step]
-
-            new_intensities = downsampled
+            new_intensities = new_intensities[::step]
 
         return new_positions, new_intensities
 
     def preprocess_ratio(scales, substanceDict):
-        """Calculate concentration ratios relative to internal standard (tsp)"""
+        """
+        Calculate concentration ratios relative to internal standard (TSP)
+
+        Args:
+            scales: Dictionary of substance concentrations
+            substanceDict: Mapping of substance names to spectrum IDs
+
+        Returns:
+            dict: Concentration ratios normalized to TSP
+        """
         ratios = {
             substance: scales[substance][0] / scales['tsp'][0]
             for substance in scales
+            if 'tsp' in scales and scales['tsp'][0] > 0
         }
-
         return ratios
+
+    return preprocess_peaks, preprocess_ratio
+
+
+@app.cell
+def _(
+    baseline_distortion,
+    downsample,
+    mp,
+    preprocess_peaks,
+    preprocess_ratio,
+    ranges,
+    reverse,
+    substanceDict,
+):
+    """Parallel preprocessing pipeline for spectra and references"""
 
     def preprocess_spectra(
         spectra,
@@ -558,8 +654,10 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
         downsample=None,
     ):
         """
-        Complete preprocessing pipeline for a single spectrum.
-        Extracts regions, adds distortion, calculates ratios.
+        Complete preprocessing pipeline for a single spectrum
+
+        Returns:
+            dict: Preprocessed spectrum with intensities, positions, scales, components, ratios
         """
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'][0],
@@ -580,10 +678,6 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             'ratios': ratios,
         }
 
-    # Preprocessing configuration
-    ranges = [[-100, 100]]  # Full spectral range in ppm
-    baseline_distortion = True  # Add realistic experimental artifacts
-
     def process_single_spectrum(spectrum):
         """Worker function for parallel spectrum preprocessing"""
         return preprocess_spectra(
@@ -591,21 +685,22 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             ranges=ranges,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
-            downsample=downsample,  #
+            downsample=downsample,
             reverse=reverse,
         )
 
-    def process_single_reference(spectrum_key):
+    def process_single_reference(spectrum_key_and_data):
         """Worker function for parallel reference preprocessing"""
+        spectrum_key, reference_data, positions = spectrum_key_and_data
         pos_int = preprocess_peaks(
-            positions=spectra[0]['positions'],
-            intensities=reference_spectra[spectrum_key],
+            positions=positions,
+            intensities=reference_data,
             downsample=downsample,
             reverse=reverse,
         )
         return (spectrum_key, pos_int[1])
 
-    def process_spectra(spectra):
+    def process_spectra_parallel(spectra):
         """Parallel preprocessing of all training spectra"""
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for spectra preprocessing')
@@ -615,15 +710,19 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
 
         return preprocessed_spectra
 
-    def process_references(reference_spectra):
+    def process_references_parallel(reference_spectra, sample_positions):
         """Parallel preprocessing of reference spectra"""
         num_processes = max(1, mp.cpu_count() - 1)
         print(f'Using {num_processes} processes for reference preprocessing')
 
+        # Prepare arguments for parallel processing
+        args = [
+            (key, intensities, sample_positions)
+            for key, intensities in reference_spectra.items()
+        ]
+
         with mp.Pool(processes=num_processes) as pool:
-            results = pool.map(
-                process_single_reference, reference_spectra.keys()
-            )
+            results = pool.map(process_single_reference, args)
 
         preprocessed_reference_spectra = {
             key: intensities for key, intensities in results
@@ -631,119 +730,207 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
 
         return preprocessed_reference_spectra
 
-    # Execute preprocessing pipelines
-    preprocessed_spectra = process_spectra(spectra)
-    preprocessed_reference_spectra = process_references(reference_spectra)
+    return process_references_parallel, process_spectra_parallel
 
-    def generate_figure():
-        """Create before/after preprocessing comparison plots"""
-        plt.figure(figsize=(8, 4))
-        for substance in substanceDict:
-            plt.subplot(1, 2, 1)
+
+@app.cell
+def _(
+    process_references_parallel,
+    process_spectra_parallel,
+    reference_spectra,
+    spectra,
+):
+    """Execute preprocessing pipelines"""
+
+    # Process all training spectra
+    print("Preprocessing training spectra...")
+    preprocessed_spectra = process_spectra_parallel(spectra)
+
+    # Process reference spectra
+    print("Preprocessing reference spectra...")
+    preprocessed_reference_spectra = process_references_parallel(
+        reference_spectra, 
+        spectra[0]['positions']  # Use sample positions for reference
+    )
+
+    # Display preprocessing results
+    print(f"Preprocessed data dimensions:")
+    print(f"  Positions: {len(preprocessed_spectra[0]['positions'])}")
+    print(f"  Intensities: {len(preprocessed_spectra[0]['intensities'])}")
+    print(f"  Data type: {type(preprocessed_spectra[0]['intensities'][0])}")
+    return preprocessed_reference_spectra, preprocessed_spectra
+
+
+@app.cell
+def _(
+    plt,
+    preprocessed_reference_spectra,
+    reference_spectra,
+    reverse,
+    spectra,
+    substanceDict,
+):
+    """Generate before/after preprocessing comparison plots"""
+
+    plt.figure(figsize=(15, 6))
+
+    # Original spectra (left panel)
+    plt.subplot(1, 2, 1)
+    for substance in substanceDict:
+        spectrum_id = substanceDict[substance][0]
+        plt.plot(
+            spectra[0]['positions'],
+            reference_spectra[spectrum_id],
+            alpha=0.7,
+            label=substance
+        )
+    plt.title('Original Reference Spectra')
+    plt.xlabel('Chemical Shift (ppm)')
+    plt.ylabel('Intensity')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+
+    # Preprocessed spectra (right panel)
+    plt.subplot(1, 2, 2)
+    for substance in substanceDict:
+        spectrum_id = substanceDict[substance][0]
+        if reverse:
+            # Time domain: plot magnitude of complex data
+            complex_data = preprocessed_reference_spectra[spectrum_id]
+            plt.plot(complex_data, alpha=0.7, label=substance)
+            plt.title('Preprocessed (Hilbert Transform - Time Domain)')
+            plt.xlabel('Time Points')
+            plt.ylabel('Magnitude')
+        else:
+            # Frequency domain: normal plotting
             plt.plot(
                 spectra[0]['positions'],
-                reference_spectra[substanceDict[substance][0]],
+                preprocessed_reference_spectra[spectrum_id],
+                alpha=0.7,
+                label=substance
             )
-            plt.subplot(1, 2, 2)
-            if reverse:
-                plt.plot(
-                    preprocessed_reference_spectra[substanceDict[substance][0]],
-                )
-            else:
-                plt.plot(
-                    spectra[0]['positions'],
-                    preprocessed_reference_spectra[substanceDict[substance][0]],
-                )
+            plt.title('Preprocessed (Frequency Domain)')
+            plt.xlabel('Chemical Shift (ppm)')
+            plt.ylabel('Intensity')
 
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    preprocessedreferencefigure = plt.gca()
+    return (preprocessedreferencefigure,)
+
+
+@app.cell
+def _(graph_count, plt, preprocessed_spectra, reverse):
+    def _():
+        """Compare original vs preprocessed training spectra"""
+
+        plt.figure(figsize=(graph_count * 4, graph_count * 4))
+
+        for graphcounter2 in range(1, graph_count**2 + 1):
+            plt.subplot(graph_count, graph_count, graphcounter2)
+
+            if reverse:
+                # Time domain: plot magnitude of complex data
+                complex_data = preprocessed_spectra[graphcounter2]['intensities']
+                plt.plot(complex_data)
+                plt.title(f'Sample {graphcounter2} (Time Domain)')
+                plt.xlabel('Time Points')
+                plt.ylabel('Magnitude')
+            else:
+                # Frequency domain: normal plotting
+                plt.plot(preprocessed_spectra[graphcounter2]['intensities'])
+                plt.title(f'Sample {graphcounter2} (Frequency Domain)')
+                plt.xlabel('Data Points')
+                plt.ylabel('Intensity')
+            plt.tight_layout()
         return plt.gca()
 
-    preprocessedreferencefigure = generate_figure()
 
-    print(len(preprocessed_spectra[0]['positions']))
-    print(len(preprocessed_spectra[0]['intensities']))
-
-    positions_count = len(preprocessed_spectra[0]['positions'])
-    intensities_count = len(preprocessed_spectra[0]['intensities'])
-    return (
-        baseline_distortion,
-        intensities_count,
-        positions_count,
-        preprocessed_reference_spectra,
-        preprocessed_spectra,
-        preprocessedreferencefigure,
-        ranges,
-    )
+    preprocessedfigure = _()
+    return (preprocessedfigure,)
 
 
 @app.cell(hide_code=True)
-def _(baseline_distortion, intensities_count, mo, positions_count, ranges):
+def _(
+    baseline_distortion,
+    mo,
+    preprocessed_spectra,
+    preprocessedfigure,
+    preprocessedreferencefigure,
+    ranges,
+    reverse,
+):
     mo.md(
-        rf"""
-    ## Preprocessing Results
+        f"""
+    ## Spectral Preprocessing Pipeline
 
-    **Configuration:**
+    **Preprocessing Configuration:**
 
-    - **Baseline Distortion:** {'Enabled' if baseline_distortion else 'Disabled'}
-
-    - **Spectral Ranges:** {ranges}
+    - **Spectral range:** {ranges[0]} ppm (full spectrum)
+    - **Baseline distortion:** {'Enabled' if baseline_distortion else 'Disabled'}
+    - **Hilbert transform:** {'Applied (time domain)' if reverse else 'Not applied (frequency domain)'}
+    - **Data type:** {'Complex64 (time domain)' if reverse else 'Float32 (frequency domain)'}
 
     **Processed Data Dimensions:**
 
-    - **Positions Count:** {positions_count}
+    - **Positions:** {len(preprocessed_spectra[0]['positions'])} points
+    - **Intensities:** {len(preprocessed_spectra[0]['intensities'])} points
 
-    - **Intensities Count:** {intensities_count}
+    ### Reference Spectra Comparison
+
+    {mo.as_html(preprocessedreferencefigure)}
+
+    ### Training Spectra Samples
+
+    {mo.as_html(preprocessedfigure)}
+
+    **Preprocessing Benefits:**
+
+    {'**Time Domain Analysis (Hilbert Transform):**' if reverse else '**Frequency Domain Analysis:**'}
+    {'''
+    - **Phase information:** Preserves both magnitude and phase components
+    - **Time-resolved features:** Enables analysis of FID decay patterns  
+    - **Reduced spectral complexity:** Focuses on fundamental signal characteristics
+    - **Improved SNR:** Time domain filtering can enhance signal quality''' if reverse else '''
+    - **Chemical shift resolution:** Maintains precise ppm scale for peak identification
+    - **Spectral features:** Preserves traditional NMR peak patterns
+    - **Direct interpretation:** Results directly relate to chemical structure
+    - **Standard analysis:** Compatible with conventional NMR processing'''}
+
+    The preprocessed data serves as input for machine learning models to learn metabolite detection and quantification patterns.
     """
     )
     return
 
 
 @app.cell
-def _(graph_count, plt, preprocessed_spectra, spectra):
-    print(len(spectra))
-
-    # Compare original vs preprocessed spectra
-    plt.figure(figsize=(graph_count * 4, graph_count * 4))
-
-    for graphcounter2 in range(1, graph_count**2 + 1):
-        plt.subplot(graph_count, graph_count, graphcounter2)
-        # Original spectrum
-        # plt.plot(
-        #     spectra[graphcounter2]['intensities'][0],
-        # )
-        # Preprocessed spectrum (downsampled + baseline corrected)
-        plt.plot(
-            preprocessed_spectra[graphcounter2]['intensities'],
-        )
-
-    preprocessedfigure = plt.gca()
-    return (preprocessedfigure,)
-
-
-@app.cell
-def _(
-    cache_dir,
-    cache_key,
-    held_back_metabolites,
-    np,
-    os,
-    preprocessed_reference_spectra,
-    preprocessed_spectra,
-    random,
-    substanceDict,
-    torch,
-):
-
+def _():
+    """Import machine learning dependencies"""
     from torch.utils.data import Dataset, DataLoader
     import h5py
 
+    return DataLoader, Dataset, h5py
+
+
+@app.cell
+def _(Dataset, h5py, torch):
+    """Streamable dataset class for memory-efficient data loading"""
+
     class StreamableNMRDataset(Dataset):
-        """Streamable dataset that loads data from HDF5 files on demand"""
+        """
+        Memory-efficient dataset that loads NMR data from HDF5 files on demand
+
+        This approach prevents loading entire datasets into memory, enabling
+        training on larger datasets that exceed available RAM.
+        """
 
         def __init__(self, file_path, dataset_name):
             self.file_path = file_path
             self.dataset_name = dataset_name
 
-            # Open file once to get length and verify structure
+            # Verify file structure and get dataset length
             with h5py.File(self.file_path, 'r') as f:
                 self.length = f[f'{dataset_name}_data'].shape[0]
 
@@ -751,49 +938,81 @@ def _(
             return self.length
 
         def __getitem__(self, idx):
-            # Load individual samples on demand
+            # Load individual samples on demand to minimize memory usage
             with h5py.File(self.file_path, 'r') as f:
-                data = torch.tensor(f[f'{self.dataset_name}_data'][idx], dtype=torch.complex64)
-                labels = torch.tensor(f[f'{self.dataset_name}_labels'][idx], dtype=torch.complex64)
+                data = torch.tensor(
+                    f[f'{self.dataset_name}_data'][idx], 
+                    dtype=torch.complex64
+                )
+                labels = torch.tensor(
+                    f[f'{self.dataset_name}_labels'][idx], 
+                    dtype=torch.float32
+                )
             return data, labels
 
-    def save_datasets_to_files(train_data, train_labels, val_data, val_labels, test_data, test_labels, cache_dir, cache_key):
-        """Save datasets to HDF5 files for streamable access"""
+    return (StreamableNMRDataset,)
+
+
+@app.cell
+def _(StreamableNMRDataset, h5py, os):
+    """Data persistence utilities for streamable datasets"""
+
+    def save_datasets_to_files(train_data, train_labels, val_data, val_labels, 
+                             test_data, test_labels, cache_dir, cache_key):
+        """
+        Save datasets to HDF5 files for streamable access
+
+        Args:
+            *_data, *_labels: PyTorch tensors for each dataset split
+            cache_dir: Directory for cache storage
+            cache_key: Unique identifier for this dataset configuration
+
+        Returns:
+            str: Path to saved HDF5 file
+        """
         os.makedirs(cache_dir, exist_ok=True)
         file_path = f'{cache_dir}/{cache_key}_datasets.h5'
 
         print(f"Saving datasets to {file_path}...")
 
         with h5py.File(file_path, 'w') as f:
-            # Save training data
-            f.create_dataset('train_data', data=train_data.numpy(), compression='gzip', compression_opts=9)
-            f.create_dataset('train_labels', data=train_labels.numpy(), compression='gzip', compression_opts=9)
+            # Save each dataset split with compression
+            f.create_dataset('train_data', data=train_data.numpy(), 
+                           compression='gzip', compression_opts=9)
+            f.create_dataset('train_labels', data=train_labels.numpy(), 
+                           compression='gzip', compression_opts=9)
+            f.create_dataset('val_data', data=val_data.numpy(), 
+                           compression='gzip', compression_opts=9)
+            f.create_dataset('val_labels', data=val_labels.numpy(), 
+                           compression='gzip', compression_opts=9)
+            f.create_dataset('test_data', data=test_data.numpy(), 
+                           compression='gzip', compression_opts=9)
+            f.create_dataset('test_labels', data=test_labels.numpy(), 
+                           compression='gzip', compression_opts=9)
 
-            # Save validation data
-            f.create_dataset('val_data', data=val_data.numpy(), compression='gzip', compression_opts=9)
-            f.create_dataset('val_labels', data=val_labels.numpy(), compression='gzip', compression_opts=9)
-
-            # Save test data
-            f.create_dataset('test_data', data=test_data.numpy(), compression='gzip', compression_opts=9)
-            f.create_dataset('test_labels', data=test_labels.numpy(), compression='gzip', compression_opts=9)
-
-            # Save metadata
+            # Store metadata for validation
             f.attrs['data_length'] = train_data.shape[1]
             f.attrs['train_size'] = train_data.shape[0]
             f.attrs['val_size'] = val_data.shape[0]
             f.attrs['test_size'] = test_data.shape[0]
 
-        print(f"Datasets saved successfully. File size: {os.path.getsize(file_path) / (1024**2):.2f} MB")
+        file_size_mb = os.path.getsize(file_path) / (1024**2)
+        print(f"Datasets saved successfully. File size: {file_size_mb:.2f} MB")
         return file_path
 
     def load_datasets_from_files(file_path):
-        """Load streamable datasets from HDF5 files"""
+        """
+        Create streamable datasets from HDF5 files
+
+        Returns:
+            tuple: (datasets_dict, data_length) or None if file doesn't exist
+        """
         if not os.path.exists(file_path):
             return None
 
         print(f"Loading datasets from {file_path}...")
 
-        # Create streamable datasets
+        # Create streamable datasets for each split
         train_dataset = StreamableNMRDataset(file_path, 'train')
         val_dataset = StreamableNMRDataset(file_path, 'val')
         test_dataset = StreamableNMRDataset(file_path, 'test')
@@ -802,17 +1021,38 @@ def _(
         with h5py.File(file_path, 'r') as f:
             data_length = f.attrs['data_length']
             train_size = f.attrs['train_size']
-            val_size = f.attrs['val_size']
+            val_size = f.attrs['val_size'] 
             test_size = f.attrs['test_size']
 
         print(f"Loaded streamable datasets - Train: {train_size}, Val: {val_size}, Test: {test_size}")
-        print(f"Data length: {data_length}")
+        print(f"Feature vector length: {data_length}")
 
         return {
             'train_dataset': train_dataset,
             'val_dataset': val_dataset,
             'test_dataset': test_dataset,
         }, data_length
+
+    return load_datasets_from_files, save_datasets_to_files
+
+
+@app.cell
+def _(
+    cache_dir,
+    cache_key,
+    held_back_metabolites,
+    load_datasets_from_files,
+    np,
+    preprocessed_reference_spectra,
+    preprocessed_spectra,
+    random,
+    reference_spectra,
+    save_datasets_to_files,
+    spectra,
+    substanceDict,
+    torch,
+):
+    """Main training data preparation with hold-back validation strategy"""
 
     def get_training_data_mlp(
         spectra,
@@ -823,42 +1063,43 @@ def _(
         train_ratio=0.7,
         val_ratio=0.15,
         test_ratio=0.15,
-        axes=0,
     ):
         """
-        Improved data splitting with streamable datasets for memory efficiency.
+        Create training datasets with hold-back validation for metabolite detection
+
+        Strategy:
+        - Training: Spectra without held-back metabolites (for all other metabolites)
+        - Validation: Mixed spectra with one held-back metabolite (hyperparameter tuning)
+        - Test: Spectra with the other held-back metabolite (final evaluation)
+
+        Args:
+            spectra: Preprocessed training spectra
+            reference_spectra: Pure component reference spectra
+            held_back_metabolites: [test_metabolite, validation_metabolite]
+
+        Returns:
+            tuple: (datasets_dict, feature_vector_length)
         """
-        # Check if streamable datasets already exist
+        # Check for existing cached datasets
         datasets_file_path = f'{cache_dir}/{cache_key}_datasets.h5'
         existing_datasets = load_datasets_from_files(datasets_file_path)
 
         if existing_datasets is not None:
-            training_data, data_length = existing_datasets
-            return training_data, data_length
+            return existing_datasets
 
-        print("Creating new datasets...")
+        print("Creating new datasets with hold-back validation...")
 
-        data = []
-        labels = []
-        data_test = []
-        labels_test = []
-        data_val = []
-        labels_val = []
-
+        # Get spectrum IDs for held-back metabolites
         held_back_key_test = substanceDict[held_back_metabolites[0]][0]
         held_back_key_validation = substanceDict[held_back_metabolites[1]][0]
-        print(
-            f'Using held-back metabolites: {[x for x in held_back_metabolites]} (testkey: {held_back_key_test}, valkey: {held_back_key_validation})'
-        )
+        print(f'Hold-back metabolites: {held_back_metabolites}')
+        print(f'  Test key: {held_back_key_test}')
+        print(f'  Validation key: {held_back_key_validation}')
 
         # Separate spectra based on held-back metabolite presence
         train_spectra = []
         val_with_holdback = []
-        val_without_holdback = []
         test_with_holdback = []
-        test_without_holdback = []
-        data_train = []
-        labels_train = []
 
         for spectrum in spectra:
             if held_back_key_test in spectrum['ratios']:
@@ -868,37 +1109,37 @@ def _(
             else:
                 train_spectra.append(spectrum)
 
-        # Split the non-holdback spectra into train/val and additional test data
+        # Further split train_spectra for additional validation/test data
         train_size = len(train_spectra)
         test_size = int(train_size * test_ratio)
         val_size = int(train_size * val_ratio)
 
+        # Randomize and split indices
         all_indices = list(range(train_size))
-        random.seed(42)
+        random.seed(42)  # Reproducible splits
         random.shuffle(all_indices)
 
         test_indices = set(all_indices[:test_size])
-        val_indices = set(all_indices[test_size : test_size + val_size])
-        train_indices = set(all_indices[test_size + val_size :])
+        val_indices = set(all_indices[test_size:test_size + val_size])
+        train_indices = set(all_indices[test_size + val_size:])
 
+        # Initialize data containers
+        data_train, labels_train = [], []
+        data_val, labels_val = [], []
+        data_test, labels_test = [], []
+
+        # Process training data (exclude held-back metabolites)
         for i, spectrum in enumerate(train_spectra):
-            if i in test_indices:
-                test_without_holdback.append(spectrum)
-            elif i in val_indices:
-                val_without_holdback.append(spectrum)
-            elif i in train_indices:
+            if i in train_indices:
                 for substance in reference_spectra:
-                    if substance not in [
-                        held_back_key_test,
-                        held_back_key_validation,
-                    ]:
-                        temp_data = np.concatenate(
-                            [
-                                spectrum['intensities'],
-                                reference_spectra[substance],
-                            ]
-                        )
+                    if substance not in [held_back_key_test, held_back_key_validation]:
+                        # Concatenate spectrum + reference for metabolite-specific analysis
+                        temp_data = np.concatenate([
+                            spectrum['intensities'],
+                            reference_spectra[substance],
+                        ])
 
+                        # Create label: [presence, concentration]
                         if substance in spectrum['ratios']:
                             temp_label = [1, spectrum['ratios'][substance]]
                         else:
@@ -907,94 +1148,70 @@ def _(
                         data_train.append(temp_data)
                         labels_train.append(temp_label)
 
-        # Create test data from spectra WITH held-back metabolite
-        for spectrum in test_with_holdback:
-            temp_data = np.concatenate(
-                [
+        # Create validation data with held-back metabolite
+        def create_dataset_for_metabolite(spectra_list, target_key, data_list, labels_list):
+            # Positive samples (with target metabolite)
+            for spectrum in spectra_list:
+                temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[held_back_key_test],
-                ]
-            )
-            temp_label = [1, spectrum['ratios'][held_back_key_test]]
-            data_test.append(temp_data)
-            labels_test.append(temp_label)
+                    reference_spectra[target_key],
+                ])
+                temp_label = [1, spectrum['ratios'][target_key]]
+                data_list.append(temp_data)
+                labels_list.append(temp_label)
 
-        for spectrum in val_with_holdback:
-            temp_data = np.concatenate(
-                [
+        # Additional validation/test data from train_spectra splits
+        train_without_holdback = [train_spectra[i] for i in train_indices]
+        val_without_holdback = [train_spectra[i] for i in val_indices] 
+        test_without_holdback = [train_spectra[i] for i in test_indices]
+
+        # Add negative samples (without held-back metabolites)
+        for spectra_subset, data_list, labels_list, target_key in [
+            (val_without_holdback, data_val, labels_val, held_back_key_validation),
+            (test_without_holdback, data_test, labels_test, held_back_key_test)
+        ]:
+            for spectrum in spectra_subset:
+                temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[held_back_key_validation],
-                ]
-            )
-            temp_label = [1, spectrum['ratios'][held_back_key_validation]]
-            data_val.append(temp_data)
-            labels_val.append(temp_label)
+                    reference_spectra[target_key],
+                ])
+                temp_label = [0, 0]  # Not present
+                data_list.append(temp_data)
+                labels_list.append(temp_label)
 
-        # Create test data from spectra WITHOUT held-back metabolite
-        for spectrum in test_without_holdback:
-            temp_data = np.concatenate(
-                [
-                    spectrum['intensities'],
-                    reference_spectra[held_back_key_test],
-                ]
-            )
-            temp_label = [0, 0]
-            data_test.append(temp_data)
-            labels_test.append(temp_label)
+        # Add positive samples with held-back metabolites
+        create_dataset_for_metabolite(val_with_holdback, held_back_key_validation, data_val, labels_val)
+        create_dataset_for_metabolite(test_with_holdback, held_back_key_test, data_test, labels_test)
 
-        for spectrum in val_without_holdback:
-            temp_data = np.concatenate(
-                [
-                    spectrum['intensities'],
-                    reference_spectra[held_back_key_validation],
-                ]
-            )
-            temp_label = [0, 0]
-            data_val.append(temp_data)
-            labels_val.append(temp_label)
+        # Display dataset statistics
+        print(f'Dataset sizes:')
+        print(f'  Training: {len(data_train)} samples')
+        print(f'  Validation: {len(data_val)} samples ({len(val_with_holdback)} with {held_back_metabolites[1]})')
+        print(f'  Test: {len(data_test)} samples ({len(test_with_holdback)} with {held_back_metabolites[0]})')
 
-        print(f'Training spectra: {len(train_spectra) - test_size - val_size}')
-        print(
-            f'Test spectra with {held_back_metabolites[0]}: {len(test_with_holdback)}'
-        )
-        print(
-            f'Test spectra without {held_back_metabolites[0]}: {len(test_without_holdback)}'
-        )
-        print(f'Total test samples: {len(data_test)}')
-        print(
-            f'validation spectra with {held_back_metabolites[1]}: {len(val_with_holdback)}'
-        )
-        print(
-            f'Validation spectra without {held_back_metabolites[1]}: {len(val_without_holdback)}'
-        )
-        print(f'Total validation samples: {len(data_val)}')
+        # Convert to tensorsFAIL
+        datasets = {
+            'train': (torch.tensor(data_train, dtype=torch.complex64), 
+                     torch.tensor(labels_train, dtype=torch.float32)),
+            'val': (torch.tensor(data_val, dtype=torch.complex64), 
+                   torch.tensor(labels_val, dtype=torch.float32)),
+            'test': (torch.tensor(data_test, dtype=torch.complex64), 
+                    torch.tensor(labels_test, dtype=torch.float32))
+        }
 
-        # Convert to tensors
-        data_train = torch.tensor(data_train, dtype=torch.complex64)
-        labels_train = torch.tensor(labels_train, dtype=torch.complex64)
-        data_val = torch.tensor(data_val, dtype=torch.complex64)
-        labels_val = torch.tensor(labels_val, dtype=torch.complex64)
-        data_test = torch.tensor(data_test, dtype=torch.complex64)
-        labels_test = torch.tensor(labels_test, dtype=torch.complex64)
-
-        # Save datasets to files
+        # Save to HDF5 for streamable access
         file_path = save_datasets_to_files(
-            data_train, labels_train, 
-            data_val, labels_val, 
-            data_test, labels_test, 
+            *datasets['train'], *datasets['val'], *datasets['test'],
             cache_dir, cache_key
         )
 
-        # Clear memory
-        del data_train, labels_train, data_val, labels_val, data_test, labels_test
+        # Clear memory and create streamable datasets
+        del datasets
         torch.cuda.empty_cache()
 
-        # Load streamable datasets
-        training_data, data_length = load_datasets_from_files(file_path)
+        return load_datasets_from_files(file_path)
 
-        return training_data, data_length
-
-    # Update the main function call
+    # Execute training data preparation
     training_data, data_length = get_training_data_mlp(
         spectra=preprocessed_spectra,
         reference_spectra=preprocessed_reference_spectra,
@@ -1003,72 +1220,96 @@ def _(
         cache_key=cache_key,
     )
 
-    print([len(training_data[x]) for x in training_data])
-    print(f"Data length: {data_length}")
+    # Delete data from earlier in the piplines ((TOOD: turn the earlier pipelines into a single pipeline where everything gets streamed TO a file. So you can generate like, 2 million spectra without worrying about RAM or anything)).
+    del spectra, reference_spectra, preprocessed_spectra, preprocessed_reference_spectra
 
-    sample_ratio = preprocessed_spectra[0]['ratios']
-
-    return DataLoader, data_length, sample_ratio, training_data
+    return data_length, training_data
 
 
 @app.cell(hide_code=True)
-def _(data_length, mo, sample_ratio, training_data):
+def _(data_length, held_back_metabolites, mo, training_data):
     mo.md(
-        rf"""
-    ## Training Data Preparation
+        f"""
+    ## Training Data Preparation Complete
 
-    **Sample Information:**
+    **Hold-back Validation Strategy:**
 
-    - **Sample Ratios (first spectrum):** {sample_ratio:}
+    This approach tests the model's ability to detect and quantify metabolites it has never seen during training, simulating real-world scenarios where new metabolites may be encountered.
 
-    - **Feature Vector Length:** {data_length}
+    - **Training metabolites:** All except {held_back_metabolites[0]} and {held_back_metabolites[1]}
+    - **Validation metabolite:** {held_back_metabolites[1]} (for hyperparameter tuning)
+    - **Test metabolite:** {held_back_metabolites[0]} (for final performance evaluation)
 
-    **Tensor Shapes:**
+    **Dataset Characteristics:**
 
-    {chr(10).join([f"- **{key}:** {value.shape}" for key, value in training_data.items()])}
+    - **Feature vector length:** {data_length} (concatenated spectrum + reference)
+    - **Data type:** Complex64 (supports both frequency and time domain)
+    - **Storage format:** HDF5 with compression for memory efficiency
+
+    **Dataset Sizes:**
+    {chr(10).join([f"- **{split.title()} dataset:** {len(dataset)}" for split, dataset in training_data.items()])}
+
+    **Multi-task Learning Setup:**
+
+    Each sample contains:
+
+    1. **Input:** [Mixed spectrum | Reference spectrum] → Feature vector of length {data_length}
+    2. **Output:** [Presence (0/1), Concentration ratio] → 2D target vector
+
+    This enables the model to simultaneously learn:
+
+    - **Binary classification:** Is the reference metabolite present in the mixture?
+    - **Concentration regression:** If present, what is its relative concentration?
     """
     )
     return
 
 
 @app.cell
-def _(DataLoader, np, torch, tqdm):
+def _():
+    """Import model architecture dependencies"""
     import copy
     import torch.optim as optim
     import torch.nn as nn
     import math
 
-    class MLPRegressor(nn.Module):
-        def __init__(self, input_size, trial=None, div_size=None):
-            """
-            Multi-layer perceptron for regression tasks.
+    return copy, math, nn, optim
 
-            Args:
-                input_size: Number of input features
-                trial: Optuna trial object for hyperparameter suggestion
-                div_size: Division factor for layer size reduction (if trial is None)
-            """
+
+@app.cell
+def _(nn, torch):
+    """Multi-Layer Perceptron for metabolite detection and quantification"""
+
+    class MLPRegressor(nn.Module):
+        """
+        MLP that properly handles complex NMR FID data
+        """
+
+        def __init__(self, input_size, trial=None, div_size=None):
             super(MLPRegressor, self).__init__()
 
-            # Get division factor from trial or use provided value
+            # Determine layer size reduction factor
             if trial is not None:
                 self.div_size = trial.suggest_float('div_size', 2, 10, step=1)
             elif div_size is not None:
                 self.div_size = div_size
             else:
-                self.div_size = 4  # Default value
+                self.div_size = 4
 
-            # Progressive layer size reduction based on division factor
-            a = input_size  # Input feature dimension
+            # For complex input, we need to handle real and imaginary parts
+            # This doubles the effective input size
+            effective_input_size = input_size * 2  # real + imaginary components
+
+            # Calculate progressive layer sizes
+            a = effective_input_size
             b = int(a / self.div_size)
             c = int(b / self.div_size)
             d = int(c / self.div_size)
             e = int(d / self.div_size)
 
-            # Store layer sizes for reference
-            self.layer_sizes = [a, b, c, d, e, 1]
+            self.layer_sizes = [a, b, c, d, e, 2]
 
-            # Define the model architecture
+            # Define network architecture
             self.model = nn.Sequential(
                 nn.Linear(a, b),
                 nn.ReLU(),
@@ -1078,175 +1319,36 @@ def _(DataLoader, np, torch, tqdm):
                 nn.ReLU(),
                 nn.Linear(d, e),
                 nn.ReLU(),
-                nn.Linear(e, 2),  # Output: concentration
+                nn.Linear(e, 2),  # Output: [presence_logit, concentration]
             )
 
         def forward(self, x):
+            # Properly handle complex input by concatenating real and imaginary parts
+            if x.dtype.is_complex:
+                # Concatenate real and imaginary parts to preserve all information
+                x_real = x.real
+                x_imag = x.imag
+                x = torch.cat([x_real, x_imag], dim=-1)
+
             return self.model(x)
 
-        def get_architecture_info(self):
-            """Return information about the model architecture"""
-            return {
-                'div_size': self.div_size,
-                'layer_sizes': self.layer_sizes,
-                'total_parameters': sum(p.numel() for p in self.parameters()),
-            }
+    return (MLPRegressor,)
 
-    class ImprovedTransformerRegressor(nn.Module):
-        def __init__(self, input_size, trial=None, **kwargs):
-            """
-            Improved Transformer model for NMR spectral analysis.
-            """
-            super(ImprovedTransformerRegressor, self).__init__()
 
-            # Get hyperparameters
-            if trial is not None:
-                self.d_model = int(trial.suggest_categorical('d_model', [128, 256, 512]))
-                self.nhead = int(trial.suggest_categorical('nhead', [8, 16]))
-                self.num_layers = int(trial.suggest_int('num_layers', 3, 6))
-                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [512, 1024, 2048]))
-                # Remove dropout from hyperparameter search
-                # Better sequence length strategy
-                self.target_seq_len = int(trial.suggest_categorical('target_seq_len', [64, 128, 256]))
-            else:
-                self.d_model = kwargs.get('d_model', 256)
-                self.nhead = kwargs.get('nhead', 8)
-                self.num_layers = kwargs.get('num_layers', 4)
-                self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
-                # Remove dropout parameter
-                self.target_seq_len = kwargs.get('target_seq_len', 128)
-
-            # Ensure nhead divides d_model evenly
-            while self.d_model % self.nhead != 0:
-                self.nhead = max(1, self.nhead - 1)
-
-            # Use linear projection instead of patch embedding to preserve all data
-            self.spectrum_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len)
-            self.reference_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len)
-
-            # Set actual sequence length to target (no data reduction)
-            self.actual_seq_len = self.target_seq_len
-
-            # Separate embeddings for spectrum and reference (no dropout)
-            self.spectrum_pos_encoding = PositionalEncoding(self.d_model, 0.0, self.actual_seq_len)
-
-            # Cross-attention between spectrum and reference (no dropout)
-            self.cross_attention = nn.MultiheadAttention(
-                embed_dim=self.d_model,
-                num_heads=self.nhead,
-                dropout=0.0,  # Remove dropout
-                batch_first=True
-            )
-
-            # Self-attention transformer (no dropout)
-            encoder_layer = nn.TransformerEncoderLayer(
-                d_model=self.d_model,
-                nhead=self.nhead,
-                dim_feedforward=self.dim_feedforward,
-                dropout=0.0,  # Remove dropout
-                activation='gelu',
-                batch_first=True,
-            )
-            self.transformer_encoder = nn.TransformerEncoder(
-                encoder_layer, num_layers=self.num_layers
-            )
-
-            # Multi-scale feature extraction (preserve all data)
-            self.multi_scale_conv = nn.ModuleList([
-                nn.Conv1d(self.d_model, self.d_model // 4, kernel_size=k, padding=k//2)
-                for k in [3, 7, 15]  # Different receptive fields
-            ])
-
-            # Calculate enriched feature size
-            enriched_feature_size = self.d_model + (3 * self.d_model // 4)
-
-            # Attention-based pooling for enriched features
-            self.attention_pool = nn.Sequential(
-                nn.Linear(enriched_feature_size, enriched_feature_size // 4),
-                nn.Tanh(),
-                nn.Linear(enriched_feature_size // 4, 1)
-            )
-
-            # Update task-specific heads to use enriched features
-            self.presence_head = nn.Sequential(
-                nn.Linear(enriched_feature_size, enriched_feature_size // 2),
-                nn.LayerNorm(enriched_feature_size // 2),
-                nn.GELU(),
-                nn.Linear(enriched_feature_size // 2, 1)
-            )
-
-            self.concentration_head = nn.Sequential(
-                nn.Linear(enriched_feature_size, enriched_feature_size // 2),
-                nn.LayerNorm(enriched_feature_size // 2),
-                nn.GELU(),
-                nn.Linear(enriched_feature_size // 2, enriched_feature_size // 4),
-                nn.GELU(),
-                nn.Linear(enriched_feature_size // 4, 1)
-            )
-
-        def forward(self, x):
-            batch_size = x.size(0)
-
-            # Split input into spectrum and reference (assuming concatenated)
-            mid_point = x.size(1) // 2
-            spectrum = x[:, :mid_point]  # [batch, seq_len]
-            reference = x[:, mid_point:]
-
-            # Project to transformer dimensions without data loss
-            spectrum_projected = self.spectrum_projection(spectrum)  # [batch, d_model * target_seq_len]
-            reference_projected = self.reference_projection(reference)
-
-            # Reshape to sequence format
-            spectrum_patches = spectrum_projected.view(batch_size, self.target_seq_len, self.d_model)
-            reference_patches = reference_projected.view(batch_size, self.target_seq_len, self.d_model)
-
-            # Add positional encoding (no dropout)
-            spectrum_patches = self.spectrum_pos_encoding(spectrum_patches)
-            reference_patches = self.spectrum_pos_encoding(reference_patches)
-
-            # Cross-attention between spectrum and reference
-            attended_spectrum, _ = self.cross_attention(
-                spectrum_patches, reference_patches, reference_patches
-            )
-
-            # Self-attention on attended spectrum
-            encoded = self.transformer_encoder(attended_spectrum)
-
-            # Multi-scale feature extraction
-            encoded_transposed = encoded.transpose(1, 2)  # [batch, d_model, seq_len]
-            multi_scale_features = []
-            for conv in self.multi_scale_conv:
-                multi_scale_features.append(conv(encoded_transposed))
-
-            # Combine multi-scale features
-            combined_features = torch.cat(multi_scale_features, dim=1)  # [batch, 3*d_model//4, seq_len]
-            combined_features = combined_features.transpose(1, 2)  # [batch, seq_len, 3*d_model//4]
-
-            # FIXED: Concatenate original transformer features with multi-scale features
-            enriched_features = torch.cat([encoded, combined_features], dim=2)  # [batch, seq_len, d_model + 3*d_model//4]
-
-            # Attention-based pooling using enriched features
-            attention_weights = self.attention_pool(enriched_features)  # [batch, seq_len, 1]
-            attention_weights = torch.softmax(attention_weights, dim=1)
-            pooled_features = torch.sum(enriched_features * attention_weights, dim=1)  # [batch, d_model + 3*d_model//4]
-
-            # Task-specific predictions
-            presence_logits = self.presence_head(pooled_features)  # [batch, 1]
-            concentration_pred = self.concentration_head(pooled_features)  # [batch, 1]
-
-            return torch.cat([presence_logits, concentration_pred], dim=1)  # [batch, 2]
+@app.cell
+def _(math, nn, torch):
+    """Advanced Transformer architecture for NMR spectral analysis"""
 
     class PositionalEncoding(nn.Module):
-        """Positional encoding for transformer input sequences"""
+        """Sinusoidal positional encoding for transformer sequences"""
 
-        def __init__(self, d_model, dropout=0.1, max_len=5000):
+        def __init__(self, d_model, dropout=0.0, max_len=5000):
             super(PositionalEncoding, self).__init__()
-            # Remove dropout completely
+
             pe = torch.zeros(max_len, d_model)
             position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
             div_term = torch.exp(
-                torch.arange(0, d_model, 2).float()
-                * (-math.log(10000.0) / d_model)
+                torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
             )
 
             pe[:, 0::2] = torch.sin(position * div_term)
@@ -1256,20 +1358,190 @@ def _(DataLoader, np, torch, tqdm):
             self.register_buffer('pe', pe)
 
         def forward(self, x):
-            # x shape: [batch_size, seq_len, d_model]
             seq_len = x.size(1)
             x = x + self.pe[:seq_len, :].transpose(0, 1)
             return x
 
+    class TransformerRegressor(nn.Module):
+        """
+        Transformer specifically designed for complex NMR FID data
+        """
+
+        def __init__(self, input_size, trial=None, **kwargs):
+            super(TransformerRegressor, self).__init__()
+
+            # Hyperparameter configuration
+            if trial is not None:
+                self.d_model = int(trial.suggest_categorical('d_model', [128, 256, 512]))
+                self.nhead = int(trial.suggest_categorical('nhead', [8, 16]))
+                self.num_layers = int(trial.suggest_int('num_layers', 3, 6))
+                self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [512, 1024, 2048]))
+                self.target_seq_len = int(trial.suggest_categorical('target_seq_len', [64, 128, 256]))
+            else:
+                self.d_model = kwargs.get('d_model', 256)
+                self.nhead = kwargs.get('nhead', 8)
+                self.num_layers = kwargs.get('num_layers', 4)
+                self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
+                self.target_seq_len = kwargs.get('target_seq_len', 128)
+
+            # Ensure attention head compatibility
+            while self.d_model % self.nhead != 0:
+                self.nhead = max(1, self.nhead - 1)
+
+            # Separate projections for real and imaginary parts
+            # This preserves phase relationships in the complex data
+            self.spectrum_real_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.spectrum_imag_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.reference_real_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.reference_imag_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+
+            # Complex-aware positional encoding
+            self.spectrum_pos_encoding = PositionalEncoding(self.d_model, 0.0, self.target_seq_len)
+
+            # Phase-aware attention mechanism
+            self.magnitude_attention = nn.MultiheadAttention(
+                embed_dim=self.d_model,
+                num_heads=self.nhead,
+                dropout=0.0,
+                batch_first=True
+            )
+
+            self.phase_attention = nn.MultiheadAttention(
+                embed_dim=self.d_model,
+                num_heads=self.nhead,
+                dropout=0.0,
+                batch_first=True
+            )
+
+            # Transformer encoder
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=self.d_model,
+                nhead=self.nhead,
+                dim_feedforward=self.dim_feedforward,
+                dropout=0.0,
+                activation='gelu',
+                batch_first=True,
+            )
+            self.transformer_encoder = nn.TransformerEncoder(
+                encoder_layer, num_layers=self.num_layers
+            )
+
+            # Task-specific heads
+            self.presence_head = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 2),
+                nn.LayerNorm(self.d_model // 2),
+                nn.GELU(),
+                nn.Linear(self.d_model // 2, 1)
+            )
+
+            self.concentration_head = nn.Sequential(
+                nn.Linear(self.d_model, self.d_model // 2),
+                nn.LayerNorm(self.d_model // 2),
+                nn.GELU(),
+                nn.Linear(self.d_model // 2, 1)
+            )
+
+        def forward(self, x):
+            batch_size = x.size(0)
+
+            # Handle complex input properly
+            if x.dtype.is_complex:
+                # Split into real and imaginary components
+                x_real = x.real
+                x_imag = x.imag
+            else:
+                # If real input, create zero imaginary part
+                x_real = x
+                x_imag = torch.zeros_like(x)
+
+            # Split concatenated input into spectrum and reference
+            mid_point = x_real.size(1) // 2
+            spectrum_real = x_real[:, :mid_point]
+            spectrum_imag = x_imag[:, :mid_point]
+            reference_real = x_real[:, mid_point:]
+            reference_imag = x_imag[:, mid_point:]
+
+            # Project real and imaginary parts separately
+            spectrum_real_proj = self.spectrum_real_projection(spectrum_real)
+            spectrum_imag_proj = self.spectrum_imag_projection(spectrum_imag)
+            reference_real_proj = self.reference_real_projection(reference_real)
+            reference_imag_proj = self.reference_imag_projection(reference_imag)
+
+            # Combine real and imaginary projections
+            spectrum_combined = torch.cat([spectrum_real_proj, spectrum_imag_proj], dim=-1)
+            reference_combined = torch.cat([reference_real_proj, reference_imag_proj], dim=-1)
+
+            # Reshape to sequence format
+            spectrum_patches = spectrum_combined.view(batch_size, self.target_seq_len, self.d_model)
+            reference_patches = reference_combined.view(batch_size, self.target_seq_len, self.d_model)
+
+            # Add positional encoding
+            spectrum_patches = self.spectrum_pos_encoding(spectrum_patches)
+            reference_patches = self.spectrum_pos_encoding(reference_patches)
+
+            # Magnitude and phase-aware attention
+            magnitude_attended, _ = self.magnitude_attention(
+                spectrum_patches, reference_patches, reference_patches
+            )
+
+            # Calculate phase information
+            spectrum_phase = torch.atan2(spectrum_imag_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1), 
+                                       spectrum_real_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1))
+            reference_phase = torch.atan2(reference_imag_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1),
+                                        reference_real_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1))
+
+            # Phase-aware features (simplified for now)
+            phase_features = torch.cat([spectrum_phase, reference_phase], dim=-1)
+            if phase_features.size(-1) < self.d_model:
+                # Pad phase features to match d_model
+                padding = self.d_model - phase_features.size(-1)
+                phase_features = torch.cat([phase_features, torch.zeros(batch_size, self.target_seq_len, padding, device=phase_features.device)], dim=-1)
+            else:
+                phase_features = phase_features[:, :, :self.d_model]
+
+            phase_attended, _ = self.phase_attention(
+                phase_features, phase_features, phase_features
+            )
+
+            # Combine magnitude and phase information
+            combined_features = magnitude_attended + phase_attended
+
+            # Self-attention processing
+            encoded = self.transformer_encoder(combined_features)
+
+            # Global average pooling
+            pooled_features = torch.mean(encoded, dim=1)
+
+            # Task-specific predictions
+            presence_logits = self.presence_head(pooled_features)
+            concentration_pred = self.concentration_head(pooled_features)
+
+            return torch.cat([presence_logits, concentration_pred], dim=1)
+
+    return (TransformerRegressor,)
+
+
+@app.cell
+def _(MLPRegressor, TransformerRegressor, nn, torch):
+    """Hybrid ensemble combining MLP and Transformer architectures"""
+
     class HybridEnsembleRegressor(nn.Module):
+        """
+        Ensemble model combining MLP and Transformer strengths
+
+        - MLP: Efficient processing of global spectral features
+        - Transformer: Advanced sequence modeling and attention mechanisms
+        - Learnable weights: Adaptive combination based on task requirements
+        """
+
         def __init__(self, input_size, trial=None, **kwargs):
             super(HybridEnsembleRegressor, self).__init__()
 
-            # Initialize both models
+            # Initialize component models
             self.mlp = MLPRegressor(input_size, trial, **kwargs)
-            self.transformer = ImprovedTransformerRegressor(input_size, trial, **kwargs)
+            self.transformer = TransformerRegressor(input_size, trial, **kwargs)
 
-            # Learnable ensemble weights
+            # Task-specific ensemble weights
             if trial is not None:
                 self.classification_weight = trial.suggest_float('class_ensemble_weight', 0.1, 0.9)
                 self.concentration_weight = trial.suggest_float('conc_ensemble_weight', 0.1, 0.9)
@@ -1278,6 +1550,7 @@ def _(DataLoader, np, torch, tqdm):
                 self.concentration_weight = kwargs.get('conc_ensemble_weight', 0.7)   # Favor MLP
 
         def forward(self, x):
+            # Get predictions from both models
             mlp_output = self.mlp(x)
             transformer_output = self.transformer(x)
 
@@ -1294,16 +1567,34 @@ def _(DataLoader, np, torch, tqdm):
 
             return torch.stack([classification_pred, concentration_pred], dim=1)
 
+    return (HybridEnsembleRegressor,)
+
+
+@app.cell
+def _(nn, torch):
+    """Advanced loss function with curriculum learning and adaptive weighting"""
+
     def improved_compute_loss(predictions, targets, epoch=0, max_epochs=200):
         """
-        Improved loss function with curriculum learning and adaptive weighting.
+        Multi-task loss with adaptive weighting and curriculum learning
         """
+        # Ensure all tensors are float32 for loss computation
+        if predictions.dtype.is_complex:
+            predictions = predictions.real
+        if targets.dtype.is_complex:
+            targets = targets.real
+
+        # Ensure float32 explicitly
+        predictions = predictions.float()
+        targets = targets.float()
+
         presence_logits = predictions[:, 0]
-        concentration_pred = predictions[:, 1]
+        concentration_pred = predictions[:, 1] 
         presence_true = targets[:, 0]
         concentration_true = targets[:, 1]
 
-        # Classification loss
+        # Rest of the function remains the same...
+        # Binary classification loss
         classification_loss = nn.BCEWithLogitsLoss()(presence_logits, presence_true)
 
         # Curriculum learning: gradually increase concentration loss weight
@@ -1324,7 +1615,7 @@ def _(DataLoader, np, torch, tqdm):
                 concentration_true[present_mask]
             )
 
-            # Calculate MAE and RMSE for monitoring
+            # Calculate monitoring metrics
             concentration_mae = torch.mean(torch.abs(concentration_diff))
             concentration_rmse = torch.sqrt(torch.mean(concentration_diff ** 2))
 
@@ -1341,6 +1632,40 @@ def _(DataLoader, np, torch, tqdm):
 
         return total_loss, classification_loss, concentration_mae, concentration_rmse
 
+    return (improved_compute_loss,)
+
+
+@app.cell(hide_code=True)
+def _(device_info, gpu_name, mo):
+    mo.md(
+        rf"""
+    ## Model Training Setup
+
+    **Hardware Configuration:**
+
+    - **Training Device:** {device_info} / {gpu_name}
+
+    **Model Architecture:** Transformer
+
+    - Final output: Classification Logits and concentration regression
+    """
+    )
+    return
+
+
+@app.cell
+def _(
+    DataLoader,
+    HybridEnsembleRegressor,
+    MLPRegressor,
+    TransformerRegressor,
+    copy,
+    improved_compute_loss,
+    np,
+    optim,
+    torch,
+    tqdm,
+):
     def train_model(training_data, trial, model_type='mlp'):
         """
         Train a multi-task neural network using streamable DataLoaders for memory efficiency.
@@ -1357,7 +1682,7 @@ def _(DataLoader, np, torch, tqdm):
         input_length = len(sample_data)
 
         if model_type == 'transformer':
-            model = ImprovedTransformerRegressor(
+            model = TransformerRegressor(
                 input_size=input_length, trial=trial
             ).to(device)
         elif model_type == 'mlp':
@@ -1367,7 +1692,8 @@ def _(DataLoader, np, torch, tqdm):
 
         # Create DataLoaders with streamable datasets
         # Increase num_workers for better I/O performance with file-based datasets
-        num_workers = min(4, max(1, torch.get_num_threads() // 2))
+        # num_workers = min(4, max(1, torch.get_num_threads() // 2))
+        num_workers = 0
 
         train_loader = DataLoader(
             training_data['train_dataset'], 
@@ -1401,8 +1727,15 @@ def _(DataLoader, np, torch, tqdm):
             dummy_data = dummy_data.to(device, non_blocking=True)
             dummy_labels = dummy_labels.to(device, non_blocking=True)
 
+            # Ensure labels are float32 (critical for loss functions)
+            if dummy_labels.dtype.is_complex:
+                dummy_labels = dummy_labels.real
+            dummy_labels = dummy_labels.float()
+
             dummy_output = model(dummy_data)
-            dummy_loss = torch.nn.MSELoss()(dummy_output, dummy_labels)
+
+            # Use your proper loss function instead of raw MSELoss
+            dummy_loss, _, _, _ = improved_compute_loss(dummy_output, dummy_labels, 0, 200)
             dummy_loss.backward()
             model.zero_grad()
 
@@ -1555,24 +1888,6 @@ def _(DataLoader, np, torch, tqdm):
     return device_info, gpu_name, train_model
 
 
-@app.cell(hide_code=True)
-def _(device_info, gpu_name, mo):
-    mo.md(
-        rf"""
-    ## Model Training Setup
-
-    **Hardware Configuration:**
-
-    - **Training Device:** {device_info} / {gpu_name}
-
-    **Model Architecture:** Transformer
-
-    - Final output: Classification Logits and concentration regression
-    """
-    )
-    return
-
-
 @app.cell
 def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
     import optuna
@@ -1660,7 +1975,7 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
         [
             t
             for t in study.trials
-            if t.state == optuna.trial.TrialState.COMPLETE
+            if t.state == optuna.trial.TrialState.COMPLETE and t.state is not optuna.trial.TrialState.FAIL
         ]
     )
 
@@ -1672,7 +1987,7 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
 
             def callback(study, trial):
                 """Progress callback for Optuna optimization"""
-                if trial.state == optuna.trial.TrialState.COMPLETE:
+                if trial.state is not optuna.trial.TrialState.FAIL:
                     pbar.update(1)
 
             # Resume or start hyperparameter optimization
