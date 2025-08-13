@@ -44,7 +44,7 @@ def _():
     # global variables
 
     count = 100
-    trials = 1000
+    trials = 10
     combo_number = 30
     notebook_name = 'randomisation_hold_back'
     MODEL_TYPE = 'mlp'  # or 'mlp' or 'transformer'
@@ -493,7 +493,7 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
         ranges=[[-100, 100]],
         baseline_distortion=False,
         downsample=None,
-        reverse=True,
+        reverse=False,
     ):
         """
         Extract and preprocess spectral regions of interest.
@@ -509,8 +509,8 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
 
         new_positions = positions #Default
         new_intensities = intensities #Default, in the case of no transformation
-    
-        if reverse == True:
+
+        if reverse:
             fid = ifft(hilbert(intensities))
             fid[0] = 0
             threshold = 1e-16
@@ -553,9 +553,9 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
         spectra,
         ranges,
         substanceDict,
+        reverse,
         baseline_distortion=False,
         downsample=None,
-        reverse=True,
     ):
         """
         Complete preprocessing pipeline for a single spectrum.
@@ -567,6 +567,7 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
             ranges=ranges,
             baseline_distortion=baseline_distortion,
             downsample=downsample,
+            reverse=reverse,
         )
 
         ratios = preprocess_ratio(spectra['scales'], substanceDict)
@@ -644,9 +645,15 @@ def _(downsample, np, plt, reference_spectra, reverse, spectra, substanceDict):
                 reference_spectra[substanceDict[substance][0]],
             )
             plt.subplot(1, 2, 2)
-            plt.plot(
-                preprocessed_reference_spectra[substanceDict[substance][0]],
-            )
+            if reverse:
+                plt.plot(
+                    preprocessed_reference_spectra[substanceDict[substance][0]],
+                )
+            else:
+                plt.plot(
+                    spectra[0]['positions'],
+                    preprocessed_reference_spectra[substanceDict[substance][0]],
+                )
 
         return plt.gca()
 
@@ -1512,7 +1519,7 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
             combined_score = 0.5 * val_classification_error + 0.5 * (
                 0.5 * val_conc_mae + 0.5 * val_conc_rmse
             )
-
+        
             return combined_score
 
         except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
@@ -1572,7 +1579,8 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
 
             def callback(study, trial):
                 """Progress callback for Optuna optimization"""
-                pbar.update(1)
+                if trial.state == optuna.trial.TrialState.COMPLETE:
+                    pbar.update(1)
 
             # Resume or start hyperparameter optimization
             study.optimize(
