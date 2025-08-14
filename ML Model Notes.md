@@ -146,6 +146,38 @@ Test Set (Final Evaluation):
     MAE: 0.024982
     RMSE: 0.049781
 
+### Hilbert Transform (FID) 2048 Improved Everything
+
+Model Type: MLP Best Trial Performance (Validation Set):
+
+    Combined Score: 0.4692 (0.5 * Classification Error + 0.5 * (0.5MAE + 0.5RMSE), optimized metric - lower is better)
+    Classification Accuracy: 0.7273 (Presence prediction accuracy - higher is better)
+    Concentration R²: 0.6776 (Coefficient of determination for concentration - higher is better)
+    Concentration MAE: 0.539668 (Mean Absolute Error for concentration - lower is better)
+    Concentration RMSE: 0.791644 (Root Mean Square Error for concentration - lower is better)
+
+Final Test Set Performance:
+
+    Classification Accuracy: 0.9143
+    Concentration R²: 0.2785
+    Concentration MAE: 0.866933
+    Concentration RMSE: 1.279395
+
+Best Hyperparameters: Training Parameters: - Batch Size: 100 - Learning Rate: 2.62e-02 MLP Architecture: - Division Size (layer reduction factor): 2.0 Model Architecture: Input Layer → Hidden Layers (progressively smaller) → Output Layer (2 outputs) Layer sizes are determined by dividing the previous layer size by the division factor Multi-Task Learning:
+
+    Task 1: Binary classification for substance presence (BCEWithLogitsLoss)
+    Task 2: Regression for concentration prediction (weighted by presence)
+    Combined Loss: 0.5 × Classification Error + 0.5 × (0.5×MAE + 0.5×RMSE)
+
+Data Split:
+
+    Training: Spectra without held-back metabolite
+    Validation: 15% of training data (used for hyperparameter optimization)
+    Test: Spectra containing held-back metabolite (['L-Valine', 'L-Threonine'])
+
+Total Trials Completed: 89
+
+Getting better with concentration, still not great with generalisation
 
 ## CNN
 ### Metabolite Randomisation with holdout 10 trials:
