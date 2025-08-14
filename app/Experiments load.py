@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.16"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -212,8 +212,10 @@ def _(np, pka):
         closest_indices.append(closest_index)
 
     expected_phs = []
+    expected_acid_ratios = []
     for idx in closest_indices:
         expected_phs.append(all_expected_phs[idx])
+        expected_acid_ratios.append(acid_ratios[idx])
 
     def calculate_ratio(percentage_d2o):
         # Molar masses
@@ -263,6 +265,7 @@ def _(np, pka):
     return (
         acid_vol,
         base_vol,
+        expected_acid_ratios,
         expected_phs,
         output,
         phs,
@@ -305,7 +308,15 @@ def _(acid_vol, corrected_pka, expected_phs, phs):
 
 
 @app.cell
-def _(acid_vol, base_vol, corrected_pka, expected_phs, phs, stocks):
+def _(
+    acid_vol,
+    base_vol,
+    corrected_pka,
+    expected_acid_ratios,
+    expected_phs,
+    phs,
+    stocks,
+):
     import matplotlib.pyplot as plt
 
     # Assuming acid_vol and base_vol are already in liters
@@ -314,12 +325,19 @@ def _(acid_vol, base_vol, corrected_pka, expected_phs, phs, stocks):
     moles_base = [
         vol * stocks['base']['molarity'] for vol in base_vol
     ]  # Use base molarity here
+    expected_moles_acid = [ratio * 0.0006 * stocks['acid']['molarity'] for ratio in expected_acid_ratios]
+    expected_moles_base = [(1-ratio) * 0.0006 * stocks['acid']['molarity'] for ratio in expected_acid_ratios]
 
     # Calculate molar ratios
     # molar_ratios = [acid / base if base != 0 else 7 for acid, base in zip(moles_acid, moles_base)]
     molar_ratios = [
         (base - acid) for acid, base in zip(moles_acid, moles_base)
     ]
+
+    expected_molar_ratios = [
+        (base - acid) for acid, base in zip(expected_moles_acid, expected_moles_base)
+    ]
+
 
     def _():
         dels = [5, 6, 16]
@@ -334,7 +352,7 @@ def _(acid_vol, base_vol, corrected_pka, expected_phs, phs, stocks):
     # Plotting
     plt.figure(figsize=(10, 6))
     plt.plot(molar_ratios, phs, label='Experimental pHs', marker='o')
-    plt.plot(molar_ratios, expected_phs, label='Expected pHs', marker='x')
+    plt.plot(expected_molar_ratios, expected_phs, label='Expected pHs', marker='x')
     # plt.plot([molar_ratios[0], molar_ratios[-1]], [phs[0], phs[-1]], label='Linear phs')
 
     for id, point in enumerate(corrected_pka):
@@ -357,8 +375,6 @@ def _(acid_vol, base_vol, corrected_pka, expected_phs, phs, stocks):
 @app.cell
 def _(corrected_pka, graph_molarity, plt, simulate_ph_graph):
     ratios_perfect = simulate_ph_graph(corrected_pka, graph_molarity, charge=0)
-
-    print(ratios_perfect)
 
     moles_acid_perfect = [
         ratio * 0.006 * graph_molarity
@@ -402,5 +418,5 @@ def _(corrected_pka, graph_molarity, plt, simulate_ph_graph):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
