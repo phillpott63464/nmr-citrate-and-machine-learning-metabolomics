@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.17"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -16,7 +16,7 @@ def _():
 def _(os):
     # global variables
 
-    count = 1000
+    count = 10
     trials = 100
     graph_count = 3
     combo_number = None
@@ -25,6 +25,8 @@ def _(os):
 
     if os.path.exists(cache_dir) == False:
         os.mkdir(cache_dir)
+
+    os.makedirs('figs', exist_ok=True)
 
     # Define metabolites and their spectrum IDs for NMR simulation
     substanceDict = {
@@ -36,19 +38,26 @@ def _(os):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""## Generate sample data""")
+def _(basefigure, mo):
+    mo.md(
+        rf"""
+    ## Generate sample data
+
+    {mo.as_html(basefigure)}
+    """
+    )
     return
 
 
 @app.cell
-def _(count, substanceDict):
+def _(count, graph_count, substanceDict):
     # Data generation with multiprocessing
 
     from morgan.createTrainingData import createTrainingData
     import numpy as np
     import multiprocessing as mp
     from functools import partial
+    import matplotlib.pyplot as plt
 
     substanceSpectrumIds = [
         substanceDict[substance][-1] for substance in substanceDict
@@ -59,9 +68,10 @@ def _(count, substanceDict):
         return createTrainingData(
             substanceSpectrumIds=substanceSpectrumIds,
             sampleNumber=batch_size,
-            rondomlyScaleSubstances=True,
+            # rondomlyScaleSubstances=False,
+            # randomlyOffsetMultiplets=False,
             # referenceSubstanceSpectrumId='dss',
-            # points=2**11
+            # points=2**11data[i] for i in indices
             # multipletOffsetCap=1,
             # noiseRange=(2, -6)
         )
@@ -140,7 +150,40 @@ def _(count, substanceDict):
     positions_shape = spectra[0]['positions'].shape
     components_shape = spectra[0]['components'].shape
 
-    return createTrainingData, mp, np, partial, spectra
+    def _():
+        indices = []
+        for idx, position in enumerate(spectra[0]['positions']):
+            if position > 2 and position < 3:
+                indices.append(idx)
+
+        return indices
+
+    indices = _()
+
+    def genBaseGraph():
+        plt.figure(figsize=(graph_count * 4, graph_count * 4))
+
+        for x in range(graph_count**2):  # Changed from range(1, graph_count**2 + 1)
+            plt.subplot(graph_count, graph_count, x + 1)  # Added +1 for subplot numbering
+            plt.plot(
+                [spectra[x]['positions'][i] for i in indices],  # Now using x (0-8)
+                [spectra[x]['intensities'][0][i] for i in indices],
+            )
+
+        plt.savefig('figs/base.svg')
+        return plt.gca()
+
+    basefigure = genBaseGraph()
+    return (
+        basefigure,
+        createTrainingData,
+        indices,
+        mp,
+        np,
+        partial,
+        plt,
+        spectra,
+    )
 
 
 @app.cell(hide_code=True)
@@ -156,9 +199,8 @@ def _(hilbertfigures, mo):
 
 
 @app.cell
-def _(graph_count, spectra):
+def _(graph_count, indices, plt, spectra):
     from scipy.signal import hilbert
-    import matplotlib.pyplot as plt
 
     hilberts = []
     for index, spectrum2 in enumerate(
@@ -166,7 +208,8 @@ def _(graph_count, spectra):
     ):  # Corrected 'ennumerate' to 'enumerate'
         hilberts.append(
             (
-                hilbert(
+                #hilbert(
+                (
                     spectrum2['intensities'][
                         0
                     ]  # Assuming 'intensities' is a list or array
@@ -184,15 +227,21 @@ def _(graph_count, spectra):
     # CreaPerformte visualization grid showing sample spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
+
     for graphcounter2 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter2)
         plt.plot(
-            hilberts[graphcounter2],
+            [spectra[0]['positions'][i] for i in indices],
+            [hilberts[graphcounter2][i] for i in indices],
         )
+
+        plt.title('Hilbert Transform')
+
+    plt.savefig('figs/hilbert.svg')
 
     hilbertfigures = plt.gca()
 
-    return hilbert, hilbertfigures, hilberts, plt
+    return hilbert, hilbertfigures, hilberts
 
 
 @app.cell(hide_code=True)
@@ -208,7 +257,7 @@ def _(inversefigures, mo):
 
 
 @app.cell
-def _(graph_count, hilberts, np, plt):
+def _(graph_count, hilberts, indices, np, plt):
     from scipy.fft import ifft
 
     from math import log2
@@ -216,7 +265,7 @@ def _(graph_count, hilberts, np, plt):
     inverses, inverses_real = [], []
     for hilbertarray in hilberts:
         inv = ifft(hilbertarray)
-        inv[0] = 0
+        # inv[0] = 0
         # Zero out very small values (both real and imaginary)0
         # inv_real = np.real(inv).astype(np.float32)
         threshold = 1e-16
@@ -234,21 +283,23 @@ def _(graph_count, hilberts, np, plt):
 
     for idx in range(min(len(inverses), graph_count**2)):
         plt.subplot(graph_count, graph_count, idx + 1)
-        plt.plot(inverses[idx])
-        plt.plot(inverses_real[idx])
+        plt.plot(
+            # [spectra[0]['positions'][i] for i in indices],
+            [inverses[idx][i] for i in indices],
+        )
 
     inversefigures = plt.gca()
     return ifft, inversefigures, inverses, inverses_real
 
 
 @app.cell
-def _(mo, uninversedfigures):
-    mo.md(rf"""{mo.as_html(uninversedfigures)}""")
+def _(mo, uninversedfigure):
+    mo.md(rf"""{mo.as_html(uninversedfigure)}""")
     return
 
 
 @app.cell
-def _(inverses, inverses_real, np, plt):
+def _(graph_count, indices, inverses, inverses_real, plt, spectra):
     from scipy.fft import fft
 
     uninversed = []
@@ -261,20 +312,22 @@ def _(inverses, inverses_real, np, plt):
     # Create visualization grid showing sample spectra
     plt.figure(figsize=(12, 4))
 
-    plt.subplot(1, 2, 1)
-    plt.plot(
-        uninversed[0].astype(np.float32),
-    )
-    plt.title('Uninversed')
-    plt.subplot(1, 2, 2)
-    plt.plot(
-        uninversed_real[0].astype(np.float32),
-    )
-    plt.title('Uninversed real')
-    plt.legend()
+    plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
-    uninversedfigures = plt.gca()
-    return uninversed, uninversedfigures
+    def _():
+        for idx in range(min(len(inverses), graph_count**2)):
+            plt.subplot(graph_count, graph_count, idx + 1)
+            plt.plot(
+                [spectra[0]['positions'][i] for i in indices],
+                [uninversed[idx][i] for i in indices],
+            )
+
+        plt.savefig('figs/uninversedfigure.svg')
+
+        return plt.gca()
+
+    uninversedfigure = _()
+    return uninversed, uninversedfigure
 
 
 @app.cell
@@ -1221,5 +1274,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
