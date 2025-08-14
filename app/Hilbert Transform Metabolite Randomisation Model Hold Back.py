@@ -48,17 +48,23 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 1                  # Number of hyperparameter optimization trials
+    trials = 100                  # Number of hyperparameter optimization trials
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = 2**11             # Target resolution for ML model (None = no downsampling)
     reverse = True                # Apply Hilbert transform (time domain analysis)
 
-    # Cache directory structure
-    cache_dir = f'./data_cache/{notebook_name}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
+    # Smart cache directory structure
+    base_cache_dir = f'./data_cache/{notebook_name}'
+    raw_data_dir = f'{base_cache_dir}/raw_data'  # Only depends on substances & generation params
+    processed_data_dir = f'{base_cache_dir}/processed/{"time" if reverse else "freq"}/{downsample}'  # Depends on preprocessing
+    model_cache_dir = f'{processed_data_dir}/models/{MODEL_TYPE}'  # Depends on model type + processed data
+
+    # Legacy cache_dir for backward compatibility
+    cache_dir = f'{base_cache_dir}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
     # NMR metabolite database mapping (substance name -> spectrum ID)
     substanceDict = {
@@ -79,10 +85,12 @@ def _():
 
     return (
         MODEL_TYPE,
-        cache_dir,
         combo_number,
         count,
         downsample,
+        model_cache_dir,
+        processed_data_dir,
+        raw_data_dir,
         reverse,
         substanceDict,
         trials,
@@ -131,12 +139,12 @@ def _():
 
 
 @app.cell
-def _(cache_dir, os, pickle, random):
-    """Data persistence utilities for caching generated spectra"""
+def _(os, pickle, random, raw_data_dir):
+    """Data persistence utilities for caching generated spectra with smart directory structure"""
 
     def save_spectra_data(spectra, held_back_metabolites, combinations, filename):
         """
-        Save generated spectra data to persistent cache
+        Save generated spectra data to raw data cache (model-independent)
 
         Args:
             spectra: List of spectrum dictionaries with intensities, positions, scales
@@ -144,8 +152,8 @@ def _(cache_dir, os, pickle, random):
             combinations: List of metabolite combinations used
             filename: Cache file identifier
         """
-        os.makedirs(cache_dir, exist_ok=True)
-        filepath = f'{cache_dir}/{filename}.pkl'
+        os.makedirs(raw_data_dir, exist_ok=True)
+        filepath = f'{raw_data_dir}/{filename}.pkl'
 
         data_to_save = {
             'spectra': spectra,
@@ -162,12 +170,12 @@ def _(cache_dir, os, pickle, random):
 
     def load_spectra_data(filename, substanceDict):
         """
-        Load cached spectra data with backward compatibility
+        Load cached spectra data from raw data cache
 
         Returns:
             tuple: (spectra, held_back_metabolites, combinations) or (None, None, None) if not found
         """
-        filepath = f'{cache_dir}/{filename}.pkl'
+        filepath = f'{raw_data_dir}/{filename}.pkl'
 
         if not os.path.exists(filepath):
             return None, None, None
@@ -203,14 +211,24 @@ def _(cache_dir, os, pickle, random):
 
         return spectra, held_back_metabolites, combinations
 
-    def generate_cache_key(substanceDict, combo_number, count):
-        """Generate unique cache identifier based on experimental parameters"""
+    def generate_raw_cache_key(substanceDict, combo_number, count):
+        """Generate cache key for raw data (independent of model/preprocessing)"""
         substance_key = '_'.join(sorted(substanceDict.keys()))
         combo_key = f'combos_{combo_number}'
         count_key = f'count_{count}'
-        return f'spectra_{substance_key}_{combo_key}_{count_key}'
+        return f'raw_spectra_{substance_key}_{combo_key}_{count_key}'
 
-    return generate_cache_key, load_spectra_data, save_spectra_data
+    def generate_processed_cache_key(raw_cache_key, downsample, reverse):
+        """Generate cache key for processed datasets"""
+        processing_key = f'{"time" if reverse else "freq"}_{downsample}'
+        return f'processed_{raw_cache_key}_{processing_key}'
+
+    return (
+        generate_processed_cache_key,
+        generate_raw_cache_key,
+        load_spectra_data,
+        save_spectra_data,
+    )
 
 
 @app.cell
@@ -243,7 +261,7 @@ def _(
     combo_number,
     count,
     create_batch_data,
-    generate_cache_key,
+    generate_raw_cache_key,
     itertools,
     load_spectra_data,
     random,
@@ -251,7 +269,7 @@ def _(
     substanceDict,
     tqdm,
 ):
-    """Main data generation pipeline with caching and hold-back selection"""
+    """Main data generation pipeline with smart caching"""
 
     def check_loaded_data(spectra, held_back_metabolites, combinations):
         """
@@ -261,7 +279,7 @@ def _(
             tuple: (spectra, held_back_metabolites, combinations)
         """
         if spectra is None:
-            print('No cached data found. Generating new spectra...')
+            print('No cached raw data found. Generating new spectra...')
 
             # Generate all possible metabolite combinations (complexity: 4+ substances)
             substances = list(substanceDict.keys())
@@ -322,21 +340,21 @@ def _(
                     spectra.append(spectrum)
 
             # Cache generated data for future use
-            save_spectra_data(spectra, held_back_metabolites, combinations, cache_key)
+            save_spectra_data(spectra, held_back_metabolites, combinations, raw_cache_key)
         else:
-            print('Using cached spectra data.')
+            print('Using cached raw spectra data.')
             if held_back_metabolites is None:
                 # Legacy cache: select new held-back metabolites
                 held_back_metabolites = random.sample(list(substanceDict.keys()), 2)
                 print(f"Cache missing held-back metabolites. Selected '{held_back_metabolites}' and updating cache...")
-                save_spectra_data(spectra, held_back_metabolites, combinations, cache_key)
+                save_spectra_data(spectra, held_back_metabolites, combinations, raw_cache_key)
             print(f'Using {len(combinations)} combinations from cache')
 
         return spectra, held_back_metabolites, combinations
 
-    # Generate cache key and attempt to load existing data
-    cache_key = generate_cache_key(substanceDict, combo_number, count)
-    spectra, held_back_metabolites, combinations = load_spectra_data(cache_key, substanceDict)
+    # Generate cache key for raw data only (model-independent)
+    raw_cache_key = generate_raw_cache_key(substanceDict, combo_number, count)
+    spectra, held_back_metabolites, combinations = load_spectra_data(raw_cache_key, substanceDict)
     spectra, held_back_metabolites, combinations = check_loaded_data(
         spectra, held_back_metabolites, combinations
     )
@@ -354,7 +372,7 @@ def _(
     print(f"Positions shape: {spectra[0]['positions'].shape}")
     print(f"Components shape: {spectra[0]['components'].shape}")
 
-    return cache_key, combinations, held_back_metabolites, spectra
+    return combinations, held_back_metabolites, raw_cache_key, spectra
 
 
 @app.cell(hide_code=True)
@@ -430,7 +448,7 @@ def _(mo, spectra, spectrafigures):
     The plots below show sample spectra from the generated dataset. Each spectrum represents a unique combination of metabolites at different concentrations, simulating the complexity found in real biological samples.
 
     **Key Features:**
-    +
+
     - **Peak diversity:** Different metabolites contribute characteristic peaks at specific chemical shifts
     - **Intensity variation:** Random concentration scaling creates realistic amplitude differences
     - **Baseline effects:** Simulated experimental artifacts for model robustness
@@ -954,26 +972,25 @@ def _(Dataset, h5py, torch):
 
 
 @app.cell
-def _(StreamableNMRDataset, h5py, os):
-    """Data persistence utilities for streamable datasets"""
+def _(StreamableNMRDataset, h5py, os, processed_data_dir):
+    """Data persistence utilities for streamable datasets with smart caching"""
 
     def save_datasets_to_files(train_data, train_labels, val_data, val_labels, 
-                             test_data, test_labels, cache_dir, cache_key):
+                             test_data, test_labels, processed_cache_key):
         """
-        Save datasets to HDF5 files for streamable access
+        Save datasets to HDF5 files in processed data directory
 
         Args:
             *_data, *_labels: PyTorch tensors for each dataset split
-            cache_dir: Directory for cache storage
-            cache_key: Unique identifier for this dataset configuration
+            processed_cache_key: Cache key for processed datasets
 
         Returns:
             str: Path to saved HDF5 file
         """
-        os.makedirs(cache_dir, exist_ok=True)
-        file_path = f'{cache_dir}/{cache_key}_datasets.h5'
+        os.makedirs(processed_data_dir, exist_ok=True)
+        file_path = f'{processed_data_dir}/{processed_cache_key}_datasets.h5'
 
-        print(f"Saving datasets to {file_path}...")
+        print(f"Saving processed datasets to {file_path}...")
 
         with h5py.File(file_path, 'w') as f:
             # Save each dataset split with compression
@@ -997,20 +1014,22 @@ def _(StreamableNMRDataset, h5py, os):
             f.attrs['test_size'] = test_data.shape[0]
 
         file_size_mb = os.path.getsize(file_path) / (1024**2)
-        print(f"Datasets saved successfully. File size: {file_size_mb:.2f} MB")
+        print(f"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB")
         return file_path
 
-    def load_datasets_from_files(file_path):
+    def load_datasets_from_files(processed_cache_key):
         """
-        Create streamable datasets from HDF5 files
+        Create streamable datasets from HDF5 files in processed data directory
 
         Returns:
             tuple: (datasets_dict, data_length) or None if file doesn't exist
         """
+        file_path = f'{processed_data_dir}/{processed_cache_key}_datasets.h5'
+
         if not os.path.exists(file_path):
             return None
 
-        print(f"Loading datasets from {file_path}...")
+        print(f"Loading processed datasets from {file_path}...")
 
         # Create streamable datasets for each split
         train_dataset = StreamableNMRDataset(file_path, 'train')
@@ -1024,7 +1043,7 @@ def _(StreamableNMRDataset, h5py, os):
             val_size = f.attrs['val_size'] 
             test_size = f.attrs['test_size']
 
-        print(f"Loaded streamable datasets - Train: {train_size}, Val: {val_size}, Test: {test_size}")
+        print(f"Loaded processed datasets - Train: {train_size}, Val: {val_size}, Test: {test_size}")
         print(f"Feature vector length: {data_length}")
 
         return {
@@ -1038,28 +1057,29 @@ def _(StreamableNMRDataset, h5py, os):
 
 @app.cell
 def _(
-    cache_dir,
-    cache_key,
+    downsample,
+    generate_processed_cache_key,
     held_back_metabolites,
     load_datasets_from_files,
     np,
     preprocessed_reference_spectra,
     preprocessed_spectra,
     random,
+    raw_cache_key,
     reference_spectra,
+    reverse,
     save_datasets_to_files,
     spectra,
     substanceDict,
     torch,
 ):
-    """Main training data preparation with hold-back validation strategy"""
+    """Main training data preparation with smart caching based on preprocessing"""
 
     def get_training_data_mlp(
         spectra,
         reference_spectra,
         held_back_metabolites,
-        cache_dir,
-        cache_key,
+        processed_cache_key,
         train_ratio=0.7,
         val_ratio=0.15,
         test_ratio=0.15,
@@ -1076,18 +1096,18 @@ def _(
             spectra: Preprocessed training spectra
             reference_spectra: Pure component reference spectra
             held_back_metabolites: [test_metabolite, validation_metabolite]
+            processed_cache_key: Cache key that includes preprocessing parameters
 
         Returns:
             tuple: (datasets_dict, feature_vector_length)
         """
-        # Check for existing cached datasets
-        datasets_file_path = f'{cache_dir}/{cache_key}_datasets.h5'
-        existing_datasets = load_datasets_from_files(datasets_file_path)
+        # Check for existing cached datasets based on processed data
+        existing_datasets = load_datasets_from_files(processed_cache_key)
 
         if existing_datasets is not None:
             return existing_datasets
 
-        print("Creating new datasets with hold-back validation...")
+        print("Creating new processed datasets with hold-back validation...")
 
         # Get spectrum IDs for held-back metabolites
         held_back_key_test = substanceDict[held_back_metabolites[0]][0]
@@ -1189,7 +1209,7 @@ def _(
         print(f'  Validation: {len(data_val)} samples ({len(val_with_holdback)} with {held_back_metabolites[1]})')
         print(f'  Test: {len(data_test)} samples ({len(test_with_holdback)} with {held_back_metabolites[0]})')
 
-        # Convert to tensorsFAIL
+        # Convert to tensors
         datasets = {
             'train': (torch.tensor(data_train, dtype=torch.complex64), 
                      torch.tensor(labels_train, dtype=torch.float32)),
@@ -1202,28 +1222,30 @@ def _(
         # Save to HDF5 for streamable access
         file_path = save_datasets_to_files(
             *datasets['train'], *datasets['val'], *datasets['test'],
-            cache_dir, cache_key
+            processed_cache_key
         )
 
         # Clear memory and create streamable datasets
         del datasets
         torch.cuda.empty_cache()
 
-        return load_datasets_from_files(file_path)
+        return load_datasets_from_files(processed_cache_key)
 
-    # Execute training data preparation
+    # Generate cache key that includes preprocessing parameters
+    processed_cache_key = generate_processed_cache_key(raw_cache_key, downsample, reverse)
+
+    # Execute training data preparation with preprocessing-aware caching
     training_data, data_length = get_training_data_mlp(
         spectra=preprocessed_spectra,
         reference_spectra=preprocessed_reference_spectra,
         held_back_metabolites=held_back_metabolites,
-        cache_dir=cache_dir,
-        cache_key=cache_key,
+        processed_cache_key=processed_cache_key,
     )
 
-    # Delete data from earlier in the piplines ((TOOD: turn the earlier pipelines into a single pipeline where everything gets streamed TO a file. So you can generate like, 2 million spectra without worrying about RAM or anything)).
+    # Delete data from earlier in the pipelines
     del spectra, reference_spectra, preprocessed_spectra, preprocessed_reference_spectra
 
-    return data_length, training_data
+    return data_length, processed_cache_key, training_data
 
 
 @app.cell(hide_code=True)
@@ -1878,7 +1900,17 @@ def _(
 
 
 @app.cell
-def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
+def _(
+    MODEL_TYPE,
+    model_cache_dir,
+    os,
+    processed_cache_key,
+    torch,
+    tqdm,
+    train_model,
+    training_data,
+    trials,
+):
     import optuna
     from functools import partial
 
@@ -1951,11 +1983,16 @@ def _(MODEL_TYPE, cache_dir, torch, tqdm, train_model, training_data, trials):
 
             return penalty_score
 
-    # Create or load existing Optuna study with persistent SQLite storage
+    # Create study name that includes model type and processed data key
+    study_name = f'study_{MODEL_TYPE}_{processed_cache_key}'
+
+    os.makedirs(model_cache_dir, exist_ok=True)
+
+    # Create or load existing Optuna study with model-specific storage
     study = optuna.create_study(
-        direction='minimize',  # Maximize the negative combined error (minimize error)
-        study_name='study',  # Use cache key for unique study identification
-        storage=f'sqlite:///{cache_dir}/database.db',  # Use cache key for database filename
+        direction='minimize',  # Minimize combined error
+        study_name=study_name,
+        storage=f'sqlite:///{model_cache_dir}/optuna_{MODEL_TYPE}.db',  # Model-specific database
         load_if_exists=True,  # Resume previous optimization if study exists
     )
 
