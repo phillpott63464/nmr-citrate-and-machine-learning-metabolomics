@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PeakList modified="2025-08-15T15:23:55">
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=3.018594ppm, F2=3.007314ppm, MI=6.77cm, MAXI=15.63cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=3.007314ppm, F2=2.908800ppm, MI=-4.91cm, MAXI=18.82cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+    <Peak1D F1="2.962008" intensity="0.1137953" type="0"/>
+    <Peak1D F1="2.936005" intensity="0.1594449" type="0"/>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.908800ppm, F2=2.908810ppm, MI=-4.91cm, MAXI=0.00cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.908800ppm, F2=2.860681ppm, MI=4.43cm, MAXI=4.67cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.860671ppm, F2=2.825326ppm, MI=-6.24cm, MAXI=0.00cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-08-15T15:23:55" expNo="3" name="20250811_cit_nacit_titr_3" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.825326ppm, F2=2.755388ppm, MI=-6.24cm, MAXI=20.21cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+    <Peak1D F1="2.817496" intensity="0.1598761" type="0"/>
+    <Peak1D F1="2.79147" intensity="0.1138484" type="0"/>
+  </PeakList1D>
+</PeakList>

@@ -1,0 +1,23 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/sp/20250811_cit_nacit_titr_22/2/audita.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-08-11 17:56:48.874 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-08-11 17:55:49.405 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       12 3D 96 82 3C CC 82 D2 D3 86 A1 32 2D 79 1F 22>)
+(   2,<2025-08-11 17:56:48.920 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       12 3D 96 82 3C CC 82 D2 D3 86 A1 32 2D 79 1F 22>)
+##END=
+
+$$ hash MD5
+$$ 0C E9 A2 F5 B4 1B E4 CC F8 55 57 B7 2A FB 87 D1

@@ -1,0 +1,11 @@
+##TITLE= Parameter file, TopSpin 3.6.1
+##JCAMPDX= 5.0
+##DATATYPE= Parameter Values
+##NPOINTS= 17	$$ modification sequence number
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ 2025-08-12 14:55:13.420 +0100  ukc@CZC8417J16
+$$ /opt/DATA/icon/2025/sp/20250811_cit_nacit_titr_19/3/pdata/1/assocs
+$$ process /opt/topspin3.6.1/prog/mod/dataserver
+##$MULTDISP= </opt/DATA/icon/2025/sp/20250811_cit_nacit_titr_1/3/pdata/1>
+##END=
