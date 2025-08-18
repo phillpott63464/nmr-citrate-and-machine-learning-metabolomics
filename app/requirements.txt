@@ -19,3 +19,4 @@ wheel>=0.45.1
 watchdog
 jax[rocm]
 h5py
+seaborn
