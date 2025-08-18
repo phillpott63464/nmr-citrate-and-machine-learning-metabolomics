@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.16"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -8,6 +8,12 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
 
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    mo.md(rf"""Code block to profile Morgan's code from where I was converting numpy to jax.""")
     return
 
 
@@ -65,7 +71,7 @@ def _(cProfile, createTrainingData, substanceSpectrumIds):
         'morgan/output.prof',
     )
 
-    dumbvar = True
+    dumbvar = True # So that the next cell always runs when this is rerun
 
     return (dumbvar,)
 
@@ -86,6 +92,8 @@ def _(dumbvar, pstats):
 
 @app.cell
 def _(createTrainingData, substanceSpectrumIds):
+    # Ensure the plot is reasonable
+
     substance = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5)
 
     import matplotlib.pyplot as plt

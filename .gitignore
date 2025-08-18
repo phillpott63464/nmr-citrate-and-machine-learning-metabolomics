@@ -1,4 +1,5 @@
 data_cache
+figs
 *.pyc
 __pycache__
 .*
