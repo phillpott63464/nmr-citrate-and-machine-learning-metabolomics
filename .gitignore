@@ -1,5 +1,8 @@
 data_cache
 figs
 *.pyc
+*.cpython*
 __pycache__
 .*
+figs
+*.svg
