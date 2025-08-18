@@ -179,6 +179,38 @@ Total Trials Completed: 89
 
 Getting better with concentration, still not great with generalisation
 
+### Hilbert Transform Sliding Window Full Length
+Model Type: MLP Best Trial Performance (Validation Set):
+
+    Combined Score: 0.4995 (0.5 * Classification Error + 0.5 * (0.5MAE + 0.5RMSE), optimized metric - lower is better)
+    Classification Accuracy: 0.7582 (Presence prediction accuracy - higher is better)
+    Concentration R²: 0.5666 (Coefficient of determination for concentration - higher is better)
+    Concentration MAE: 0.596572 (Mean Absolute Error for concentration - lower is better)
+    Concentration RMSE: 0.917840 (Root Mean Square Error for concentration - lower is better)
+
+Final Test Set Performance:
+
+    Classification Accuracy: 0.9109
+    Concentration R²: 0.2986
+    Concentration MAE: 0.828268
+    Concentration RMSE: 1.261425
+
+Best Hyperparameters: Training Parameters: - Batch Size: 70 - Learning Rate: 1.09e-02 Sliding Window MLP Architecture: - Window Size: 256 - Stride Ratio: 0.712 - Actual Stride: 182 Model Architecture: Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output Window Processing: - Each window processes 256 points - Windows overlap with stride of 182 points - Local features (128D) extracted from each window - Global aggregation combines all window features Multi-Task Learning:
+
+    Task 1: Binary classification for substance presence (BCEWithLogitsLoss)
+    Task 2: Regression for concentration prediction (weighted by presence)
+    Combined Loss: 0.5 × Classification Error + 0.5 × (0.5×MAE + 0.5×RMSE)
+
+Data Split:
+
+    Training: Spectra without held-back metabolite
+    Validation: 15% of training data (used for hyperparameter optimization)
+    Test: Spectra containing held-back metabolite (['L-Valine', 'L-Threonine'])
+
+Total Trials Completed: 43
+
+Better, not perfect, takes an hour per trial (:O)
+
 ## CNN
 ### Metabolite Randomisation with holdout 10 trials:
 
