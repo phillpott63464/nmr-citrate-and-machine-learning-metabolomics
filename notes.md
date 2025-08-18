@@ -57,6 +57,14 @@ Zinc citrate is supplied as a white to almost white powder. It is practically od
 
 slightly soluble in H2O; soluble in dilute acid solutions,alkaline solutions  - https://www.chemicalbook.com/ChemicalProductProperty_EN_CB6364212.htm, no numbers
 
+https://go.drugbank.com/drugs/DB11110
+Magnesium citrate
+6.34mg/ml
+6.34g/l
+451.113 g/mol
+0.0141M
+reasonable
+
 ---
 
 We have sodium citrate (pH around 8) and citric acid (pH around 0.1) (pubchem)
