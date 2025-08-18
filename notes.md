@@ -1,27 +1,8 @@
 Likely to work with 5% D2O 95% H2O instead of 100% D2O. It's just cheaper. 
 
-https://pillbuys.com/research/Magnesium%20citrate/17.pdf
-
-
-[citrate-table](pillbuys-citrate-table.csv)
-
-Initial concentration (mmol dm-3) of:
-CM: Metal
-CL: Ligand (citrate)
-CH: mineral acid
-
-[citrate-formation-table](pillbuys-formation.csv)
-
-$M_qL_PH_R$
-S=sum square residuals
-R = R factor defined in ref. 54 (A. Sabatini, A. Vacca and P. Gans, Talanta, 21, 53 (1974))
-log beta = logarithm of the stability constant for metal-ligand complex. Higher B = more stable product.
-
-
-
 https://journals.iucr.org/e/issues/2020/10/00/hb7927/index.html
 Evidence for magnesium citrate, not trimagnesium dicitrate, and how to prepare
-10mmol citric acid, 10ml water, add 10mmol MgCO3 (actually Mg5(CO3)4(OH)2). Slow fizzing, clear colourless solution, dry at 333K.
+10mmol citric acid, 10ml water, add 10mmol MgCO3 (actually Mg5(CO3)4(OH)2). Slow fizzing, clear colourless solution, dry at 333K. No solubility data.
 
 Most common magnesium citrates are:
 Mg:citrate
