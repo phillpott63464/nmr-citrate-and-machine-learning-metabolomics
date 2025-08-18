@@ -45,40 +45,40 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 100                  # Number of hyperparameter optimization trials
+    trials = 1                  # Number of hyperparameter optimization trials
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
-    downsample = None             # Target resolution for ML model (None = no downsampling)
-    reverse = True                # Apply Hilbert transform (time domain analysis)
-    ranges = [[-100, 100]]  # Full spectral range in ppm
+    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    downsample = 2**13             # Target resolution for ML model (None = no downsampling)
+    reverse = False                # Apply Hilbert transform (time domain analysis)
+    ranged = True
 
     # Smart cache directory structure
     base_cache_dir = f'./data_cache/{notebook_name}'
     raw_data_dir = f'{base_cache_dir}/raw_data'  # Only depends on substances & generation params
-    processed_data_dir = f'{base_cache_dir}/processed/{"time" if reverse else "freq"}/{downsample}'  # Depends on preprocessing
+    processed_data_dir = f'{base_cache_dir}/processed/{"time" if reverse else "freq"}/{"ranged" if ranged else "unranged"}{downsample}'  # Depends on preprocessing
     model_cache_dir = f'{processed_data_dir}/models/{MODEL_TYPE}'  # Depends on model type + processed data
 
     # Legacy cache_dir for backward compatibility
     cache_dir = f'{base_cache_dir}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
-    # NMR metabolite database mapping (substance name -> spectrum ID)
+    # NMR metabolite database mapping (substance name -> spectrum ID + chemical shift range)
     substanceDict = {
-        'Citric acid': ['SP:3368'],
-        'Succinic acid': ['SP:3211'],
-        'Maleic acid': ['SP:3110'],
-        'Lactic acid': ['SP:3675'],
-        'L-Methionine': ['SP:3509'],
-        'L-Proline': ['SP:3406'],
-        'L-Phenylalanine': ['SP:3507'],
-        'L-Serine': ['SP:3732'],
-        'L-Threonine': ['SP:3437'],
-        'L-Tryptophan': ['SP:3455'],
-        'L-Tyrosine': ['SP:3464'],
-        'L-Valine': ['SP:3490'],
-        'Glycine': ['SP:3682'],
+        'Citric acid': ['SP:3368', [2.2, 2.8]],
+        'Succinic acid': ['SP:3211', [2.0, 2.5]],
+        'Maleic acid': ['SP:3110', [6.0, 6.5]],
+        'Lactic acid': ['SP:3675', [1.2, 1.5]],
+        'L-Methionine': ['SP:3509', [2.0, 2.5]],
+        'L-Proline': ['SP:3406', [2.0, 3.0]],
+        'L-Phenylalanine': ['SP:3507', [6.5, 7.5]],
+        'L-Serine': ['SP:3732', [3.5, 4.5]],
+        'L-Threonine': ['SP:3437', [3.5, 4.5]],
+        'L-Tryptophan': ['SP:3455', [7.0, 8.0]],
+        'L-Tyrosine': ['SP:3464', [6.5, 7.5]],
+        'L-Valine': ['SP:3490', [0.9, 1.5]],
+        'Glycine': ['SP:3682', [3.5, 4.0]],
     }
 
     return (
@@ -88,7 +88,7 @@ def _():
         downsample,
         model_cache_dir,
         processed_data_dir,
-        ranges,
+        ranged,
         raw_data_dir,
         reverse,
         substanceDict,
@@ -210,17 +210,30 @@ def _(os, pickle, random, raw_data_dir):
 
         return spectra, held_back_metabolites, combinations
 
+    import hashlib
+
     def generate_raw_cache_key(substanceDict, combo_number, count):
         """Generate cache key for raw data (independent of model/preprocessing)"""
         substance_key = '_'.join(sorted(substanceDict.keys()))
         combo_key = f'combos_{combo_number}'
         count_key = f'count_{count}'
-        return f'raw_spectra_{substance_key}_{combo_key}_{count_key}'
+
+        # Combine all parts into a single string
+        raw_key = f'raw_spectra_{substance_key}_{combo_key}_{count_key}'
+
+        # Generate a hash of the combined string
+        return hashlib.sha256(raw_key.encode()).hexdigest()
 
     def generate_processed_cache_key(raw_cache_key, downsample, reverse):
         """Generate cache key for processed datasets"""
         processing_key = f'{"time" if reverse else "freq"}_{downsample}'
-        return f'processed_{raw_cache_key}_{processing_key}'
+
+        # Combine the raw cache key with the processing key
+        processed_key = f'processed_{raw_cache_key}_{processing_key}'
+
+        # Generate a hash of the combined string
+        return hashlib.sha256(processed_key.encode()).hexdigest()
+
 
     return (
         generate_processed_cache_key,
@@ -295,6 +308,8 @@ def _(
             # Randomly sample combinations to manage computational load
             if combo_number is not None:
                 combinations = random.sample(all_combinations, combo_number)
+            else:
+                combinations = all_combinations
             print(f'Generated {len(combinations)} random combinations')
 
             # Select two metabolites for hold-back validation
@@ -303,7 +318,7 @@ def _(
 
             # Extract spectrum IDs for NMR simulation
             substanceSpectrumIds = [
-                [combination[substance][-1] for substance in combination]
+                [combination[substance][0] for substance in combination]
                 for combination in combinations
             ]
 
@@ -360,7 +375,7 @@ def _(
 
     # Extract spectrum IDs for downstream processing
     substanceSpectrumIds = [
-        [combination[substance][-1] for substance in combination]
+        [combination[substance][0] for substance in combination]
         for combination in combinations
     ]
 
@@ -467,7 +482,7 @@ def _(createTrainingData, substanceDict):
 
         # Extract individual metabolite spectrum IDs
         referenceSpectrumIds = [
-            substanceDict[substance][-1] for substance in substanceDict
+            substanceDict[substance][0] for substance in substanceDict
         ]
 
         # Generate pure component spectra (no concentration randomization)
@@ -479,17 +494,19 @@ def _(createTrainingData, substanceDict):
 
         # Map substance names to their reference spectra for easy lookup
         reference_spectra = {
-            substanceDict[substance][0]: reference_spectra_raw['components'][index]
+            substanceDict[substance][0]: [reference_spectra_raw['components'][index], reference_spectra_raw['scales'][substanceDict[substance][0]]]
             for index, substance in enumerate(substanceDict)
         }
 
         print("Generated reference spectra for metabolite identification:")
         for substance, spectrum_id in reference_spectra.items():
-            print(f"  {substance}: {len(spectrum_id)} data points")
+            print(f"  {substance}: {len(spectrum_id[0])} data points")
 
         return reference_spectra
 
     reference_spectra = _()
+
+    print(reference_spectra['SP:3368'][1])
     return (reference_spectra,)
 
 
@@ -505,7 +522,7 @@ def _(plt, reference_spectra, spectra, substanceDict):
             spectrum_id = substanceDict[substance][0]
             plt.plot(
                 spectra[0]['positions'],
-                reference_spectra[spectrum_id],
+                reference_spectra[spectrum_id][0],
                 label=substance,
                 alpha=0.7
             )
@@ -566,17 +583,23 @@ def _():
     # Preprocessing configuration
     baseline_distortion = True  # Add realistic experimental artifacts
 
-    return baseline_distortion, irfft, mp
+    return baseline_distortion, mp
 
 
 @app.cell
-def _(irfft, np):
+def _(np):
     """Core spectrum preprocessing functions"""
+
+    def log(msg):
+        with open('log.txt', 'a') as f:
+            f.writelines(f'{msg}\n')
 
     def preprocess_peaks(
         intensities,
         positions,
-        ranges=[[-100, 100]],
+        scales=None,
+        substanceDict = None,
+        ranged=False,
         baseline_distortion=False,
         downsample=None,
         reverse=False,
@@ -598,12 +621,69 @@ def _(irfft, np):
         new_positions = positions  # Default: keep original positions
         new_intensities = intensities  # Default: keep original intensities
 
+        # Select only certain chemical shift ranges
+        if ranged:
+            # log(f'Ranged: {ranged}')
+            ranges = [[-0.1, 0.1]]
+
+            for scale in scales:
+                log(scale)
+                for substance in substanceDict:
+                    log(substanceDict[substance][0])
+                    if scale == substanceDict[substance][0]:
+                        ranges.append(substanceDict[substance][1])
+
+            # log(f'Ranges: {ranges}')
+
+            indicies = []
+            for x in ranges:
+                lower_bound, upper_bound = x
+                for i, (position, intensity) in enumerate(zip(new_positions, new_intensities)):
+                    if lower_bound <= position <= upper_bound:
+                        indicies.append(i)
+
+            # log(f'Indices: {indicies}')
+
+            # Pad to an exponential of 2
+            length = len(indicies)
+            # log(f'Initial length = {len}')
+            next_power = 1
+            while next_power < length:
+                next_power *= 2
+
+            # log(f'Next power = {next_power}')
+
+            pad = next_power - length
+
+            if pad > 0:
+                left_pad = pad // 2
+                right_pad = pad - left_pad
+
+                for i in range(0, left_pad):
+                    if indicies[0] > 0:
+                        # indicies.insert(0, indicies[0] - 1)
+                        indicies = [indicies[0] - 1] + indicies
+                    else:
+                        right_pad += 1
+
+                for i in range(0, right_pad):
+                    indicies.insert(0, indicies[-1] + 1)
+
+            temp_positions = [new_positions[i] for i in indicies]
+            temp_intensities = [new_intensities[i] for i in indicies]
+
+            new_positions = temp_positions
+            new_intensities = temp_intensities
+
+        log(len(new_positions))
+
+        # Convert to FID if needed
         if reverse:
             # Apply Hilbert transform for time-domain representation
             from scipy.signal import hilbert
             from scipy.fft import ifft
 
-            fid = ifft(hilbert(intensities))
+            fid = ifft(hilbert(new_intensities))
             fid[0] = 0
             threshold = 1e-16
             fid[np.abs(fid) < threshold] = 0
@@ -611,7 +691,7 @@ def _(irfft, np):
             new_intensities = fid.astype(np.complex64)
             new_positions = [0, 0]
 
-        # Apply downsampling if requested
+
         if downsample is not None and len(new_intensities) > downsample:
             step = len(new_intensities) // downsample
 
@@ -621,9 +701,13 @@ def _(irfft, np):
             filtered = np.zeros_like(new_intensities)
             filtered[:new_nyquist] = new_intensities[:new_nyquist]
 
-            # Convert to time domain, then downsample
-            time_domain = irfft(filtered, n=len(new_intensities))
+            # Downsample new_intensities
             new_intensities = new_intensities[::step]
+
+            # Check if new_positions exists and is not [0, 0]
+            if 'new_positions' in locals() and not np.array_equal(new_positions, [0, 0]):
+                new_positions = new_positions[::step]
+
 
         return new_positions, new_intensities
 
@@ -655,7 +739,7 @@ def _(
     mp,
     preprocess_peaks,
     preprocess_ratio,
-    ranges,
+    ranged,
     reverse,
     substanceDict,
 ):
@@ -663,9 +747,9 @@ def _(
 
     def preprocess_spectra(
         spectra,
-        ranges,
         substanceDict,
         reverse,
+        ranged=ranged,
         baseline_distortion=False,
         downsample=None,
     ):
@@ -678,7 +762,9 @@ def _(
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'][0],
             positions=spectra['positions'],
-            ranges=ranges,
+            scales=spectra['scales'],
+            ranged=ranged,
+            substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
             downsample=downsample,
             reverse=reverse,
@@ -698,23 +784,26 @@ def _(
         """Worker function for parallel spectrum preprocessing"""
         return preprocess_spectra(
             spectra=spectrum,
-            ranges=ranges,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
+            ranged=ranged,
             downsample=downsample,
             reverse=reverse,
         )
 
     def process_single_reference(spectrum_key_and_data):
         """Worker function for parallel reference preprocessing"""
-        spectrum_key, reference_data, positions = spectrum_key_and_data
-        pos_int = preprocess_peaks(
+        spectrum_key, reference_data, positions, scales = spectrum_key_and_data
+        positions, intensities = preprocess_peaks(
             positions=positions,
             intensities=reference_data,
+            scales=spectrum_key,
+            ranged=ranged,
+            substanceDict=substanceDict,
             downsample=downsample,
             reverse=reverse,
         )
-        return (spectrum_key, pos_int[1])
+        return (spectrum_key, positions, intensities)
 
     def process_spectra_parallel(spectra):
         """Parallel preprocessing of all training spectra"""
@@ -733,19 +822,18 @@ def _(
 
         # Prepare arguments for parallel processing
         args = [
-            (key, intensities, sample_positions)
-            for key, intensities in reference_spectra.items()
+            (key, intensities, sample_positions, scales)
+            for key, (intensities, scales) in reference_spectra.items()
         ]
 
         with mp.Pool(processes=num_processes) as pool:
             results = pool.map(process_single_reference, args)
 
         preprocessed_reference_spectra = {
-            key: intensities for key, intensities in results
+            key: [positions, intensities] for key, positions, intensities in results
         }
 
         return preprocessed_reference_spectra
-
     return process_references_parallel, process_spectra_parallel
 
 
@@ -796,7 +884,7 @@ def _(
         spectrum_id = substanceDict[substance][0]
         plt.plot(
             spectra[0]['positions'],
-            reference_spectra[spectrum_id],
+            reference_spectra[spectrum_id][0],
             alpha=0.7,
             label=substance
         )
@@ -820,8 +908,8 @@ def _(
         else:
             # Frequency domain: normal plotting
             plt.plot(
-                spectra[0]['positions'],
-                preprocessed_reference_spectra[spectrum_id],
+                preprocessed_reference_spectra[spectrum_id][0],
+                preprocessed_reference_spectra[spectrum_id][1],
                 alpha=0.7,
                 label=substance
             )
@@ -834,6 +922,8 @@ def _(
     plt.tight_layout()
 
     preprocessedreferencefigure = plt.gca()
+
+    print(preprocessed_reference_spectra['SP:3368'][0])
     return (preprocessedreferencefigure,)
 
 
@@ -856,7 +946,7 @@ def _(graph_count, plt, preprocessed_spectra, reverse):
                 plt.ylabel('Magnitude')
             else:
                 # Frequency domain: normal plotting
-                plt.plot(preprocessed_spectra[graphcounter2]['intensities'])
+                plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
                 plt.title(f'Sample {graphcounter2} (Frequency Domain)')
                 plt.xlabel('Data Points')
                 plt.ylabel('Intensity')
@@ -875,7 +965,7 @@ def _(
     preprocessed_spectra,
     preprocessedfigure,
     preprocessedreferencefigure,
-    ranges,
+    ranged,
     reverse,
 ):
     mo.md(
@@ -884,7 +974,7 @@ def _(
 
     **Preprocessing Configuration:**
 
-    - **Spectral range:** {ranges[0]} ppm (full spectrum)
+    - **Spectral ranged:** {"Ranged" if ranged else "Disabled"}
     - **Baseline distortion:** {'Enabled' if baseline_distortion else 'Disabled'}
     - **Hilbert transform:** {'Applied (time domain)' if reverse else 'Not applied (frequency domain)'}
     - **Data type:** {'Complex64 (time domain)' if reverse else 'Float32 (frequency domain)'}
@@ -1154,7 +1244,7 @@ def _(
                         # Concatenate spectrum + reference for metabolite-specific analysis
                         temp_data = np.concatenate([
                             spectrum['intensities'],
-                            reference_spectra[substance],
+                            reference_spectra[substance][0],
                         ])
 
                         # Create label: [presence, concentration]
@@ -1172,7 +1262,7 @@ def _(
             for spectrum in spectra_list:
                 temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[target_key],
+                    reference_spectra[target_key][0],
                 ])
                 temp_label = [1, spectrum['ratios'][target_key]]
                 data_list.append(temp_data)
@@ -1191,7 +1281,7 @@ def _(
             for spectrum in spectra_subset:
                 temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[target_key],
+                    reference_spectra[target_key][0],
                 ])
                 temp_label = [0, 0]  # Not present
                 data_list.append(temp_data)
@@ -1297,14 +1387,14 @@ def _():
 
 
 @app.cell
-def _(kwargs, nn, torch):
+def _(nn, torch):
     """Multi-Layer Perceptron for metabolite detection and quantification"""
 
     class MLPRegressor(nn.Module):
         def __init__(self, input_size=2048, trial=None):
             super().__init__()
             self.input_size = input_size
-            self.window_size = kwargs.get('window_size', 256)
+            self.window_size = 256
 
             stride_ratio = trial.suggest_float('stride_ratio', 0.25, 0.75)
             self.stride = int(self.window_size * stride_ratio)
@@ -1424,7 +1514,7 @@ def _(math, nn, torch):
 
             self.input_size = input_size
             self.window_size = kwargs.get('window_size', 256)
-        
+
             # Hyperparameter configuration
             if trial is not None:
                 self.d_model = int(trial.suggest_categorical('d_model', [128, 256, 512]))
@@ -1443,7 +1533,7 @@ def _(math, nn, torch):
                 self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
                 self.stride = kwargs.get('stride', 128)
 
-        
+
             # Ensure attention head compatibility
             while self.d_model % self.nhead != 0:
                 self.nhead = max(1, self.nhead - 1)
