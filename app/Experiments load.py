@@ -41,7 +41,7 @@ def _():
     study = optuna.create_study(
         direction='minimize',
         study_name='PKA_STUDY',
-        storage='sqlite:///model_database/PKA_STUDY.db',
+        storage='sqlite:///PKA_STUDY.db',
         load_if_exists=True,
     )
 

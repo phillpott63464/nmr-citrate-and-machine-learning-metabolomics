@@ -20,3 +20,4 @@ watchdog
 jax[rocm]
 h5py
 seaborn
+pytest

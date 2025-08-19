@@ -12,3 +12,17 @@ services:
       - /dev/kfd:/dev/kfd
     environment:
       - HSA_OVERRIDE_GFX_VERSION=10.3.0
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    ports:
+      - "27183:2718"
+    volumes:
+      - ./app:/usr/src/app
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0

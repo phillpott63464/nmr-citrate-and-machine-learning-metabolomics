@@ -1,4 +1,4 @@
-import marimo # type: ignore
+import marimo
 
 __generated_with = "0.14.17"
 app = marimo.App(width="medium")
@@ -45,7 +45,7 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 100                  # Number of hyperparameter optimization trialss
+    trials = 1                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
