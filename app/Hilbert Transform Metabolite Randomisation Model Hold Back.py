@@ -1070,7 +1070,8 @@ def _(Dataset, h5py, torch):
 
             # Verify file structure and get dataset length
             with h5py.File(self.file_path, 'r') as f:
-                self.length = f[f'{dataset_name}_data'].shape[0]
+                dataset = f[f'{dataset_name}_data']
+                self.length = dataset.shape[0] if len(dataset.shape) > 0 else 0
 
         def __len__(self):
             return self.length
