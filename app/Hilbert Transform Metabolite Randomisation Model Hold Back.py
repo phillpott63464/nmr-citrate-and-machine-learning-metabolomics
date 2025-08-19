@@ -1,4 +1,4 @@
-import marimo
+import marimo # type: ignore
 
 __generated_with = "0.14.17"
 app = marimo.App(width="medium")
@@ -7,8 +7,8 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Initial imports and hardware detection"""
-    import marimo as mo
-    import torch
+    import marimo as mo # type: ignore
+    import torch # type: ignore
 
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
@@ -44,13 +44,13 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 1                    # Number of samples per metabolite combination
-    trials = 1                  # Number of hyperparameter optimization trials
+    count = 100                    # Number of samples per metabolite combination
+    trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = None             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
@@ -126,8 +126,8 @@ def _():
     """Import data generation dependencies"""
     from morgan.createTrainingData import createTrainingData
     import morgan
-    import numpy as np
-    import tqdm
+    import numpy as np # type: ignore
+    import tqdm # type: ignore
     import itertools
     import random
     import pickle
@@ -428,7 +428,7 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 @app.cell
 def _(spectra):
     """Generate sample spectrum visualizations"""
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt # type: ignore
 
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra
@@ -576,9 +576,9 @@ def _(mo, referencefigure, substanceDict):
 def _():
     """Import preprocessing dependencies"""
     import multiprocessing as mp
-    from scipy.signal import resample, hilbert
-    from scipy.interpolate import interp1d
-    from scipy.fft import ifft, irfft
+    from scipy.signal import resample, hilbert # type: ignore
+    from scipy.interpolate import interp1d # type: ignore
+    from scipy.fft import ifft, irfft # type: ignore
 
     # Preprocessing configuration
     baseline_distortion = True  # Add realistic experimental artifacts
@@ -712,8 +712,8 @@ def _(np):
         # Convert to FID if needed
         if reverse:
             # Apply Hilbert transform for time-domain representation
-            from scipy.signal import hilbert
-            from scipy.fft import ifft
+            from scipy.signal import hilbert # type: ignore
+            from scipy.fft import ifft # type: ignore
 
             fid = ifft(hilbert(new_intensities))
             fid[0] = 0
@@ -1046,8 +1046,8 @@ def _(
 @app.cell
 def _():
     """Import machine learning dependencies"""
-    from torch.utils.data import Dataset, DataLoader
-    import h5py
+    from torch.utils.data import Dataset, DataLoader # type: ignore
+    import h5py # type: ignore
 
     return DataLoader, Dataset, h5py
 
@@ -1257,7 +1257,7 @@ def _(
                     ])
                 else:
                     spectrum['intensities'] = spectrum['intensities'] + [-float('inf')] * padding_needed
-            
+
             # Pad positions (only if not [0, 0] placeholder)
             if spectrum['positions'] != [0, 0] and len(spectrum['positions']) < max_positions_length:
                 padding_needed = max_positions_length - len(spectrum['positions'])
@@ -1272,7 +1272,7 @@ def _(
         # Find maximum length across all reference spectra for padding
         max_ref_intensities_length = 0
         max_ref_positions_length = 0
-        
+
         for key, value in reference_spectra.items():
             positions, intensities = value
             max_ref_intensities_length = max(max_ref_intensities_length, len(intensities))
@@ -1282,7 +1282,7 @@ def _(
         # Pad all reference spectra to the same length
         for key, value in reference_spectra.items():
             positions, intensities = value
-            
+
             # Pad intensities
             if len(intensities) < max_ref_intensities_length:
                 padding_needed = max_ref_intensities_length - len(intensities)
@@ -1290,7 +1290,7 @@ def _(
                     intensities = np.concatenate([intensities, np.full(padding_needed, -np.inf)])
                 else:
                     intensities = intensities + [-float('inf')] * padding_needed
-            
+
             # Pad positions (only if not [0, 0] placeholder)
             if positions != [0, 0] and len(positions) < max_ref_positions_length:
                 padding_needed = max_ref_positions_length - len(positions)
@@ -1298,7 +1298,7 @@ def _(
                     positions = np.concatenate([positions, np.full(padding_needed, -np.inf)])
                 else:
                     positions = positions + [-float('inf')] * padding_needed
-            
+
             # Update the reference spectra with padded data
             reference_spectra[key] = [positions, intensities]
 
@@ -1471,15 +1471,63 @@ def _(data_length, held_back_metabolites, mo, training_data):
 def _():
     """Import model architecture dependencies"""
     import copy
-    import torch.optim as optim
-    import torch.nn as nn
+    import torch.optim as optim # type: ignore
+    import torch.nn as nn # type: ignore
     import math
 
     return copy, math, nn, optim
 
 
 @app.cell
-def _(nn, torch):
+def _(torch):
+    """Utility function for removing padding from input tensors"""
+
+    def remove_padding(tensor, pad_value=-float('inf')):
+        """
+        Remove padding values from tensor
+
+        Args:
+            tensor: Input tensor that may contain padding
+            pad_value: The padding value to remove (default: -inf)
+
+        Returns:
+            tensor: Tensor with padding removed
+        """
+        if tensor.dtype.is_complex:
+            # For complex tensors, check both real and imaginary parts
+            mask = ~(torch.isinf(tensor.real) | torch.isinf(tensor.imag))
+        else:
+            # For real tensors, check for inf values
+            mask = ~torch.isinf(tensor)
+
+        # Find the last True value in the mask to determine actual length
+        if mask.any():
+            # Get the last valid index across all dimensions
+            if tensor.dim() > 1:
+                # For batched data, find max valid length across batch
+                max_valid_idx = 0
+                for batch_idx in range(tensor.size(0)):
+                    batch_mask = mask[batch_idx]
+                    if batch_mask.any():
+                        last_valid = torch.where(batch_mask)[0][-1].item()
+                        max_valid_idx = max(max_valid_idx, last_valid + 1)
+                return tensor[:, :max_valid_idx]
+            else:
+                # For 1D tensors
+                last_valid = torch.where(mask)[0][-1].item()
+                return tensor[:last_valid + 1]
+
+        # If no valid data found, return empty tensor with correct shape
+        if tensor.dim() > 1:
+            return tensor[:, :0]
+        else:
+            return tensor[:0]
+
+    return (remove_padding,)
+
+
+@app.cell
+def _(nn, remove_padding, torch):
     """Multi-Layer Perceptron for metabolite detection and quantification"""
 
     class MLPRegressor(nn.Module):
@@ -1515,6 +1563,12 @@ def _(nn, torch):
         def forward(self, x):
             batch_size = x.size(0)
 
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Update input_size based on actual data length after padding removal
+            actual_input_size = x.size(1)
+
             # **FIX: Handle complex input by separating real and imaginary parts**
             if x.dtype.is_complex:
                 x_real = x.real.float()
@@ -1526,9 +1580,9 @@ def _(nn, torch):
                 # If input is real, create zero imaginary part
                 x = torch.cat([x, torch.zeros_like(x)], dim=-1)
 
-            # Now x has shape [batch, input_size * 2] (real + imag)
+            # Now x has shape [batch, actual_input_size * 2] (real + imag)
             # Split spectrum and reference (each has real + imag components)
-            quarter_size = self.input_size // 2
+            quarter_size = actual_input_size // 2
             spectrum_real = x[:, :quarter_size]
             spectrum_imag = x[:, quarter_size:quarter_size*2]
             reference_real = x[:, quarter_size*2:quarter_size*3] 
@@ -1537,12 +1591,24 @@ def _(nn, torch):
             window_features = []
 
             spectrum_length = spectrum_real.size(1)
-            for i in range(0, spectrum_length - self.window_size + 1, self.stride):
+
+            # Adjust window size if it's larger than actual data
+            effective_window_size = min(self.window_size, spectrum_length)
+
+            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
                 # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+self.window_size]
-                spec_imag_window = spectrum_imag[:, i:i+self.window_size]
-                ref_real_window = reference_real[:, i:i+self.window_size]
-                ref_imag_window = reference_imag[:, i:i+self.window_size]
+                spec_real_window = spectrum_real[:, i:i+effective_window_size]
+                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
+                ref_real_window = reference_real[:, i:i+effective_window_size]
+                ref_imag_window = reference_imag[:, i:i+effective_window_size]
+
+                # Pad window to expected size if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
 
                 # Concatenate all components
                 window_input = torch.cat([
@@ -1556,11 +1622,18 @@ def _(nn, torch):
             if len(window_features) == 0:
                 # Fallback for edge cases
                 window_input = torch.cat([
-                    spectrum_real[:, :self.window_size],
-                    spectrum_imag[:, :self.window_size],
-                    reference_real[:, :self.window_size],
-                    reference_imag[:, :self.window_size]
+                    spectrum_real[:, :effective_window_size],
+                    spectrum_imag[:, :effective_window_size],
+                    reference_real[:, :effective_window_size],
+                    reference_imag[:, :effective_window_size]
                 ], dim=-1)
+
+                # Pad if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
+                    window_input = torch.cat([window_input, padding], dim=1)
+
                 features = self.local_feature_extractor(window_input)
                 window_features.append(features)
 
@@ -1570,7 +1643,7 @@ def _(nn, torch):
 
 
 @app.cell
-def _(math, nn, torch):
+def _(math, nn, remove_padding, torch):
     """Advanced Sliding Window Transformer architecture for NMR spectral analysis"""
 
     class PositionalEncoding(nn.Module):
@@ -1686,6 +1759,12 @@ def _(math, nn, torch):
         def forward(self, x):
             batch_size = x.size(0)
 
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Update input_size based on actual data length after padding removal
+            actual_input_size = x.size(1)
+
             # Handle complex input by separating real and imaginary parts
             if x.dtype.is_complex:
                 x_real = x.real.float()
@@ -1697,9 +1776,9 @@ def _(math, nn, torch):
                 # If input is real, create zero imaginary part
                 x = torch.cat([x, torch.zeros_like(x)], dim=-1)
 
-            # Now x has shape [batch, input_size * 2] (real + imag)
+            # Now x has shape [batch, actual_input_size * 2] (real + imag)
             # Split spectrum and reference (each has real + imag components)
-            quarter_size = self.input_size // 2
+            quarter_size = actual_input_size // 2
             spectrum_real = x[:, :quarter_size]
             spectrum_imag = x[:, quarter_size:quarter_size*2]
             reference_real = x[:, quarter_size*2:quarter_size*3] 
@@ -1708,13 +1787,24 @@ def _(math, nn, torch):
             window_features = []
             spectrum_length = spectrum_real.size(1)
 
+            # Adjust window size if it's larger than actual data
+            effective_window_size = min(self.window_size, spectrum_length)
+
             # Process each sliding window
-            for i in range(0, spectrum_length - self.window_size + 1, self.stride):
+            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
                 # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+self.window_size]
-                spec_imag_window = spectrum_imag[:, i:i+self.window_size]
-                ref_real_window = reference_real[:, i:i+self.window_size]
-                ref_imag_window = reference_imag[:, i:i+self.window_size]
+                spec_real_window = spectrum_real[:, i:i+effective_window_size]
+                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
+                ref_real_window = reference_real[:, i:i+effective_window_size]
+                ref_imag_window = reference_imag[:, i:i+effective_window_size]
+
+                # Pad window to expected size if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
 
                 # Concatenate all components for this window
                 window_input = torch.cat([
@@ -1733,11 +1823,17 @@ def _(math, nn, torch):
             if len(window_features) == 0:
                 # Fallback: use first window_size points
                 window_input = torch.cat([
-                    spectrum_real[:, :self.window_size],
-                    spectrum_imag[:, :self.window_size],
-                    reference_real[:, :self.window_size],
-                    reference_imag[:, :self.window_size]
+                    spectrum_real[:, :effective_window_size],
+                    spectrum_imag[:, :effective_window_size],
+                    reference_real[:, :effective_window_size],
+                    reference_imag[:, :effective_window_size]
                 ], dim=-1)
+
+                # Pad if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
+                    window_input = torch.cat([window_input, padding], dim=1)
 
                 window_embed = self.window_projection(window_input).unsqueeze(1)
                 local_features = self.local_transformer(window_embed)
@@ -1765,7 +1861,7 @@ def _(math, nn, torch):
 
 
 @app.cell
-def _(MLPRegressor, TransformerRegressor, nn, torch):
+def _(MLPRegressor, TransformerRegressor, nn, remove_padding, torch):
     """Hybrid ensemble combining MLP and Transformer architectures"""
 
     class HybridEnsembleRegressor(nn.Module):
@@ -1793,7 +1889,10 @@ def _(MLPRegressor, TransformerRegressor, nn, torch):
                 self.concentration_weight = kwargs.get('conc_ensemble_weight', 0.7)   # Favor MLP
 
         def forward(self, x):
-            # Get predictions from both models
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Get predictions from both models (they will handle their own padding removal)
             mlp_output = self.mlp(x)
             transformer_output = self.transformer(x)
 
@@ -2132,7 +2231,7 @@ def _(
     training_data,
     trials,
 ):
-    import optuna
+    import optuna # type: ignore
     from functools import partial
 
     def objective(training_data, trial, model_type='transformer'):
@@ -2335,53 +2434,29 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - **Number of Attention Heads:** {study.best_trial.params.get('nhead', 'N/A')}
     - **Number of Encoder Layers:** {study.best_trial.params.get('num_layers', 'N/A')}
     - **Feedforward Dimension:** {study.best_trial.params.get('dim_feedforward', 'N/A')}
-    - **Target Sequence Length:** {study.best_trial.params.get('target_seq_len', 'N/A')}
+    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
 
     **Model Architecture:**
 
     Input Projection → Positional Encoding → Transformer Encoder → Global Average Pooling → Output Projection
     """
     elif MODEL_TYPE == 'mlp':
-        # Handle both sliding window and traditional MLP parameters
-        if 'window_size' in study.best_trial.params:
-            # Sliding Window MLP
-            model_params_md = f"""
+        # Handle sliding window MLP parameters
+        model_params_md = f"""
     **Sliding Window MLP Architecture:**
-    - **Window Size:** {study.best_trial.params['window_size']}
-    - **Stride Ratio:** {study.best_trial.params['stride_ratio']:.3f}
-    - **Actual Stride:** {int(study.best_trial.params['window_size'] * study.best_trial.params['stride_ratio'])}
+    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
+    - **Window Size:** 256 (fixed)
+    - **Actual Stride:** {int(256 * study.best_trial.params.get('stride_ratio', 0.5))}
 
     **Model Architecture:**
 
     Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output
 
     **Window Processing:**
-    - Each window processes {study.best_trial.params['window_size']} points
-    - Windows overlap with stride of {int(study.best_trial.params['window_size'] * study.best_trial.params['stride_ratio'])} points
+    - Each window processes 256 points
+    - Windows overlap with stride of {int(256 * study.best_trial.params.get('stride_ratio', 0.5))} points
     - Local features (128D) extracted from each window
     - Global aggregation combines all window features
-    """
-        elif 'div_size' in study.best_trial.params:
-            # Traditional MLP
-            model_params_md = f"""
-    **Traditional MLP Architecture:**
-    - **Division Size (layer reduction factor):** {study.best_trial.params['div_size']:.1f}
-
-    **Model Architecture:**
-
-    Input Layer → Hidden Layers (progressively smaller) → Output Layer (2 outputs)
-
-    *Layer sizes are determined by dividing the previous layer size by the division factor*
-    """
-        else:
-            # Fallback for unknown MLP structure
-            model_params_md = """
-    **MLP Architecture:**
-    - Custom parameter configuration
-
-    **Model Architecture:**
-
-    Multi-Layer Perceptron with metabolite detection and quantification outputs
     """
     elif MODEL_TYPE == 'ensemble':
         model_params_md = f"""
@@ -2390,7 +2465,7 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - **Concentration Weight:** {study.best_trial.params.get('conc_ensemble_weight', 'N/A'):.3f}
 
     **Component Models:**
-    - **MLP:** Window Size: {study.best_trial.params.get('window_size', 'N/A')}, Stride: {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
+    - **MLP:** Stride Ratio: {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
     - **Transformer:** d_model: {study.best_trial.params.get('d_model', 'N/A')}, Layers: {study.best_trial.params.get('num_layers', 'N/A')}
 
     **Model Architecture:**
