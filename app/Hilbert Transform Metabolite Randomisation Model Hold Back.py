@@ -1111,6 +1111,8 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
         file_path = f'{processed_data_dir}/{processed_cache_key}_datasets.h5'
 
         print(f"Saving processed datasets to {file_path}...")
+        print(f"Dataset shapes - Train: {train_data.shape}, Val: {val_data.shape}, Test: {test_data.shape}")
+        print(f"Dataset dtypes - Train: {train_data.dtype}, Val: {val_data.dtype}, Test: {test_data.dtype}")
 
         with h5py.File(file_path, 'w') as f:
             # Save each dataset split with compression
@@ -1128,10 +1130,21 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
                            compression='gzip', compression_opts=9)
 
             # Store metadata for validation
-            f.attrs['data_length'] = train_data.shape[1]
-            f.attrs['train_size'] = train_data.shape[0]
-            f.attrs['val_size'] = val_data.shape[0]
-            f.attrs['test_size'] = test_data.shape[0]
+            # Handle case where tensors might not have expected dimensions due to empty data
+            if len(train_data.shape) >= 2 and train_data.shape[0] > 0:
+                # Normal case: 2D tensor with samples x features
+                f.attrs['data_length'] = train_data.shape[1]
+            elif len(train_data.shape) == 1 and train_data.shape[0] > 0:
+                # 1D tensor case - use the single dimension as data length
+                f.attrs['data_length'] = train_data.shape[0]
+            else:
+                # Empty tensor case - set data_length to 0
+                f.attrs['data_length'] = 0
+                print("Warning: Empty training data detected, setting data_length to 0")
+            
+            f.attrs['train_size'] = train_data.shape[0] if len(train_data.shape) > 0 else 0
+            f.attrs['val_size'] = val_data.shape[0] if len(val_data.shape) > 0 else 0
+            f.attrs['test_size'] = test_data.shape[0] if len(test_data.shape) > 0 else 0
 
         file_size_mb = os.path.getsize(file_path) / (1024**2)
         print(f"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB")
