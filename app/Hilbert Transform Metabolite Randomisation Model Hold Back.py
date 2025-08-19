@@ -66,19 +66,19 @@ def _():
 
     # NMR metabolite database mapping (substance name -> spectrum ID + chemical shift range)
     substanceDict = {
-        'Citric acid': ['SP:3368', [2.2, 2.8]],
-        'Succinic acid': ['SP:3211', [2.0, 2.5]],
-        'Maleic acid': ['SP:3110', [6.0, 6.5]],
-        'Lactic acid': ['SP:3675', [1.2, 1.5]],
-        'L-Methionine': ['SP:3509', [2.0, 2.5]],
-        'L-Proline': ['SP:3406', [2.0, 3.0]],
-        'L-Phenylalanine': ['SP:3507', [6.5, 7.5]],
-        'L-Serine': ['SP:3732', [3.5, 4.5]],
-        'L-Threonine': ['SP:3437', [3.5, 4.5]],
-        'L-Tryptophan': ['SP:3455', [7.0, 8.0]],
-        'L-Tyrosine': ['SP:3464', [6.5, 7.5]],
-        'L-Valine': ['SP:3490', [0.9, 1.5]],
-        'Glycine': ['SP:3682', [3.5, 4.0]],
+        'Citric acid': ['SP:3368', [[2.4, 2.8]]],
+        'Succinic acid': ['SP:3211', [[2.0, 2.6]]],
+        'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
+        'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
+        'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
+        'L-Proline': ['SP:3406', [[1.8, 4.3]]],
+        'L-Phenylalanine': ['SP:3507', [[3, 8]]],
+        'L-Serine': ['SP:3732', [[3.5, 4.5]]],
+        'L-Threonine': ['SP:3437', [[3.5, 4.5]]],
+        'L-Tryptophan': ['SP:3455', [[7.0, 8.0]]],
+        'L-Tyrosine': ['SP:3464', [[6.5, 7.5]]],
+        'L-Valine': ['SP:3490', [[0.9, 1.5]]],
+        'Glycine': ['SP:3682', [[3.5, 4.0]]],
     }
 
     return (
@@ -610,7 +610,9 @@ def _(np):
         Args:
             intensities: Spectral intensity data
             positions: Chemical shift positions (ppm)
-            ranges: List of [min, max] ppm ranges to extract
+            scales: Dictionary of substance concentrations (for training data) or substance ID (for reference data)
+            substanceDict: Mapping of substance names to [spectrum_id, range]
+            ranged: Select only certain chemical shift ranges
             baseline_distortion: Add realistic baseline drift
             downsample: Target number of points for downsampling
             reverse: Apply Hilbert transform for time-domain analysis
@@ -625,12 +627,22 @@ def _(np):
         if ranged:
             ranges = [[-0.1, 0.1]]
 
-            for scale in scales:
-                # log(scale)
+            # Handle different types of scales parameter
+            if isinstance(scales, dict):
+                # Training data: scales is a dictionary of substance concentrations
+                for scale in scales:
+                    for substance in substanceDict:
+                        if scale == substanceDict[substance][0]:
+                            for x in substanceDict[substance][1]:
+                                ranges.append(x)    
+            elif isinstance(scales, str):
+                # Reference data: scales is a single substance ID
                 for substance in substanceDict:
-                    # log(substanceDict[substance][0])
-                    if scale == substanceDict[substance][0]:
-                        ranges.append(substanceDict[substance][1])
+                    if scales == substanceDict[substance][0]:
+                        for x in substanceDict[substance][1]:
+                            ranges.append(x)
+                        break
+            # If scales is None or other type, just use the default range
 
             indicies = set() # Array but with no duplicates
             for x in ranges:
@@ -699,15 +711,11 @@ def _(np):
                         else:
                             indicies.insert(0, indicies[0])  # Duplicate first
 
-            # log(f'Indicies: {len(indicies)}')
-
             temp_positions = [new_positions[i] for i in indicies]
             temp_intensities = [new_intensities[i] for i in indicies]
 
             new_positions = temp_positions
             new_intensities = temp_intensities
-
-        # log(f'New_positions: {len(new_positions)}')
 
         # Convert to FID if needed
         if reverse:
@@ -823,7 +831,7 @@ def _(
             reverse=reverse,
         )
 
-    def process_single_reference(spectrum_key_and_data):
+    def process_single_reference(spectrum_key_and_data):  # Pass the spectrum ID directly for reference data
         """Worker function for parallel reference preprocessing"""
         spectrum_key, reference_data, positions, scales = spectrum_key_and_data
         positions, intensities = preprocess_peaks(
@@ -906,35 +914,36 @@ def _(
     spectra,
     substanceDict,
 ):
-    """Generate before/after preprocessing comparison plots"""
+    # Number of substances
+    num_substances = len(substanceDict)
 
-    plt.figure(figsize=(15, 6))
+    # Create a figure with subplots for each substance
+    plt.figure(figsize=(15, 6 * num_substances))
 
-    # Original spectra (left panel)
-    plt.subplot(1, 2, 1)
-    for substance in substanceDict:
+    for i, substance in enumerate(substanceDict):
         spectrum_id = substanceDict[substance][0]
+
+        # Original spectra (left panel)
+        plt.subplot(num_substances, 2, 2 * i + 1)
         plt.plot(
             spectra[0]['positions'],
             reference_spectra[spectrum_id][0],
             alpha=0.7,
             label=substance
         )
-    plt.title('Original Reference Spectra')
-    plt.xlabel('Chemical Shift (ppm)')
-    plt.ylabel('Intensity')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
+        plt.title(f'Original Reference Spectrum: {substance}')
+        plt.xlabel('Chemical Shift (ppm)')
+        plt.ylabel('Intensity')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, alpha=0.3)
 
-    # Preprocessed spectra (right panel)
-    plt.subplot(1, 2, 2)
-    for substance in substanceDict:
-        spectrum_id = substanceDict[substance][0]
+        # Preprocessed spectra (right panel)
+        plt.subplot(num_substances, 2, 2 * i + 2)
         if reverse:
             # Time domain: plot magnitude of complex data
             complex_data = preprocessed_reference_spectra[spectrum_id]
             plt.plot(complex_data, alpha=0.7, label=substance)
-            plt.title('Preprocessed (Hilbert Transform - Time Domain)')
+            plt.title(f'Preprocessed (Hilbert Transform - Time Domain): {substance}')
             plt.xlabel('Time Points')
             plt.ylabel('Magnitude')
         else:
@@ -945,14 +954,14 @@ def _(
                 alpha=0.7,
                 label=substance
             )
-            plt.title('Preprocessed (Frequency Domain)')
+            plt.title(f'Preprocessed (Frequency Domain): {substance}')
             plt.xlabel('Chemical Shift (ppm)')
             plt.ylabel('Intensity')
 
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, alpha=0.3)
 
+    plt.tight_layout()
     preprocessedreferencefigure = plt.gca()
 
     print(preprocessed_reference_spectra['SP:3368'][0])
@@ -2091,7 +2100,7 @@ def _(
 
         best_val_loss = np.inf
         epochs_without_improvement = 0
-        best_weights = None
+        best_weights = copy.deepcopy(model.state_dict())  # Initialize with current weights
 
         for epoch in range(max_epochs):
             model.train()
@@ -2149,9 +2158,11 @@ def _(
                     print(f'Early stopping at epoch {epoch}')
                     break
 
-        # Load best weights
-        model.load_state_dict(best_weights)
-        model.eval()
+        # Load best weights - now guaranteed to not be None
+        if best_weights is not None:
+            model.load_state_dict(best_weights)
+        else:
+            print("Warning: No improvement found during training, using final weights")
 
         # Compute final metrics using DataLoaders
         def compute_metrics(data_loader):
