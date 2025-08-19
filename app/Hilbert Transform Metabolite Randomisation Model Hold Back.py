@@ -44,14 +44,14 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100                    # Number of samples per metabolite combination
+    count = 1                    # Number of samples per metabolite combination
     trials = 1                  # Number of hyperparameter optimization trials
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
     MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
-    downsample = 2**13             # Target resolution for ML model (None = no downsampling)
+    downsample = None             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
 
@@ -623,51 +623,83 @@ def _(np):
 
         # Select only certain chemical shift ranges
         if ranged:
-            # log(f'Ranged: {ranged}')
             ranges = [[-0.1, 0.1]]
 
             for scale in scales:
-                log(scale)
+                # log(scale)
                 for substance in substanceDict:
-                    log(substanceDict[substance][0])
+                    # log(substanceDict[substance][0])
                     if scale == substanceDict[substance][0]:
                         ranges.append(substanceDict[substance][1])
 
-            # log(f'Ranges: {ranges}')
-
-            indicies = []
+            indicies = set() # Array but with no duplicates
             for x in ranges:
                 lower_bound, upper_bound = x
-                for i, (position, intensity) in enumerate(zip(new_positions, new_intensities)):
+                for i, position in enumerate(new_positions):
                     if lower_bound <= position <= upper_bound:
-                        indicies.append(i)
+                        indicies.add(i) # Add instead of append to handle overlapping ranges
 
-            # log(f'Indices: {indicies}')
+            indicies = sorted(indicies) # Sort indicies for consistent ordering
 
-            # Pad to an exponential of 2
+            # Calculate next power of 2
             length = len(indicies)
-            # log(f'Initial length = {len}')
+            if length == 0:
+                length = 1
+
+            # Find the next power of 2 using bit operations
             next_power = 1
             while next_power < length:
-                next_power *= 2
+                next_power <<= 1  # Equivalent to next_power *= 2
 
-            # log(f'Next power = {next_power}')
+            # Calculate how much padding we need
+            pad_needed = next_power - length
 
-            pad = next_power - length
+            if pad_needed > 0:
+                left_pad = pad_needed // 2
+                right_pad = pad_needed - left_pad
 
-            if pad > 0:
-                left_pad = pad // 2
-                right_pad = pad - left_pad
-
-                for i in range(0, left_pad):
+                # Try to pad symmetrically, but respect boundaries
+                for _ in range(left_pad):
                     if indicies[0] > 0:
-                        # indicies.insert(0, indicies[0] - 1)
-                        indicies = [indicies[0] - 1] + indicies
+                        indicies.insert(0, indicies[0] - 1)
                     else:
+                        # Can't pad left, add to right padding
                         right_pad += 1
 
-                for i in range(0, right_pad):
-                    indicies.insert(0, indicies[-1] + 1)
+                for _ in range(right_pad):
+                    if indicies[-1] < len(new_positions) - 1:
+                        indicies.append(indicies[-1] + 1)
+                    else:
+                        # Can't pad right, try padding left again
+                        if indicies[0] > 0:
+                            indicies.insert(0, indicies[0] - 1)
+                        else:
+                            # If we can't extend, we'll have to accept non-power-of-2
+                            break
+
+            # Final verification - if still not power of 2, force it
+            final_length = len(indicies)
+            if final_length & (final_length - 1) != 0:
+                # Calculate the next power of 2 again
+                target_power = 1
+                while target_power < final_length:
+                    target_power <<= 1
+
+                # If we're closer to the lower power of 2, truncate; otherwise pad
+                lower_power = target_power >> 1
+                if abs(final_length - lower_power) < abs(final_length - target_power):
+                    # Truncate to lower power of 2
+                    indicies = indicies[:lower_power]
+                else:
+                    # Pad to higher power of 2 by duplicating edge values
+                    while len(indicies) < target_power:
+                        # Alternate between duplicating first and last elements
+                        if len(indicies) % 2 == 0:
+                            indicies.append(indicies[-1])  # Duplicate last
+                        else:
+                            indicies.insert(0, indicies[0])  # Duplicate first
+
+            # log(f'Indicies: {len(indicies)}')
 
             temp_positions = [new_positions[i] for i in indicies]
             temp_intensities = [new_intensities[i] for i in indicies]
@@ -675,7 +707,7 @@ def _(np):
             new_positions = temp_positions
             new_intensities = temp_intensities
 
-        log(len(new_positions))
+        # log(f'New_positions: {len(new_positions)}')
 
         # Convert to FID if needed
         if reverse:
@@ -1209,6 +1241,67 @@ def _(
         val_with_holdback = []
         test_with_holdback = []
 
+        # Find maximum length across all spectra for padding
+        max_intensities_length = max(len(spectrum['intensities']) for spectrum in spectra)
+        max_positions_length = max(len(spectrum['positions']) for spectrum in spectra if spectrum['positions'] != [0, 0])
+
+        # Pad all spectra to the same length
+        for spectrum in spectra:
+            # Pad intensities
+            if len(spectrum['intensities']) < max_intensities_length:
+                padding_needed = max_intensities_length - len(spectrum['intensities'])
+                if isinstance(spectrum['intensities'], np.ndarray):
+                    spectrum['intensities'] = np.concatenate([
+                        spectrum['intensities'], 
+                        np.full(padding_needed, -np.inf)
+                    ])
+                else:
+                    spectrum['intensities'] = spectrum['intensities'] + [-float('inf')] * padding_needed
+            
+            # Pad positions (only if not [0, 0] placeholder)
+            if spectrum['positions'] != [0, 0] and len(spectrum['positions']) < max_positions_length:
+                padding_needed = max_positions_length - len(spectrum['positions'])
+                if isinstance(spectrum['positions'], np.ndarray):
+                    spectrum['positions'] = np.concatenate([
+                        spectrum['positions'], 
+                        np.full(padding_needed, -np.inf)
+                    ])
+                else:
+                    spectrum['positions'] = spectrum['positions'] + [-float('inf')] * padding_needed
+
+        # Find maximum length across all reference spectra for padding
+        max_ref_intensities_length = 0
+        max_ref_positions_length = 0
+        
+        for key, value in reference_spectra.items():
+            positions, intensities = value
+            max_ref_intensities_length = max(max_ref_intensities_length, len(intensities))
+            if positions != [0, 0]:
+                max_ref_positions_length = max(max_ref_positions_length, len(positions))
+
+        # Pad all reference spectra to the same length
+        for key, value in reference_spectra.items():
+            positions, intensities = value
+            
+            # Pad intensities
+            if len(intensities) < max_ref_intensities_length:
+                padding_needed = max_ref_intensities_length - len(intensities)
+                if isinstance(intensities, np.ndarray):
+                    intensities = np.concatenate([intensities, np.full(padding_needed, -np.inf)])
+                else:
+                    intensities = intensities + [-float('inf')] * padding_needed
+            
+            # Pad positions (only if not [0, 0] placeholder)
+            if positions != [0, 0] and len(positions) < max_ref_positions_length:
+                padding_needed = max_ref_positions_length - len(positions)
+                if isinstance(positions, np.ndarray):
+                    positions = np.concatenate([positions, np.full(padding_needed, -np.inf)])
+                else:
+                    positions = positions + [-float('inf')] * padding_needed
+            
+            # Update the reference spectra with padded data
+            reference_spectra[key] = [positions, intensities]
+
         for spectrum in spectra:
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(spectrum)
@@ -1276,7 +1369,6 @@ def _(
         # Add negative samples (without held-back metabolites)
         for spectra_subset, data_list, labels_list, target_key in [
             (val_without_holdback, data_val, labels_val, held_back_key_validation),
-            (test_without_holdback, data_test, labels_test, held_back_key_test)
         ]:
             for spectrum in spectra_subset:
                 temp_data = np.concatenate([
