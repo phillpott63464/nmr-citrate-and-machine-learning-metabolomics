@@ -1424,7 +1424,7 @@ def _(math, nn, torch):
 
             self.input_size = input_size
             self.window_size = kwargs.get('window_size', 256)
-        
+
             # Hyperparameter configuration
             if trial is not None:
                 self.d_model = int(trial.suggest_categorical('d_model', [128, 256, 512]))
@@ -1443,7 +1443,7 @@ def _(math, nn, torch):
                 self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
                 self.stride = kwargs.get('stride', 128)
 
-        
+
             # Ensure attention head compatibility
             while self.d_model % self.nhead != 0:
                 self.nhead = max(1, self.nhead - 1)
@@ -2269,6 +2269,160 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     """
     )
     return
+
+
+@app.cell(hide_code=True)
+def _(fidfig, mo):
+    mo.md(
+        rf"""
+    ## Load Experimental FID Data
+
+    {mo.as_html(fidfig)}
+    """
+    )
+    return
+
+
+@app.cell
+def _(np):
+    """Import read_fid function"""
+
+    data_dir = 'spectra' # The directory all data is in
+    experiment_dir = '20250811_cit_nacit_titr' # The experiment name
+    experiment_count = 24 # The number of experiments in format _i
+    experiment_number = '3' # The folder in the experiment that contains the acqusition data
+
+    import struct
+    import math
+    import seaborn as sns
+    import re
+    import xml.etree.ElementTree as ET
+    import os
+
+    def type_check(**type_hints):
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                for arg_name, expected_type in type_hints.items():
+                    if arg_name in kwargs:
+                        arg_value = kwargs[arg_name]
+                    else:
+                        arg_index = list(type_hints.keys()).index(arg_name)
+                        arg_value = args[arg_index]
+
+                    if isinstance(expected_type, type) and not isinstance(arg_value, expected_type):
+                        raise TypeError(f'Expected {arg_name} to be of type {expected_type.__name__}, got {type(arg_value).__name__}')
+
+                    # Check for list of specific type
+                    if isinstance(expected_type, tuple) and expected_type[0] == list:
+                        if not isinstance(arg_value, list):
+                            raise TypeError(f'Expected {arg_name} to be a list, got {type(arg_value).__name__}')
+                        for item in arg_value:
+                            if not isinstance(item, (expected_type[1], np.float32, np.float64)):
+                                raise TypeError(f'All items in {arg_name} must be of type {expected_type[1].__name__}, got {type(item).__name__}')
+                return func(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    @type_check(base_dir=str, experiment_dir=str, count=int)
+    def get_experiment_directories(base_dir, experiment_dir, count):
+        """Generate a list of experiment directories."""
+        return [f'{experiment_dir}_{i}' for i in range(1, count + 1)]
+    
+    @type_check(experiment=str, experiment_number=str, data_dir=str)
+    def read_fid(experiment, experiment_number, data_dir):
+        dir = f'{data_dir}/{experiment}/{experiment_number}/fid'
+        with open(dir, 'rb') as fid_file:
+            # Read the first few bytes to determine the data type
+            # This is a placeholder; you need to implement the logic to read DTYPA and NC
+            dtypa = "int"  # or "double", based on your file
+            nc = 0  # Set this based on your file's parameters
+
+            # Read the entire file into a byte array
+            fid_data = fid_file.read()
+
+            if dtypa == "int":
+                # Calculate the number of data points
+                num_points = len(fid_data) // 4  # 4 bytes for each int
+                data = np.zeros(num_points, dtype=np.int32)
+
+                for i in range(num_points):
+                    data[i] = struct.unpack('i', fid_data[i*4:(i+1)*4])[0]
+
+                # Apply the exponent
+                data = data * (10 ** nc)
+
+            elif dtypa == "double":
+                num_points = len(fid_data) // 8  # 8 bytes for each double
+                data = np.zeros(num_points, dtype=np.float64)
+
+                for i in range(num_points):
+                    data[i] = struct.unpack('d', fid_data[i*8:(i+1)*8])[0]
+
+            return data
+    return data_dir, experiment_number, math, os, read_fid, sns
+
+
+@app.cell
+def _(data_dir, experiment_number, experiments, math, plt, read_fid, sns):
+    """Generate FID figure"""
+
+
+    def plot_fid_experiments(experiments, experiment_number, data_dir):
+        # Set the style for the plots
+        sns.set(style="whitegrid")  # Use Seaborn's whitegrid style for a clean look
+
+        # Create a new figure
+        plt.figure(figsize=(12, 10))
+
+        for idx, experiment in enumerate(experiments):
+            # Read the FID data
+            data = read_fid(experiment, experiment_number, data_dir)
+
+            # Calculate the number of rows and columns for subplots
+            n = len(experiments)
+            rows = round(math.sqrt(n))
+            cols = round(math.ceil(n / rows))
+
+            plt.subplot(rows, cols, idx + 1)
+            # plt.plot(data, marker='o', linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=2, markersize=5)
+            plt.plot(data, linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=0.5, markersize=5)
+
+            # Add titles and labels
+            plt.title(f'FID Experiment {idx + 1}', fontsize=14)
+            plt.xlabel('Time (ms)', fontsize=12)  # Replace with actual time unit if different
+            plt.ylabel('Magnitude', fontsize=12)  # Magnitude of FID data
+            plt.grid(True)  # Add grid lines for better readability
+            plt.xticks(fontsize=10)
+            plt.yticks(fontsize=10)
+
+        plt.tight_layout()  # Adjust layout to prevent overlap
+        plt.suptitle('FID Experiments Overview', fontsize=16, y=1.02)  # Main title for the figure
+        plt.savefig('figs/FID.svg')
+        return plt.gca()  # Return the current axes
+
+    # Example usage
+    fidfig = plot_fid_experiments(experiments, experiment_number, data_dir)
+    return (fidfig,)
+
+
+app._unparsable_cell(
+    r"""
+    \"\"\"Extract Experimental FID Data to Spectra Format\"\"\"
+
+    experiments = get_experiment_directories(data_dir, experiment_dir, experiment_count)
+
+    experimentalspectra = [{
+        'intensities': read_fid(experiment, experiment_number, data_dir)
+        'positions': [0, 0],
+        'scales': 'SP:3368'
+        }
+    for experiment in experiments
+    ]
+
+    preprocessedexperimentalspectra = process_spectra_parallel(experimentalspectra)
+    """,
+    name="_"
+)
 
 
 if __name__ == "__main__":

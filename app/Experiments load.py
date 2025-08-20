@@ -601,6 +601,34 @@ def _(np):
 
         return peak_values
 
+
+    @type_check(experiment=str, experiment_number=str, data_dir=str)
+    def extract_phc(experiment, experiment_number, data_dir):
+        """Extract Phase Correction values from the procs file."""
+
+        dir_path = f'{data_dir}/{experiment}/{experiment_number}'
+
+        if not os.path.exists(dir_path):
+            raise FileNotFoundError(f'Directory {dir_path} does not exist')
+
+        procs_file_path = f'{dir_path}/pdata/1/procs'
+        if not os.path.exists(procs_file_path):
+            raise FileNotFoundError(f'Directory {dir_path} does not contain procs parameters')
+
+        phc = {}
+
+        with open(procs_file_path) as f:
+            for line in f:
+                match = re.search(r'\$PHC(\d*)=\s*([-+]?\d*\.\d+|\d+)', line)
+                if match:
+                    key = f'PHC{match.group(1)}' if match.group(1) else 'PHC'
+                    phc[key] = np.float64(match.group(2))
+
+        if not phc:
+            raise ValueError(f'No phase correction values in directory {dir_path}')
+
+        return phc
+
     @type_check(sr=float, frequency=float)
     def calculate_ppm_shift(sr, frequency):
         """Calculate PPM shift from SR."""
@@ -623,6 +651,7 @@ def _(np):
         sf = extract_sf_values(experiment, experiment_number, data_dir)
         sr = calculate_sr(o1, sf, sfo1)
         return sr
+
 
     data_dir = 'spectra' # The directory all data is in
     experiment_dir = '20250811_cit_nacit_titr' # The experiment name
@@ -650,7 +679,15 @@ def _(np):
     # print(sr_values)
     # print(ppm_shift)
     # print(peak_values[0])
-    return data_dir, experiment_number, experiments, peak_values, type_check
+    return (
+        data_dir,
+        experiment_number,
+        experiments,
+        extract_peak_values,
+        extract_phc,
+        peak_values,
+        type_check,
+    )
 
 
 @app.cell
@@ -758,8 +795,7 @@ def _(data_dir, experiment_number, experiments, np, plt, type_check):
                 for i in range(num_points):
                     data[i] = struct.unpack('d', fid_data[i*8:(i+1)*8])[0]
 
-            return data
-
+            return data[..., ::2] + data[..., 1::2] * 1.j # Stole this line from NMRglue
 
     def plot_fid_experiments(experiments, experiment_number, data_dir):
         # Set the style for the plots
@@ -797,17 +833,174 @@ def _(data_dir, experiment_number, experiments, np, plt, type_check):
     # Example usage
     fidfig = plot_fid_experiments(experiments, experiment_number, data_dir)
 
-    data = read_fid(experiments[0], experiment_number, data_dir)
+    fiddata = read_fid(experiments[0], experiment_number, data_dir)
 
-    return data, fidfig
+    return fiddata, fidfig, math
 
 
 @app.cell
-def _(data, plt):
-    plt.plot(data, linestyle='-', linewidth=0.5, markersize=5)
+def _(fiddata, plt):
+    plt.plot(fiddata, linestyle='-', linewidth=0.5, markersize=5)
     plt.savefig('figs/singleFID.svg')
     singlefidfig = plt.gca()
     return (singlefidfig,)
+
+
+@app.cell
+def _(data_dir, experiment_number, experiments, extract_phc, math, plt):
+    def bruker_fft(data_dir, experiment, experiment_number):
+        """Convert time domain data to frequency domain"""
+        import nmrglue as ng
+        phc = extract_phc(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment)
+
+        data = read_bruker(data_dir, experiment, experiment_number)
+        # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
+
+        # Process the spectrum
+        data = ng.proc_base.zf_size(data, 2**15)    # Zero fill to 32768 points
+        data = ng.proc_base.fft(data)                 # Fourier transform
+        data = ng.proc_base.ps(data, p0=phc['PHC0'], p1=phc['PHC1'])  # Phase correction
+        # data = ng.proc_autophase.autops(data, 'acme') # Automatic phase correction
+        data = ng.proc_base.di(data)                  # Discard the imaginaries
+        data = ng.proc_base.rev(data)                 # Reverse the data
+
+        return data
+
+    def read_bruker(data_dir, experiment, experiment_number):
+        import nmrglue as ng
+        phc = extract_phc(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment)
+
+        dic, data = ng.bruker.read(f'{data_dir}/{experiment}/{experiment_number}')
+
+        # Remove the digital filter
+        data = ng.bruker.remove_digital_filter(dic, data)
+
+        return data
+
+    def _():
+        # Create a new figure
+        ngfig = plt.figure(figsize=(12, 10))
+
+        # Calculate the number of rows and columns for subplots
+        n = len(experiments)
+        rows = round(math.sqrt(n))
+        cols = round(math.ceil(n / rows))
+
+        for idx, experiment in enumerate(experiments):
+            data = bruker_fft(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
+
+            ax = ngfig.add_subplot(rows, cols, idx + 1)
+            ax.plot(data[19000:22000])  # Adjust the range as needed
+            # ax.plot(data)
+            ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
+            ax.set_xlabel('Data Points', fontsize=12)  # Replace with actual x-axis label if needed
+            ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
+            ax.grid(True)  # Add grid lines for better readability
+            ax.tick_params(axis='both', which='major', labelsize=10)
+
+        plt.tight_layout()  # Adjust layout to prevent overlap
+        plt.suptitle('NMR Experiments Overview', fontsize=16, y=1.02)  # Main title for the figure
+        plt.savefig('figs/NMR.svg')
+        return plt.gca()  # Return the current axes
+
+    nmrgluefig = _()
+    return nmrgluefig, read_bruker
+
+
+@app.cell
+def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
+    brukerdata = read_bruker(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
+
+    print(fiddata)
+    print(brukerdata)
+
+    plt.figure(figsize=(12,6))
+    plt.subplot(1, 2, 1)
+    plt.title('Custom fid reader')
+    plt.plot(fiddata)
+    plt.subplot(1, 2, 2)
+    plt.title('NMR glue')
+    plt.plot(brukerdata)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, nmrgluefig):
+    mo.md(rf"""{mo.as_html(nmrgluefig)}""")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## Compare with uranium shifts
+
+    Notes:
+
+    - Graph is weird, why on earth does the difference between the two peaks go down, then up?
+    - Difference between chemical shifts much bigger for sodium than it is for uranium
+    """
+    )
+    return
+
+
+@app.cell
+def _(
+    data_dir,
+    experiment_number,
+    experiments,
+    extract_peak_values,
+    np,
+    phs,
+    plt,
+):
+    # 4 protons, because it's a dicitrate
+    uranium_proton_ppms = [4.08, 4.19, 4.26, 4.35]
+
+    uranium_proton_ppms_converted = [
+        x*220/600.05 for x in uranium_proton_ppms
+    ]
+
+    print(f'Uranium chemical shifts: {[round(x, 2) for x in uranium_proton_ppms_converted]}')
+    print(f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}')
+
+
+
+
+    citrate_ppms = [extract_peak_values(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment) for experiment in experiments]
+
+    # print(len(citrate_ppms[0]))
+
+    citrate_ppms = [[x[0] for x in y] for y in citrate_ppms] # Discard intensities, not required for this
+
+    # print(len(citrate_ppms[0]))
+
+    citrate_shifts = [[
+        np.average(x[0:1]),
+        np.average(x[2:3]),
+    ] for x in citrate_ppms] # Average the multiplets together
+
+    # print(len(citrate_shifts[0]))
+
+    citrate_differences = [float(round(x[0] - x[1], 4)) for x in citrate_shifts]
+
+    # print(f'{citrate_differences}')
+
+    # plt.plot([x/0.0006 for x in acid_vol], citrate_differences)
+    plt.plot(phs, citrate_differences)
+    # print(len(phs))
+    # plt.plot(citrate_differences, species_1)
+    # plt.plot(citrate_differences, species_2)
+    # plt.plot(citrate_differences, species_3)
+    # plt.plot(citrate_differences, species_4)
+
+    return
+
+
+@app.cell
+def _():
+    return
 
 
 if __name__ == "__main__":
