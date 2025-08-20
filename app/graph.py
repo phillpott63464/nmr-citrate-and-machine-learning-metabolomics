@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.16'
-app = marimo.App(width='medium')
+__generated_with = "0.14.17"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -93,9 +93,7 @@ def _(electrolytes):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""Define a function to simulate a ph graph at a concentration from pkas"""
-    )
+    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
     return
 
 
@@ -125,9 +123,7 @@ def _(phfork):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
-    )
+    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
     return
 
 
@@ -388,9 +384,7 @@ def _(options, ratios):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""Calculate volume of acid/base needed to complete these experiments"""
-    )
+    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
     return
 
 
@@ -554,5 +548,66 @@ def _(
     return
 
 
-if __name__ == '__main__':
+@app.cell
+def _():
+    better_sample_vol = 0.001   # l # Use a bigger volume to give leeway
+    metal_conc = 0.005*10
+    return better_sample_vol, metal_conc
+
+
+@app.cell(hide_code=True)
+def _(better_sample_vol, metal_conc, mo, stock_molarity, tris_vol):
+    mo.md(
+        rf"""
+    ## Magnesium/Citrate Experimental Preparation
+
+    - Use 1/10 sample vol {better_sample_vol * 0.1*1000}mL citric acid, which is a molarity of {stock_molarity*0.1}M
+    - Calcium/magnesium chloride
+        - Final concentration: {metal_conc}M. [This](https://doi.org/10.1007/s007750100264) paper recommends 1.5e-2mol.dm-3, or 0.015M, but their values remain relatively constant past about 0.005M. x10 so I only have to add 0.1mL.
+        - Final volume: {better_sample_vol * 0.1*1000}mL
+    - Add {tris_vol*1000}ml of tris buffer. [This](https://doi.org/10.1007/s007750100264) paper recommended a target concentration of 5e-2mol.dm-3, or 0.05M, so double that to 0.1M as we're going to use half the volume as buffer.
+    - Make up to {better_sample_vol*1000}mL total with milliq
+    """
+    )
+    return
+
+
+@app.cell
+def _(better_sample_vol, pd):
+    metal_experiments = []
+    citric_sample_vol = better_sample_vol * 0.1
+    tris_vol = better_sample_vol * 0.5
+
+    for i in range (0, 24):
+        metal_experiments.append({
+            'citric acid stock uL': citric_sample_vol,
+            'salt stock uL': round(citric_sample_vol/23*i, 6),
+            'tris buffer stock uL': round(tris_vol, 6),
+        })
+
+    for x in metal_experiments:
+        temp = 0
+        for y in x.items():
+            temp += y[1]
+        x['milliq uL'] = round(better_sample_vol - temp, 6)
+
+    for x in metal_experiments:
+        temp = 0
+        for y in x.items():
+            temp += y[1]
+        if temp != better_sample_vol:
+            print('Issue')
+
+    for x in metal_experiments:
+        for key, value in x.items():
+            x[key] = f'{round(value * 1000 * 1000)}'
+
+    metal_experiments = pd.DataFrame(metal_experiments)
+
+    metal_experiments.to_csv('metal_experiments.csv', index=False)
+
+    return (tris_vol,)
+
+
+if __name__ == "__main__":
     app.run()
