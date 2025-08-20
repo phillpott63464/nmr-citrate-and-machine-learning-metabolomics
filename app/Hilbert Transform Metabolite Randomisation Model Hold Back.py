@@ -7,8 +7,8 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     """Initial imports and hardware detection"""
-    import marimo as mo
-    import torch
+    import marimo as mo # type: ignore
+    import torch # type: ignore
 
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
@@ -45,41 +45,61 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 100                  # Number of hyperparameter optimization trials
+    trials = 1                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
     MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = None             # Target resolution for ML model (None = no downsampling)
-    reverse = True                # Apply Hilbert transform (time domain analysis)
-    ranges = [[-100, 100]]  # Full spectral range in ppm
+    reverse = False                # Apply Hilbert transform (time domain analysis)
+    ranged = True
 
     # Smart cache directory structure
     base_cache_dir = f'./data_cache/{notebook_name}'
     raw_data_dir = f'{base_cache_dir}/raw_data'  # Only depends on substances & generation params
-    processed_data_dir = f'{base_cache_dir}/processed/{"time" if reverse else "freq"}/{downsample}'  # Depends on preprocessing
+    processed_data_dir = f'{base_cache_dir}/processed/{"time" if reverse else "freq"}/{"ranged" if ranged else "unranged"}{downsample}'  # Depends on preprocessing
     model_cache_dir = f'{processed_data_dir}/models/{MODEL_TYPE}'  # Depends on model type + processed data
 
     # Legacy cache_dir for backward compatibility
     cache_dir = f'{base_cache_dir}/{MODEL_TYPE}/{"time" if reverse else "freq"}/{downsample}'
 
-    # NMR metabolite database mapping (substance name -> spectrum ID)
+    # NMR metabolite database mapping (substance name -> spectrum ID + chemical shift range)
     substanceDict = {
-        'Citric acid': ['SP:3368'],
-        'Succinic acid': ['SP:3211'],
-        'Maleic acid': ['SP:3110'],
-        'Lactic acid': ['SP:3675'],
-        'L-Methionine': ['SP:3509'],
-        'L-Proline': ['SP:3406'],
-        'L-Phenylalanine': ['SP:3507'],
-        'L-Serine': ['SP:3732'],
-        'L-Threonine': ['SP:3437'],
-        'L-Tryptophan': ['SP:3455'],
-        'L-Tyrosine': ['SP:3464'],
-        'L-Valine': ['SP:3490'],
-        'Glycine': ['SP:3682'],
+        'Citric acid': ['SP:3368', [[2.4, 2.8]]],
+        'Succinic acid': ['SP:3211', [[2.0, 2.6]]],
+        'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
+        'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
+        'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
+        'L-Proline': ['SP:3406', [[1.8, 4.3]]],
+        'L-Phenylalanine': ['SP:3507', [[3, 8]]],
+        'L-Serine': ['SP:3732', [[3.5, 4.5]]],
+        'L-Threonine': ['SP:3437', [[3.5, 4.5]]],
+        'L-Tryptophan': ['SP:3455', [[7.0, 8.0]]],
+        'L-Tyrosine': ['SP:3464', [[6.5, 7.5]]],
+        'L-Valine': ['SP:3490', [[0.9, 1.5]]],
+        'Glycine': ['SP:3682', [[3.5, 4.0]]],
     }
+
+    import pandas as pd
+    multiplets = pd.read_csv('morgan/Casmdb_Data/multiplets.csv')
+
+    def _():
+        for key, item in substanceDict.items():
+            centers = multiplets[multiplets['spectrum_id'] == item[0]]
+            centers = centers['center']
+            centers = centers.to_numpy()
+
+            arrays = [[x - 0.1, x + 0.1] for x in centers]
+
+            if len(item) < 2:
+                item.append(arrays)
+            else:
+                item[1] = arrays
+
+    _()
+
+    print(substanceDict)
 
     return (
         MODEL_TYPE,
@@ -88,7 +108,7 @@ def _():
         downsample,
         model_cache_dir,
         processed_data_dir,
-        ranges,
+        ranged,
         raw_data_dir,
         reverse,
         substanceDict,
@@ -126,8 +146,8 @@ def _():
     """Import data generation dependencies"""
     from morgan.createTrainingData import createTrainingData
     import morgan
-    import numpy as np
-    import tqdm
+    import numpy as np # type: ignore
+    import tqdm # type: ignore
     import itertools
     import random
     import pickle
@@ -210,17 +230,30 @@ def _(os, pickle, random, raw_data_dir):
 
         return spectra, held_back_metabolites, combinations
 
+    import hashlib
+
     def generate_raw_cache_key(substanceDict, combo_number, count):
         """Generate cache key for raw data (independent of model/preprocessing)"""
         substance_key = '_'.join(sorted(substanceDict.keys()))
         combo_key = f'combos_{combo_number}'
         count_key = f'count_{count}'
-        return f'raw_spectra_{substance_key}_{combo_key}_{count_key}'
+
+        # Combine all parts into a single string
+        raw_key = f'raw_spectra_{substance_key}_{combo_key}_{count_key}'
+
+        # Generate a hash of the combined string
+        return hashlib.sha256(raw_key.encode()).hexdigest()
 
     def generate_processed_cache_key(raw_cache_key, downsample, reverse):
         """Generate cache key for processed datasets"""
         processing_key = f'{"time" if reverse else "freq"}_{downsample}'
-        return f'processed_{raw_cache_key}_{processing_key}'
+
+        # Combine the raw cache key with the processing key
+        processed_key = f'processed_{raw_cache_key}_{processing_key}'
+
+        # Generate a hash of the combined string
+        return hashlib.sha256(processed_key.encode()).hexdigest()
+
 
     return (
         generate_processed_cache_key,
@@ -295,6 +328,8 @@ def _(
             # Randomly sample combinations to manage computational load
             if combo_number is not None:
                 combinations = random.sample(all_combinations, combo_number)
+            else:
+                combinations = all_combinations
             print(f'Generated {len(combinations)} random combinations')
 
             # Select two metabolites for hold-back validation
@@ -303,7 +338,7 @@ def _(
 
             # Extract spectrum IDs for NMR simulation
             substanceSpectrumIds = [
-                [combination[substance][-1] for substance in combination]
+                [combination[substance][0] for substance in combination]
                 for combination in combinations
             ]
 
@@ -360,7 +395,7 @@ def _(
 
     # Extract spectrum IDs for downstream processing
     substanceSpectrumIds = [
-        [combination[substance][-1] for substance in combination]
+        [combination[substance][0] for substance in combination]
         for combination in combinations
     ]
 
@@ -413,7 +448,7 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 @app.cell
 def _(spectra):
     """Generate sample spectrum visualizations"""
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt # type: ignore
 
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra
@@ -467,7 +502,7 @@ def _(createTrainingData, substanceDict):
 
         # Extract individual metabolite spectrum IDs
         referenceSpectrumIds = [
-            substanceDict[substance][-1] for substance in substanceDict
+            substanceDict[substance][0] for substance in substanceDict
         ]
 
         # Generate pure component spectra (no concentration randomization)
@@ -479,17 +514,19 @@ def _(createTrainingData, substanceDict):
 
         # Map substance names to their reference spectra for easy lookup
         reference_spectra = {
-            substanceDict[substance][0]: reference_spectra_raw['components'][index]
+            substanceDict[substance][0]: [reference_spectra_raw['components'][index], reference_spectra_raw['scales'][substanceDict[substance][0]]]
             for index, substance in enumerate(substanceDict)
         }
 
         print("Generated reference spectra for metabolite identification:")
         for substance, spectrum_id in reference_spectra.items():
-            print(f"  {substance}: {len(spectrum_id)} data points")
+            print(f"  {substance}: {len(spectrum_id[0])} data points")
 
         return reference_spectra
 
     reference_spectra = _()
+
+    print(reference_spectra['SP:3368'][1])
     return (reference_spectra,)
 
 
@@ -505,7 +542,7 @@ def _(plt, reference_spectra, spectra, substanceDict):
             spectrum_id = substanceDict[substance][0]
             plt.plot(
                 spectra[0]['positions'],
-                reference_spectra[spectrum_id],
+                reference_spectra[spectrum_id][0],
                 label=substance,
                 alpha=0.7
             )
@@ -559,24 +596,30 @@ def _(mo, referencefigure, substanceDict):
 def _():
     """Import preprocessing dependencies"""
     import multiprocessing as mp
-    from scipy.signal import resample, hilbert
-    from scipy.interpolate import interp1d
-    from scipy.fft import ifft, irfft
+    from scipy.signal import resample, hilbert # type: ignore
+    from scipy.interpolate import interp1d # type: ignore
+    from scipy.fft import ifft, irfft # type: ignore
 
     # Preprocessing configuration
     baseline_distortion = True  # Add realistic experimental artifacts
 
-    return baseline_distortion, irfft, mp
+    return baseline_distortion, mp
 
 
 @app.cell
-def _(irfft, np):
+def _(np):
     """Core spectrum preprocessing functions"""
+
+    def log(msg):
+        with open('log.txt', 'a') as f:
+            f.writelines(f'{msg}\n')
 
     def preprocess_peaks(
         intensities,
         positions,
-        ranges=[[-100, 100]],
+        scales=None,
+        substanceDict = None,
+        ranged=False,
         baseline_distortion=False,
         downsample=None,
         reverse=False,
@@ -587,7 +630,9 @@ def _(irfft, np):
         Args:
             intensities: Spectral intensity data
             positions: Chemical shift positions (ppm)
-            ranges: List of [min, max] ppm ranges to extract
+            scales: Dictionary of substance concentrations (for training data) or substance ID (for reference data)
+            substanceDict: Mapping of substance names to [spectrum_id, range]
+            ranged: Select only certain chemical shift ranges
             baseline_distortion: Add realistic baseline drift
             downsample: Target number of points for downsampling
             reverse: Apply Hilbert transform for time-domain analysis
@@ -598,12 +643,107 @@ def _(irfft, np):
         new_positions = positions  # Default: keep original positions
         new_intensities = intensities  # Default: keep original intensities
 
+        # Select only certain chemical shift ranges
+        if ranged:
+            ranges = [[-0.1, 0.1]]
+
+            # Handle different types of scales parameter
+            if isinstance(scales, dict):
+                # Training data: scales is a dictionary of substance concentrations
+                for scale in scales:
+                    for substance in substanceDict:
+                        if scale == substanceDict[substance][0]:
+                            for x in substanceDict[substance][1]:
+                                ranges.append(x)    
+            elif isinstance(scales, str):
+                # Reference data: scales is a single substance ID
+                for substance in substanceDict:
+                    if scales == substanceDict[substance][0]:
+                        for x in substanceDict[substance][1]:
+                            ranges.append(x)
+                        break
+            # If scales is None or other type, just use the default range
+
+            indicies = set() # Array but with no duplicates
+            for x in ranges:
+                lower_bound, upper_bound = x
+                for i, position in enumerate(new_positions):
+                    if lower_bound <= position <= upper_bound:
+                        indicies.add(i) # Add instead of append to handle overlapping ranges
+
+            indicies = sorted(indicies) # Sort indicies for consistent ordering
+
+            # Calculate next power of 2
+            length = len(indicies)
+            if length == 0:
+                length = 1
+
+            # Find the next power of 2 using bit operations
+            next_power = 1
+            while next_power < length:
+                next_power <<= 1  # Equivalent to next_power *= 2
+
+            # Calculate how much padding we need
+            pad_needed = next_power - length
+
+            if pad_needed > 0:
+                left_pad = pad_needed // 2
+                right_pad = pad_needed - left_pad
+
+                # Try to pad symmetrically, but respect boundaries
+                for _ in range(left_pad):
+                    if indicies[0] > 0:
+                        indicies.insert(0, indicies[0] - 1)
+                    else:
+                        # Can't pad left, add to right padding
+                        right_pad += 1
+
+                for _ in range(right_pad):
+                    if indicies[-1] < len(new_positions) - 1:
+                        indicies.append(indicies[-1] + 1)
+                    else:
+                        # Can't pad right, try padding left again
+                        if indicies[0] > 0:
+                            indicies.insert(0, indicies[0] - 1)
+                        else:
+                            # If we can't extend, we'll have to accept non-power-of-2
+                            break
+
+            # Final verification - if still not power of 2, force it
+            final_length = len(indicies)
+            if final_length & (final_length - 1) != 0:
+                # Calculate the next power of 2 again
+                target_power = 1
+                while target_power < final_length:
+                    target_power <<= 1
+
+                # If we're closer to the lower power of 2, truncate; otherwise pad
+                lower_power = target_power >> 1
+                if abs(final_length - lower_power) < abs(final_length - target_power):
+                    # Truncate to lower power of 2
+                    indicies = indicies[:lower_power]
+                else:
+                    # Pad to higher power of 2 by duplicating edge values
+                    while len(indicies) < target_power:
+                        # Alternate between duplicating first and last elements
+                        if len(indicies) % 2 == 0:
+                            indicies.append(indicies[-1])  # Duplicate last
+                        else:
+                            indicies.insert(0, indicies[0])  # Duplicate first
+
+            temp_positions = [new_positions[i] for i in indicies]
+            temp_intensities = [new_intensities[i] for i in indicies]
+
+            new_positions = temp_positions
+            new_intensities = temp_intensities
+
+        # Convert to FID if needed
         if reverse:
             # Apply Hilbert transform for time-domain representation
-            from scipy.signal import hilbert
-            from scipy.fft import ifft
+            from scipy.signal import hilbert # type: ignore
+            from scipy.fft import ifft # type: ignore
 
-            fid = ifft(hilbert(intensities))
+            fid = ifft(hilbert(new_intensities))
             fid[0] = 0
             threshold = 1e-16
             fid[np.abs(fid) < threshold] = 0
@@ -611,7 +751,7 @@ def _(irfft, np):
             new_intensities = fid.astype(np.complex64)
             new_positions = [0, 0]
 
-        # Apply downsampling if requested
+
         if downsample is not None and len(new_intensities) > downsample:
             step = len(new_intensities) // downsample
 
@@ -621,9 +761,13 @@ def _(irfft, np):
             filtered = np.zeros_like(new_intensities)
             filtered[:new_nyquist] = new_intensities[:new_nyquist]
 
-            # Convert to time domain, then downsample
-            time_domain = irfft(filtered, n=len(new_intensities))
+            # Downsample new_intensities
             new_intensities = new_intensities[::step]
+
+            # Check if new_positions exists and is not [0, 0]
+            if 'new_positions' in locals() and not np.array_equal(new_positions, [0, 0]):
+                new_positions = new_positions[::step]
+
 
         return new_positions, new_intensities
 
@@ -655,7 +799,7 @@ def _(
     mp,
     preprocess_peaks,
     preprocess_ratio,
-    ranges,
+    ranged,
     reverse,
     substanceDict,
 ):
@@ -663,9 +807,9 @@ def _(
 
     def preprocess_spectra(
         spectra,
-        ranges,
         substanceDict,
         reverse,
+        ranged=ranged,
         baseline_distortion=False,
         downsample=None,
     ):
@@ -678,7 +822,9 @@ def _(
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'][0],
             positions=spectra['positions'],
-            ranges=ranges,
+            scales=spectra['scales'],
+            ranged=ranged,
+            substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
             downsample=downsample,
             reverse=reverse,
@@ -698,23 +844,26 @@ def _(
         """Worker function for parallel spectrum preprocessing"""
         return preprocess_spectra(
             spectra=spectrum,
-            ranges=ranges,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
+            ranged=ranged,
             downsample=downsample,
             reverse=reverse,
         )
 
-    def process_single_reference(spectrum_key_and_data):
+    def process_single_reference(spectrum_key_and_data):  # Pass the spectrum ID directly for reference data
         """Worker function for parallel reference preprocessing"""
-        spectrum_key, reference_data, positions = spectrum_key_and_data
-        pos_int = preprocess_peaks(
+        spectrum_key, reference_data, positions, scales = spectrum_key_and_data
+        positions, intensities = preprocess_peaks(
             positions=positions,
             intensities=reference_data,
+            scales=spectrum_key,
+            ranged=ranged,
+            substanceDict=substanceDict,
             downsample=downsample,
             reverse=reverse,
         )
-        return (spectrum_key, pos_int[1])
+        return (spectrum_key, positions, intensities)
 
     def process_spectra_parallel(spectra):
         """Parallel preprocessing of all training spectra"""
@@ -733,19 +882,18 @@ def _(
 
         # Prepare arguments for parallel processing
         args = [
-            (key, intensities, sample_positions)
-            for key, intensities in reference_spectra.items()
+            (key, intensities, sample_positions, scales)
+            for key, (intensities, scales) in reference_spectra.items()
         ]
 
         with mp.Pool(processes=num_processes) as pool:
             results = pool.map(process_single_reference, args)
 
         preprocessed_reference_spectra = {
-            key: intensities for key, intensities in results
+            key: [positions, intensities] for key, positions, intensities in results
         }
 
         return preprocessed_reference_spectra
-
     return process_references_parallel, process_spectra_parallel
 
 
@@ -786,54 +934,57 @@ def _(
     spectra,
     substanceDict,
 ):
-    """Generate before/after preprocessing comparison plots"""
+    # Number of substances
+    num_substances = len(substanceDict)
 
-    plt.figure(figsize=(15, 6))
+    # Create a figure with subplots for each substance
+    plt.figure(figsize=(15, 6 * num_substances))
 
-    # Original spectra (left panel)
-    plt.subplot(1, 2, 1)
-    for substance in substanceDict:
+    for i, substance in enumerate(substanceDict):
         spectrum_id = substanceDict[substance][0]
+
+        # Original spectra (left panel)
+        plt.subplot(num_substances, 2, 2 * i + 1)
         plt.plot(
             spectra[0]['positions'],
-            reference_spectra[spectrum_id],
+            reference_spectra[spectrum_id][0],
             alpha=0.7,
             label=substance
         )
-    plt.title('Original Reference Spectra')
-    plt.xlabel('Chemical Shift (ppm)')
-    plt.ylabel('Intensity')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
+        plt.title(f'Original Reference Spectrum: {substance}')
+        plt.xlabel('Chemical Shift (ppm)')
+        plt.ylabel('Intensity')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, alpha=0.3)
 
-    # Preprocessed spectra (right panel)
-    plt.subplot(1, 2, 2)
-    for substance in substanceDict:
-        spectrum_id = substanceDict[substance][0]
+        # Preprocessed spectra (right panel)
+        plt.subplot(num_substances, 2, 2 * i + 2)
         if reverse:
             # Time domain: plot magnitude of complex data
             complex_data = preprocessed_reference_spectra[spectrum_id]
             plt.plot(complex_data, alpha=0.7, label=substance)
-            plt.title('Preprocessed (Hilbert Transform - Time Domain)')
+            plt.title(f'Preprocessed (Hilbert Transform - Time Domain): {substance}')
             plt.xlabel('Time Points')
             plt.ylabel('Magnitude')
         else:
             # Frequency domain: normal plotting
             plt.plot(
-                spectra[0]['positions'],
-                preprocessed_reference_spectra[spectrum_id],
+                preprocessed_reference_spectra[spectrum_id][0],
+                preprocessed_reference_spectra[spectrum_id][1],
                 alpha=0.7,
                 label=substance
             )
-            plt.title('Preprocessed (Frequency Domain)')
+            plt.title(f'Preprocessed (Frequency Domain): {substance}')
             plt.xlabel('Chemical Shift (ppm)')
             plt.ylabel('Intensity')
 
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, alpha=0.3)
 
+    plt.tight_layout()
     preprocessedreferencefigure = plt.gca()
+
+    print(preprocessed_reference_spectra['SP:3368'][0])
     return (preprocessedreferencefigure,)
 
 
@@ -856,7 +1007,7 @@ def _(graph_count, plt, preprocessed_spectra, reverse):
                 plt.ylabel('Magnitude')
             else:
                 # Frequency domain: normal plotting
-                plt.plot(preprocessed_spectra[graphcounter2]['intensities'])
+                plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
                 plt.title(f'Sample {graphcounter2} (Frequency Domain)')
                 plt.xlabel('Data Points')
                 plt.ylabel('Intensity')
@@ -875,7 +1026,7 @@ def _(
     preprocessed_spectra,
     preprocessedfigure,
     preprocessedreferencefigure,
-    ranges,
+    ranged,
     reverse,
 ):
     mo.md(
@@ -884,7 +1035,7 @@ def _(
 
     **Preprocessing Configuration:**
 
-    - **Spectral range:** {ranges[0]} ppm (full spectrum)
+    - **Spectral ranged:** {"Ranged" if ranged else "Disabled"}
     - **Baseline distortion:** {'Enabled' if baseline_distortion else 'Disabled'}
     - **Hilbert transform:** {'Applied (time domain)' if reverse else 'Not applied (frequency domain)'}
     - **Data type:** {'Complex64 (time domain)' if reverse else 'Float32 (frequency domain)'}
@@ -924,8 +1075,8 @@ def _(
 @app.cell
 def _():
     """Import machine learning dependencies"""
-    from torch.utils.data import Dataset, DataLoader
-    import h5py
+    from torch.utils.data import Dataset, DataLoader # type: ignore
+    import h5py # type: ignore
 
     return DataLoader, Dataset, h5py
 
@@ -1119,6 +1270,67 @@ def _(
         val_with_holdback = []
         test_with_holdback = []
 
+        # Find maximum length across all spectra for padding
+        max_intensities_length = max(len(spectrum['intensities']) for spectrum in spectra)
+        max_positions_length = max(len(spectrum['positions']) for spectrum in spectra if spectrum['positions'] != [0, 0])
+
+        # Pad all spectra to the same length
+        for spectrum in spectra:
+            # Pad intensities
+            if len(spectrum['intensities']) < max_intensities_length:
+                padding_needed = max_intensities_length - len(spectrum['intensities'])
+                if isinstance(spectrum['intensities'], np.ndarray):
+                    spectrum['intensities'] = np.concatenate([
+                        spectrum['intensities'], 
+                        np.full(padding_needed, -np.inf)
+                    ])
+                else:
+                    spectrum['intensities'] = spectrum['intensities'] + [-float('inf')] * padding_needed
+
+            # Pad positions (only if not [0, 0] placeholder)
+            if spectrum['positions'] != [0, 0] and len(spectrum['positions']) < max_positions_length:
+                padding_needed = max_positions_length - len(spectrum['positions'])
+                if isinstance(spectrum['positions'], np.ndarray):
+                    spectrum['positions'] = np.concatenate([
+                        spectrum['positions'], 
+                        np.full(padding_needed, -np.inf)
+                    ])
+                else:
+                    spectrum['positions'] = spectrum['positions'] + [-float('inf')] * padding_needed
+
+        # Find maximum length across all reference spectra for padding
+        max_ref_intensities_length = 0
+        max_ref_positions_length = 0
+
+        for key, value in reference_spectra.items():
+            positions, intensities = value
+            max_ref_intensities_length = max(max_ref_intensities_length, len(intensities))
+            if positions != [0, 0]:
+                max_ref_positions_length = max(max_ref_positions_length, len(positions))
+
+        # Pad all reference spectra to the same length
+        for key, value in reference_spectra.items():
+            positions, intensities = value
+
+            # Pad intensities
+            if len(intensities) < max_ref_intensities_length:
+                padding_needed = max_ref_intensities_length - len(intensities)
+                if isinstance(intensities, np.ndarray):
+                    intensities = np.concatenate([intensities, np.full(padding_needed, -np.inf)])
+                else:
+                    intensities = intensities + [-float('inf')] * padding_needed
+
+            # Pad positions (only if not [0, 0] placeholder)
+            if positions != [0, 0] and len(positions) < max_ref_positions_length:
+                padding_needed = max_ref_positions_length - len(positions)
+                if isinstance(positions, np.ndarray):
+                    positions = np.concatenate([positions, np.full(padding_needed, -np.inf)])
+                else:
+                    positions = positions + [-float('inf')] * padding_needed
+
+            # Update the reference spectra with padded data
+            reference_spectra[key] = [positions, intensities]
+
         for spectrum in spectra:
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(spectrum)
@@ -1154,7 +1366,7 @@ def _(
                         # Concatenate spectrum + reference for metabolite-specific analysis
                         temp_data = np.concatenate([
                             spectrum['intensities'],
-                            reference_spectra[substance],
+                            reference_spectra[substance][0],
                         ])
 
                         # Create label: [presence, concentration]
@@ -1172,7 +1384,7 @@ def _(
             for spectrum in spectra_list:
                 temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[target_key],
+                    reference_spectra[target_key][0],
                 ])
                 temp_label = [1, spectrum['ratios'][target_key]]
                 data_list.append(temp_data)
@@ -1186,12 +1398,11 @@ def _(
         # Add negative samples (without held-back metabolites)
         for spectra_subset, data_list, labels_list, target_key in [
             (val_without_holdback, data_val, labels_val, held_back_key_validation),
-            (test_without_holdback, data_test, labels_test, held_back_key_test)
         ]:
             for spectrum in spectra_subset:
                 temp_data = np.concatenate([
                     spectrum['intensities'],
-                    reference_spectra[target_key],
+                    reference_spectra[target_key][0],
                 ])
                 temp_label = [0, 0]  # Not present
                 data_list.append(temp_data)
@@ -1289,22 +1500,70 @@ def _(data_length, held_back_metabolites, mo, training_data):
 def _():
     """Import model architecture dependencies"""
     import copy
-    import torch.optim as optim
-    import torch.nn as nn
+    import torch.optim as optim # type: ignore
+    import torch.nn as nn # type: ignore
     import math
 
     return copy, math, nn, optim
 
 
 @app.cell
-def _(kwargs, nn, torch):
+def _(torch):
+    """Utility function for removing padding from input tensors"""
+
+    def remove_padding(tensor, pad_value=-float('inf')):
+        """
+        Remove padding values from tensor
+
+        Args:
+            tensor: Input tensor that may contain padding
+            pad_value: The padding value to remove (default: -inf)
+
+        Returns:
+            tensor: Tensor with padding removed
+        """
+        if tensor.dtype.is_complex:
+            # For complex tensors, check both real and imaginary parts
+            mask = ~(torch.isinf(tensor.real) | torch.isinf(tensor.imag))
+        else:
+            # For real tensors, check for inf values
+            mask = ~torch.isinf(tensor)
+
+        # Find the last True value in the mask to determine actual length
+        if mask.any():
+            # Get the last valid index across all dimensions
+            if tensor.dim() > 1:
+                # For batched data, find max valid length across batch
+                max_valid_idx = 0
+                for batch_idx in range(tensor.size(0)):
+                    batch_mask = mask[batch_idx]
+                    if batch_mask.any():
+                        last_valid = torch.where(batch_mask)[0][-1].item()
+                        max_valid_idx = max(max_valid_idx, last_valid + 1)
+                return tensor[:, :max_valid_idx]
+            else:
+                # For 1D tensors
+                last_valid = torch.where(mask)[0][-1].item()
+                return tensor[:last_valid + 1]
+
+        # If no valid data found, return empty tensor with correct shape
+        if tensor.dim() > 1:
+            return tensor[:, :0]
+        else:
+            return tensor[:0]
+
+    return (remove_padding,)
+
+
+@app.cell
+def _(nn, remove_padding, torch):
     """Multi-Layer Perceptron for metabolite detection and quantification"""
 
     class MLPRegressor(nn.Module):
         def __init__(self, input_size=2048, trial=None):
             super().__init__()
             self.input_size = input_size
-            self.window_size = kwargs.get('window_size', 256)
+            self.window_size = 256
 
             stride_ratio = trial.suggest_float('stride_ratio', 0.25, 0.75)
             self.stride = int(self.window_size * stride_ratio)
@@ -1333,6 +1592,12 @@ def _(kwargs, nn, torch):
         def forward(self, x):
             batch_size = x.size(0)
 
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Update input_size based on actual data length after padding removal
+            actual_input_size = x.size(1)
+
             # **FIX: Handle complex input by separating real and imaginary parts**
             if x.dtype.is_complex:
                 x_real = x.real.float()
@@ -1344,9 +1609,9 @@ def _(kwargs, nn, torch):
                 # If input is real, create zero imaginary part
                 x = torch.cat([x, torch.zeros_like(x)], dim=-1)
 
-            # Now x has shape [batch, input_size * 2] (real + imag)
+            # Now x has shape [batch, actual_input_size * 2] (real + imag)
             # Split spectrum and reference (each has real + imag components)
-            quarter_size = self.input_size // 2
+            quarter_size = actual_input_size // 2
             spectrum_real = x[:, :quarter_size]
             spectrum_imag = x[:, quarter_size:quarter_size*2]
             reference_real = x[:, quarter_size*2:quarter_size*3] 
@@ -1355,12 +1620,24 @@ def _(kwargs, nn, torch):
             window_features = []
 
             spectrum_length = spectrum_real.size(1)
-            for i in range(0, spectrum_length - self.window_size + 1, self.stride):
+
+            # Adjust window size if it's larger than actual data
+            effective_window_size = min(self.window_size, spectrum_length)
+
+            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
                 # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+self.window_size]
-                spec_imag_window = spectrum_imag[:, i:i+self.window_size]
-                ref_real_window = reference_real[:, i:i+self.window_size]
-                ref_imag_window = reference_imag[:, i:i+self.window_size]
+                spec_real_window = spectrum_real[:, i:i+effective_window_size]
+                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
+                ref_real_window = reference_real[:, i:i+effective_window_size]
+                ref_imag_window = reference_imag[:, i:i+effective_window_size]
+
+                # Pad window to expected size if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
 
                 # Concatenate all components
                 window_input = torch.cat([
@@ -1374,11 +1651,18 @@ def _(kwargs, nn, torch):
             if len(window_features) == 0:
                 # Fallback for edge cases
                 window_input = torch.cat([
-                    spectrum_real[:, :self.window_size],
-                    spectrum_imag[:, :self.window_size],
-                    reference_real[:, :self.window_size],
-                    reference_imag[:, :self.window_size]
+                    spectrum_real[:, :effective_window_size],
+                    spectrum_imag[:, :effective_window_size],
+                    reference_real[:, :effective_window_size],
+                    reference_imag[:, :effective_window_size]
                 ], dim=-1)
+
+                # Pad if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
+                    window_input = torch.cat([window_input, padding], dim=1)
+
                 features = self.local_feature_extractor(window_input)
                 window_features.append(features)
 
@@ -1388,7 +1672,7 @@ def _(kwargs, nn, torch):
 
 
 @app.cell
-def _(math, nn, torch):
+def _(math, nn, remove_padding, torch):
     """Advanced Sliding Window Transformer architecture for NMR spectral analysis"""
 
     class PositionalEncoding(nn.Module):
@@ -1504,6 +1788,12 @@ def _(math, nn, torch):
         def forward(self, x):
             batch_size = x.size(0)
 
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Update input_size based on actual data length after padding removal
+            actual_input_size = x.size(1)
+
             # Handle complex input by separating real and imaginary parts
             if x.dtype.is_complex:
                 x_real = x.real.float()
@@ -1515,9 +1805,9 @@ def _(math, nn, torch):
                 # If input is real, create zero imaginary part
                 x = torch.cat([x, torch.zeros_like(x)], dim=-1)
 
-            # Now x has shape [batch, input_size * 2] (real + imag)
+            # Now x has shape [batch, actual_input_size * 2] (real + imag)
             # Split spectrum and reference (each has real + imag components)
-            quarter_size = self.input_size // 2
+            quarter_size = actual_input_size // 2
             spectrum_real = x[:, :quarter_size]
             spectrum_imag = x[:, quarter_size:quarter_size*2]
             reference_real = x[:, quarter_size*2:quarter_size*3] 
@@ -1526,13 +1816,24 @@ def _(math, nn, torch):
             window_features = []
             spectrum_length = spectrum_real.size(1)
 
+            # Adjust window size if it's larger than actual data
+            effective_window_size = min(self.window_size, spectrum_length)
+
             # Process each sliding window
-            for i in range(0, spectrum_length - self.window_size + 1, self.stride):
+            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
                 # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+self.window_size]
-                spec_imag_window = spectrum_imag[:, i:i+self.window_size]
-                ref_real_window = reference_real[:, i:i+self.window_size]
-                ref_imag_window = reference_imag[:, i:i+self.window_size]
+                spec_real_window = spectrum_real[:, i:i+effective_window_size]
+                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
+                ref_real_window = reference_real[:, i:i+effective_window_size]
+                ref_imag_window = reference_imag[:, i:i+effective_window_size]
+
+                # Pad window to expected size if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
 
                 # Concatenate all components for this window
                 window_input = torch.cat([
@@ -1551,11 +1852,17 @@ def _(math, nn, torch):
             if len(window_features) == 0:
                 # Fallback: use first window_size points
                 window_input = torch.cat([
-                    spectrum_real[:, :self.window_size],
-                    spectrum_imag[:, :self.window_size],
-                    reference_real[:, :self.window_size],
-                    reference_imag[:, :self.window_size]
+                    spectrum_real[:, :effective_window_size],
+                    spectrum_imag[:, :effective_window_size],
+                    reference_real[:, :effective_window_size],
+                    reference_imag[:, :effective_window_size]
                 ], dim=-1)
+
+                # Pad if needed
+                if effective_window_size < self.window_size:
+                    pad_size = self.window_size - effective_window_size
+                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
+                    window_input = torch.cat([window_input, padding], dim=1)
 
                 window_embed = self.window_projection(window_input).unsqueeze(1)
                 local_features = self.local_transformer(window_embed)
@@ -1583,7 +1890,7 @@ def _(math, nn, torch):
 
 
 @app.cell
-def _(MLPRegressor, TransformerRegressor, nn, torch):
+def _(MLPRegressor, TransformerRegressor, nn, remove_padding, torch):
     """Hybrid ensemble combining MLP and Transformer architectures"""
 
     class HybridEnsembleRegressor(nn.Module):
@@ -1611,7 +1918,10 @@ def _(MLPRegressor, TransformerRegressor, nn, torch):
                 self.concentration_weight = kwargs.get('conc_ensemble_weight', 0.7)   # Favor MLP
 
         def forward(self, x):
-            # Get predictions from both models
+            # **NEW: Remove padding before processing**
+            x = remove_padding(x)
+
+            # Get predictions from both models (they will handle their own padding removal)
             mlp_output = self.mlp(x)
             transformer_output = self.transformer(x)
 
@@ -1810,7 +2120,7 @@ def _(
 
         best_val_loss = np.inf
         epochs_without_improvement = 0
-        best_weights = None
+        best_weights = copy.deepcopy(model.state_dict())  # Initialize with current weights
 
         for epoch in range(max_epochs):
             model.train()
@@ -1868,9 +2178,11 @@ def _(
                     print(f'Early stopping at epoch {epoch}')
                     break
 
-        # Load best weights
-        model.load_state_dict(best_weights)
-        model.eval()
+        # Load best weights - now guaranteed to not be None
+        if best_weights is not None:
+            model.load_state_dict(best_weights)
+        else:
+            print("Warning: No improvement found during training, using final weights")
 
         # Compute final metrics using DataLoaders
         def compute_metrics(data_loader):
@@ -1950,7 +2262,7 @@ def _(
     training_data,
     trials,
 ):
-    import optuna
+    import optuna # type: ignore
     from functools import partial
 
     def objective(training_data, trial, model_type='transformer'):
@@ -2153,53 +2465,29 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - **Number of Attention Heads:** {study.best_trial.params.get('nhead', 'N/A')}
     - **Number of Encoder Layers:** {study.best_trial.params.get('num_layers', 'N/A')}
     - **Feedforward Dimension:** {study.best_trial.params.get('dim_feedforward', 'N/A')}
-    - **Target Sequence Length:** {study.best_trial.params.get('target_seq_len', 'N/A')}
+    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
 
     **Model Architecture:**
 
     Input Projection → Positional Encoding → Transformer Encoder → Global Average Pooling → Output Projection
     """
     elif MODEL_TYPE == 'mlp':
-        # Handle both sliding window and traditional MLP parameters
-        if 'window_size' in study.best_trial.params:
-            # Sliding Window MLP
-            model_params_md = f"""
+        # Handle sliding window MLP parameters
+        model_params_md = f"""
     **Sliding Window MLP Architecture:**
-    - **Window Size:** {study.best_trial.params['window_size']}
-    - **Stride Ratio:** {study.best_trial.params['stride_ratio']:.3f}
-    - **Actual Stride:** {int(study.best_trial.params['window_size'] * study.best_trial.params['stride_ratio'])}
+    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
+    - **Window Size:** 256 (fixed)
+    - **Actual Stride:** {int(256 * study.best_trial.params.get('stride_ratio', 0.5))}
 
     **Model Architecture:**
 
     Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output
 
     **Window Processing:**
-    - Each window processes {study.best_trial.params['window_size']} points
-    - Windows overlap with stride of {int(study.best_trial.params['window_size'] * study.best_trial.params['stride_ratio'])} points
+    - Each window processes 256 points
+    - Windows overlap with stride of {int(256 * study.best_trial.params.get('stride_ratio', 0.5))} points
     - Local features (128D) extracted from each window
     - Global aggregation combines all window features
-    """
-        elif 'div_size' in study.best_trial.params:
-            # Traditional MLP
-            model_params_md = f"""
-    **Traditional MLP Architecture:**
-    - **Division Size (layer reduction factor):** {study.best_trial.params['div_size']:.1f}
-
-    **Model Architecture:**
-
-    Input Layer → Hidden Layers (progressively smaller) → Output Layer (2 outputs)
-
-    *Layer sizes are determined by dividing the previous layer size by the division factor*
-    """
-        else:
-            # Fallback for unknown MLP structure
-            model_params_md = """
-    **MLP Architecture:**
-    - Custom parameter configuration
-
-    **Model Architecture:**
-
-    Multi-Layer Perceptron with metabolite detection and quantification outputs
     """
     elif MODEL_TYPE == 'ensemble':
         model_params_md = f"""
@@ -2208,7 +2496,7 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - **Concentration Weight:** {study.best_trial.params.get('conc_ensemble_weight', 'N/A'):.3f}
 
     **Component Models:**
-    - **MLP:** Window Size: {study.best_trial.params.get('window_size', 'N/A')}, Stride: {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
+    - **MLP:** Stride Ratio: {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
     - **Transformer:** d_model: {study.best_trial.params.get('d_model', 'N/A')}, Layers: {study.best_trial.params.get('num_layers', 'N/A')}
 
     **Model Architecture:**
@@ -2269,160 +2557,6 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     """
     )
     return
-
-
-@app.cell(hide_code=True)
-def _(fidfig, mo):
-    mo.md(
-        rf"""
-    ## Load Experimental FID Data
-
-    {mo.as_html(fidfig)}
-    """
-    )
-    return
-
-
-@app.cell
-def _(np):
-    """Import read_fid function"""
-
-    data_dir = 'spectra' # The directory all data is in
-    experiment_dir = '20250811_cit_nacit_titr' # The experiment name
-    experiment_count = 24 # The number of experiments in format _i
-    experiment_number = '3' # The folder in the experiment that contains the acqusition data
-
-    import struct
-    import math
-    import seaborn as sns
-    import re
-    import xml.etree.ElementTree as ET
-    import os
-
-    def type_check(**type_hints):
-        def decorator(func):
-            def wrapper(*args, **kwargs):
-                for arg_name, expected_type in type_hints.items():
-                    if arg_name in kwargs:
-                        arg_value = kwargs[arg_name]
-                    else:
-                        arg_index = list(type_hints.keys()).index(arg_name)
-                        arg_value = args[arg_index]
-
-                    if isinstance(expected_type, type) and not isinstance(arg_value, expected_type):
-                        raise TypeError(f'Expected {arg_name} to be of type {expected_type.__name__}, got {type(arg_value).__name__}')
-
-                    # Check for list of specific type
-                    if isinstance(expected_type, tuple) and expected_type[0] == list:
-                        if not isinstance(arg_value, list):
-                            raise TypeError(f'Expected {arg_name} to be a list, got {type(arg_value).__name__}')
-                        for item in arg_value:
-                            if not isinstance(item, (expected_type[1], np.float32, np.float64)):
-                                raise TypeError(f'All items in {arg_name} must be of type {expected_type[1].__name__}, got {type(item).__name__}')
-                return func(*args, **kwargs)
-            return wrapper
-        return decorator
-
-    @type_check(base_dir=str, experiment_dir=str, count=int)
-    def get_experiment_directories(base_dir, experiment_dir, count):
-        """Generate a list of experiment directories."""
-        return [f'{experiment_dir}_{i}' for i in range(1, count + 1)]
-    
-    @type_check(experiment=str, experiment_number=str, data_dir=str)
-    def read_fid(experiment, experiment_number, data_dir):
-        dir = f'{data_dir}/{experiment}/{experiment_number}/fid'
-        with open(dir, 'rb') as fid_file:
-            # Read the first few bytes to determine the data type
-            # This is a placeholder; you need to implement the logic to read DTYPA and NC
-            dtypa = "int"  # or "double", based on your file
-            nc = 0  # Set this based on your file's parameters
-
-            # Read the entire file into a byte array
-            fid_data = fid_file.read()
-
-            if dtypa == "int":
-                # Calculate the number of data points
-                num_points = len(fid_data) // 4  # 4 bytes for each int
-                data = np.zeros(num_points, dtype=np.int32)
-
-                for i in range(num_points):
-                    data[i] = struct.unpack('i', fid_data[i*4:(i+1)*4])[0]
-
-                # Apply the exponent
-                data = data * (10 ** nc)
-
-            elif dtypa == "double":
-                num_points = len(fid_data) // 8  # 8 bytes for each double
-                data = np.zeros(num_points, dtype=np.float64)
-
-                for i in range(num_points):
-                    data[i] = struct.unpack('d', fid_data[i*8:(i+1)*8])[0]
-
-            return data
-    return data_dir, experiment_number, math, os, read_fid, sns
-
-
-@app.cell
-def _(data_dir, experiment_number, experiments, math, plt, read_fid, sns):
-    """Generate FID figure"""
-
-
-    def plot_fid_experiments(experiments, experiment_number, data_dir):
-        # Set the style for the plots
-        sns.set(style="whitegrid")  # Use Seaborn's whitegrid style for a clean look
-
-        # Create a new figure
-        plt.figure(figsize=(12, 10))
-
-        for idx, experiment in enumerate(experiments):
-            # Read the FID data
-            data = read_fid(experiment, experiment_number, data_dir)
-
-            # Calculate the number of rows and columns for subplots
-            n = len(experiments)
-            rows = round(math.sqrt(n))
-            cols = round(math.ceil(n / rows))
-
-            plt.subplot(rows, cols, idx + 1)
-            # plt.plot(data, marker='o', linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=2, markersize=5)
-            plt.plot(data, linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=0.5, markersize=5)
-
-            # Add titles and labels
-            plt.title(f'FID Experiment {idx + 1}', fontsize=14)
-            plt.xlabel('Time (ms)', fontsize=12)  # Replace with actual time unit if different
-            plt.ylabel('Magnitude', fontsize=12)  # Magnitude of FID data
-            plt.grid(True)  # Add grid lines for better readability
-            plt.xticks(fontsize=10)
-            plt.yticks(fontsize=10)
-
-        plt.tight_layout()  # Adjust layout to prevent overlap
-        plt.suptitle('FID Experiments Overview', fontsize=16, y=1.02)  # Main title for the figure
-        plt.savefig('figs/FID.svg')
-        return plt.gca()  # Return the current axes
-
-    # Example usage
-    fidfig = plot_fid_experiments(experiments, experiment_number, data_dir)
-    return (fidfig,)
-
-
-app._unparsable_cell(
-    r"""
-    \"\"\"Extract Experimental FID Data to Spectra Format\"\"\"
-
-    experiments = get_experiment_directories(data_dir, experiment_dir, experiment_count)
-
-    experimentalspectra = [{
-        'intensities': read_fid(experiment, experiment_number, data_dir)
-        'positions': [0, 0],
-        'scales': 'SP:3368'
-        }
-    for experiment in experiments
-    ]
-
-    preprocessedexperimentalspectra = process_spectra_parallel(experimentalspectra)
-    """,
-    name="_"
-)
 
 
 if __name__ == "__main__":
