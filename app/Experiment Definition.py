@@ -11,13 +11,12 @@ def _():
     import phfork
     from chempy import electrolytes
     import numpy as np
-
     return electrolytes, mo, np, phfork
 
 
 @app.cell(hide_code=True)
-def _():
-    # Experimental Method for Citric Acid Speciation Chemical Shift
+def _(mo):
+    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
     return
 
 
@@ -40,12 +39,12 @@ def _(mo):
 @app.cell
 def _(electrolytes):
     # Graph constants
-    EPS_R = 78.3   # relative permittivity of water at 25°C, should really change to 30C, maybe
+    EPS_R = 78.3   # relative permittivity of water at 25°C/298K
     T = 298  # K
     RHO = 0.997
     B0 = 1.0
     A_CONST = electrolytes.A(eps_r=EPS_R, T=T, rho=RHO, b0=B0)
-    trials = 10
+    trials = 1
     search_molarity = 0.1
     graph_molarity = 0.001
     stock_molarity = 0.01
@@ -315,7 +314,7 @@ def _(corrected_pka, graph_molarity, simulate_ph_graph):
     return (ratios,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(corrected_pka, graph_molarity, mo, search_molarity, speciationfig):
     mo.md(
         rf"""
@@ -370,7 +369,7 @@ def _(corrected_pka, graph_molarity, np, phfork):
     return fig, speciationfig
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(experiment_output, mo):
     mo.md(
         rf"""
@@ -391,9 +390,6 @@ def _(options, ratios):
         experiments.append(
             min(ratios, key=lambda d: abs(float(d['pH']) - option))
         )
-
-    print(''.join(f'{x}\n' for x in experiments))
-
     return (experiments,)
 
 
@@ -438,12 +434,6 @@ def _(experiments, mo, rounding, sample_vol, stock_molarity):
                 ),
             }
         )
-
-    # experiment_output = '''|pH| acid volume| base volume|\n\n
-    # | -- | -- | -- | \n\n
-    # ''' + ''.join(
-    #     f'''|{x['pH']}| {x['acid volume']}| {x['base volume']}|\n\n''' 
-    #     for x in volumed_experiments)
 
     experiment_output = mo.ui.table(
         data=volumed_experiments,
@@ -532,15 +522,19 @@ def _(
 ):
     mo.md(
         rf"""
-    ## Magnesium/Citrate Experimental Preparation
+    ## Metal Ion Chelation Experimental Preparation
 
-    - Use 1/10 sample vol {better_sample_vol * 0.1*1000}mL citric acid, which is a molarity of {stock_molarity*0.1}M
+    - Use 1/10 sample vol {round(better_sample_vol * 0.1*1000, 4)}mL citric acid, which is a molarity of {stock_molarity*0.1}M
     - Calcium chloride
+        - 0.4% with spin 5/2, practically negligible. [Source](https://webelements.com/calcium/isotopes.html)
         - Final concentration: {calcium_conc}M. [This](https://doi.org/10.1007/s007750100264) paper recommends 1.5e-2mol.dm-3, or 0.015M, but their values remain relatively constant past about 0.005M. x10 so I only have to add 0.1mL.
-        - Final volume: {better_sample_vol * 0.1*1000}mL
+        - Final volume: {round(better_sample_vol * 0.1*1000, 4)}mL
     - Magnesium chloride
+        - 10% 5/2 spin, within reason, maybe. [Source](https://webelements.com/magnesium/isotopes.html)
         - Final concentration: {magnesium_conc}M. [This](https://doi.org/10.1007/s007750100264) paper states that a 1:1 magnesium:citrate complex occurs at 2.34e-3mol.dm-3, or 0.00234M. 10x for volume.
-        - Final volume: {better_sample_vol * 0.1*1000}mL
+        - Final volume: {round(better_sample_vol * 0.1*1000, 4)}mL
+    - Aluminium chloride
+        - 100% isotope with 5/2 spin. Not great. [Source](https://webelements.com/aluminium/isotopes.html)
     - Add {tris_vol*1000}ml of tris buffer. [This](https://doi.org/10.1007/s007750100264) paper recommended a target concentration of 5e-2mol.dm-3, or 0.05M, so double that to {tris_conc}M as we're going to use half the volume as buffer.
     - Make up to {better_sample_vol*1000}mL total with milliq
 
@@ -557,7 +551,7 @@ def _(
 
 @app.cell
 def _():
-    better_sample_vol = 0.001   # l # Use a bigger volume to give leeway
+    better_sample_vol = 0.0015   # l # Use a bigger volume to give leeway
     citric_sample_vol = better_sample_vol * 0.1 # L, 1/10th
     tris_vol = better_sample_vol * 0.5 # L, 1/2
 
@@ -565,13 +559,14 @@ def _():
     magnesium_conc = 0.00234*10 #M
     tris_conc = 0.05 * 2 #M
 
-    number_experiments_per_metal = 24 # Count (not including 0)
-
     magnesium_chloride_mass = 95.21 #g/mol
     calcium_chloride_mass = 110.98 #g/mol
     tris_mass = 121.14 #g/mol
-    metal_stock_volume = 10/1000 #L
-    tris_stock_volume = 50/1000 #L
+
+    metal_stock_volume = 15/1000 #mL to L
+    tris_stock_volume = 50/1000 #mL to L
+
+    number_experiments_per_metal = 12 # Count (not including 0)
     return (
         better_sample_vol,
         calcium_chloride_mass,
