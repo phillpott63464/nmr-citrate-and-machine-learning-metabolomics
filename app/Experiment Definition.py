@@ -15,9 +15,25 @@ def _():
     return electrolytes, mo, np, phfork
 
 
-@app.cell
+@app.cell(hide_code=True)
+def _():
+    # Experimental Method for Citric Acid Speciation Chemical Shift
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Define constants""")
+    mo.md(
+        r"""
+    ## Calculate pKas
+
+    The first step is to find the pKa values of citric acid, so that we know what increment of base to acid ratio will lead to a certain pH. We had a table of buffer pH values, but these had two problems: 
+
+    1) they were at the wrong concentration
+
+    2) they only worked over the buffer range, and we wanted to test outside of this range.
+    """
+    )
     return
 
 
@@ -92,14 +108,9 @@ def _(electrolytes):
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""Define a function to simulate a ph graph at a concentration from pkas""")
-    return
-
-
-@app.cell
 def _(phfork):
     def simulate_ph_graph(pka, conc, charge=0):
+        """Function to simulate a ph graph at a concentration from pkas"""
         ratios = []
         citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=conc)
         for i in range(0, 201):
@@ -122,14 +133,9 @@ def _(phfork):
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""Define a function that will evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas""")
-    return
-
-
-@app.cell
 def _(simulate_ph_graph):
     def evaluate_pka_error(known_values, search_molarity, trial):
+        """Evaluate the mean square error in pH values between the known buffer data and the predicted data from a set of pkas"""
         pka_values = [
             trial.suggest_float('pka1', low=2.0, high=3.5, step=0.001),
             trial.suggest_float('pka2', low=4.0, high=5.5, step=0.001),
@@ -151,19 +157,11 @@ def _(simulate_ph_graph):
     return (evaluate_pka_error,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    - Import data from bufferdata.csv and convert from pandas array to dict
-    - Export shape of data and len of data
-    """
-    )
-    return
-
-
 @app.cell
 def _():
+    """Import data from bufferdata.csv, convert to dict"""
+
+
     import pandas as pd
 
     imported = pd.read_csv('bufferdata.csv')
@@ -182,17 +180,14 @@ def _():
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""- Create an optuna study and trial it""")
-    return
-
-
-@app.cell
 def _(evaluate_pka_error, known_values, search_molarity, trials):
+    """Use optuna to search for the pka values that fit the buffer data the best"""
+
     import optuna
     from functools import partial
 
     def objective(trial, search_molarity, known_values):
+        """Evaluate the pka error"""
         error = evaluate_pka_error(
             trial=trial,
             search_molarity=search_molarity,
@@ -233,25 +228,15 @@ def _(evaluate_pka_error, known_values, search_molarity, trials):
     return (study,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Get pKas of trial data""")
-    return
-
-
 @app.cell
 def _(study):
+    """Get the pkas from trial data"""
+
     pka = [
         round(study.best_trial.params[x], 5) for x in study.best_trial.params
     ]
     print(pka)
     return (pka,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Define functions for debye huckel correction""")
-    return
 
 
 @app.cell
@@ -292,12 +277,6 @@ def _(A_CONST, np):
     return correct_pkas, ionic_strength_from_conc
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Correct for ion concentration using debye huckel""")
-    return
-
-
 @app.cell
 def _(
     correct_pkas,
@@ -306,6 +285,8 @@ def _(
     pka,
     search_molarity,
 ):
+    """Correct pkas with debye huckel between search molarity (molarity of buffer data) and graph molarity (molarity of the samples)"""
+
     # Citrate acid-base pairs and charges for pKa steps:
     # H3A (0) ⇌ H2A- (-1)
     # H2A- (-1) ⇌ HA2- (-2)
@@ -326,22 +307,25 @@ def _(
     return (corrected_pka,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Create final pH to ratio dataframe""")
-    return
-
-
 @app.cell
 def _(corrected_pka, graph_molarity, simulate_ph_graph):
+    """Final speciation ratios at graph molarity"""
     ratios = simulate_ph_graph(pka=corrected_pka, conc=graph_molarity)
     print(''.join(f'{x}\n' for x in ratios))
     return (ratios,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Create final speciation graph""")
+@app.cell
+def _(corrected_pka, graph_molarity, mo, search_molarity, speciationfig):
+    mo.md(
+        rf"""
+    Our final pKa values, calculated at {search_molarity} and corrected to {graph_molarity}, where: {corrected_pka}.
+
+    With these pKa values, we could generate a speciation graph for citric acid:
+
+    {mo.as_html(speciationfig)}
+    """
+    )
     return
 
 
@@ -349,23 +333,54 @@ def _(mo):
 def _(corrected_pka, graph_molarity, np, phfork):
     import matplotlib.pyplot as plt
 
+    # Sample data for demonstration
     phs = np.linspace(1, 9, 1000)
 
+    # Assuming corrected_pka and graph_molarity are defined
     citricacid = phfork.AcidAq(
         pKa=corrected_pka, charge=0, conc=graph_molarity
     )
     fracs = citricacid.alpha(phs)
 
-    fig = plt.figure()
+    # Create a figure with a specific size
+    fig = plt.figure(figsize=(10, 6))
 
-    plt.plot(phs, fracs)
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    return (fig,)
+    # Plot the fractions with a color palette
+    plt.plot(phs, fracs, linewidth=2)
+
+    # Add a legend with a title
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'], title='Species', loc='upper right')
+
+    # Add grid lines for better readability
+    plt.grid(True, linestyle='--', alpha=0.7)
+
+    # Set title and labels with larger font sizes
+    plt.title('Citric Acid Speciation', fontsize=16)
+    plt.xlabel('pH', fontsize=14)
+    plt.ylabel('Fraction of Species', fontsize=14)
+
+    # Customize ticks
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    # Show the plot
+    plt.tight_layout()
+    speciationfig = plt.gca()
+
+    return fig, speciationfig
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Choose options from calculated ratios""")
+@app.cell
+def _(experiment_output, mo):
+    mo.md(
+        rf"""
+    ## Experimental Options
+
+    Our next job then was to decide which values of
+
+    {experiment_output}
+    """
+    )
     return
 
 
@@ -382,14 +397,20 @@ def _(options, ratios):
     return (experiments,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Calculate volume of acid/base needed to complete these experiments""")
+@app.cell
+def _(mo, stock_output):
+    mo.md(
+        rf"""
+    ## Stock Requirements
+
+    {stock_output}
+    """
+    )
     return
 
 
 @app.cell
-def _(experiments, rounding, sample_vol, stock_molarity):
+def _(experiments, mo, rounding, sample_vol, stock_molarity):
     acid_vol = 0
     base_vol = 0
 
@@ -418,54 +439,37 @@ def _(experiments, rounding, sample_vol, stock_molarity):
             }
         )
 
-    print(''.join(f'{x}\n' for x in volumed_experiments))
-    return acid_vol, base_vol, volumed_experiments
+    # experiment_output = '''|pH| acid volume| base volume|\n\n
+    # | -- | -- | -- | \n\n
+    # ''' + ''.join(
+    #     f'''|{x['pH']}| {x['acid volume']}| {x['base volume']}|\n\n''' 
+    #     for x in volumed_experiments)
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Define stock requirements""")
-    return
-
-
-@app.cell
-def _(acid_mass, acid_vol, base_mass, base_vol, rounding):
-    stock_output = []
-
-    def stock(msg):
-        stock_output.append(f'{msg}\n')
-        print(msg)
-
-    acid_weight = acid_mass * acid_vol
-    base_weight = base_mass * base_vol
-
-    stock(f'Actual requirements:')
-    stock(f'Acid weight: {round(acid_weight * 100, rounding)}mg')
-    stock(f'Acid volume: {round(acid_vol * 1000, rounding)}ml')
-    stock('\n')
-    stock(f'Base weight: {round(base_weight * 100, rounding)}mg')
-    stock(f'Base volume: {round(base_vol * 1000, rounding)}ml')
-
-    return stock, stock_output
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Define stock requirements based upon the validty of a balance""")
-    return
+    experiment_output = mo.ui.table(
+        data=volumed_experiments,
+        pagination=True,
+        label="Experiment output"
+    )
+    return acid_vol, base_vol, experiment_output, volumed_experiments
 
 
 @app.cell
 def _(
+    acid_mass,
     acid_molecular_weight,
+    acid_vol,
+    base_mass,
     base_molecular_weight,
+    base_vol,
     dss_molarity,
     dss_molecular_weight,
     rounding,
-    stock,
     stock_molarity,
     stock_volume,
 ):
+    acid_weight = acid_mass * acid_vol
+    base_weight = base_mass * base_vol
+
     stock_acid_weight = (
         stock_molarity * (stock_volume / 1000) * acid_molecular_weight
     )
@@ -474,57 +478,24 @@ def _(
     )
     dss_weight = dss_molarity * (stock_volume / 1000) * dss_molecular_weight
 
-    stock(
-        f'\nRequirements for {stock_volume}ml {stock_molarity}M stock solution:'
-    )
-    stock(f'Acid weight: {round(stock_acid_weight*1000, rounding)}mg')
-    stock(f'Acid volume: {stock_volume}ml')
-    stock('\n')
-    stock(f'Base weight: {round(stock_base_weight*1000, rounding)}mg')
-    stock(f'Base volume: {stock_volume}ml')
-    stock('\n')
-    stock(f'Water requirements: {stock_volume*0.95}ml')
-    stock(f'D2O requirements: {stock_volume*0.05}ml')
-    stock(f'DSS requirements: {dss_weight*1000}mg')
-    print(f'DSS cost: £{840*dss_weight}')
+    stock_output = f"""
+    Requirements for {stock_volume}ml {stock_molarity}M stock solution:
 
-    # n=m/M
-    # c=n/V
-    # c=(m/M)/v
-    # cv=m/M
-    # cvM=m
-    # weight=concentration*volume*molarity
-
-    stupid_variable = True   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
-    return (stupid_variable,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Save everything important to files""")
-    return
+    - Acid weight: {round(stock_acid_weight * 1000, rounding)}mg
+    - Base weight: {round(stock_base_weight * 1000, rounding)}mg
+    - Water requirements: {stock_volume * 0.95}ml
+    - D2O requirements: {stock_volume * 0.05}ml
+    - DSS requirements: {dss_weight * 1000}mg
+    """
+    return (stock_output,)
 
 
 @app.cell
-def _(
-    corrected_pka,
-    fig,
-    pd,
-    pka,
-    stock_output,
-    study,
-    stupid_variable,
-    volumed_experiments,
-):
+def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
     import operator
     import os
 
     directory = 'output-graph'
-
-    if (
-        stupid_variable == False
-    ):   # Required otherwise cell 30 will run before cell 28 and thus cut off the results for some reason
-        print('Done a stupid')
 
     if not os.path.isdir(directory):
         os.mkdir(directory)
@@ -548,49 +519,107 @@ def _(
     return
 
 
-@app.cell
-def _():
-    better_sample_vol = 0.001   # l # Use a bigger volume to give leeway
-    metal_conc = 0.005*10
-    return better_sample_vol, metal_conc
-
-
 @app.cell(hide_code=True)
-def _(better_sample_vol, metal_conc, mo, stock_molarity, tris_vol):
+def _(
+    better_sample_vol,
+    calcium_conc,
+    magnesium_conc,
+    metal_stock_output,
+    mo,
+    stock_molarity,
+    tris_conc,
+    tris_vol,
+):
     mo.md(
         rf"""
     ## Magnesium/Citrate Experimental Preparation
 
     - Use 1/10 sample vol {better_sample_vol * 0.1*1000}mL citric acid, which is a molarity of {stock_molarity*0.1}M
-    - Calcium/magnesium chloride
-        - Final concentration: {metal_conc}M. [This](https://doi.org/10.1007/s007750100264) paper recommends 1.5e-2mol.dm-3, or 0.015M, but their values remain relatively constant past about 0.005M. x10 so I only have to add 0.1mL.
+    - Calcium chloride
+        - Final concentration: {calcium_conc}M. [This](https://doi.org/10.1007/s007750100264) paper recommends 1.5e-2mol.dm-3, or 0.015M, but their values remain relatively constant past about 0.005M. x10 so I only have to add 0.1mL.
         - Final volume: {better_sample_vol * 0.1*1000}mL
-    - Add {tris_vol*1000}ml of tris buffer. [This](https://doi.org/10.1007/s007750100264) paper recommended a target concentration of 5e-2mol.dm-3, or 0.05M, so double that to 0.1M as we're going to use half the volume as buffer.
+    - Magnesium chloride
+        - Final concentration: {magnesium_conc}M. [This](https://doi.org/10.1007/s007750100264) paper states that a 1:1 magnesium:citrate complex occurs at 2.34e-3mol.dm-3, or 0.00234M. 10x for volume.
+        - Final volume: {better_sample_vol * 0.1*1000}mL
+    - Add {tris_vol*1000}ml of tris buffer. [This](https://doi.org/10.1007/s007750100264) paper recommended a target concentration of 5e-2mol.dm-3, or 0.05M, so double that to {tris_conc}M as we're going to use half the volume as buffer.
     - Make up to {better_sample_vol*1000}mL total with milliq
+
+    ### Stock preparation:
+    {metal_stock_output}
+
+    ### Experiment preparation:
+
+    Found in metal_experiments.csv
     """
     )
     return
 
 
 @app.cell
-def _(better_sample_vol, pd):
+def _():
+    better_sample_vol = 0.001   # l # Use a bigger volume to give leeway
+    citric_sample_vol = better_sample_vol * 0.1 # L, 1/10th
+    tris_vol = better_sample_vol * 0.5 # L, 1/2
+
+    calcium_conc = 0.005*10 #M
+    magnesium_conc = 0.00234*10 #M
+    tris_conc = 0.05 * 2 #M
+
+    number_experiments_per_metal = 24 # Count (not including 0)
+
+    magnesium_chloride_mass = 95.21 #g/mol
+    calcium_chloride_mass = 110.98 #g/mol
+    tris_mass = 121.14 #g/mol
+    metal_stock_volume = 10/1000 #L
+    tris_stock_volume = 50/1000 #L
+    return (
+        better_sample_vol,
+        calcium_chloride_mass,
+        calcium_conc,
+        citric_sample_vol,
+        magnesium_chloride_mass,
+        magnesium_conc,
+        metal_stock_volume,
+        number_experiments_per_metal,
+        tris_conc,
+        tris_mass,
+        tris_stock_volume,
+        tris_vol,
+    )
+
+
+@app.cell
+def _(
+    better_sample_vol,
+    citric_sample_vol,
+    number_experiments_per_metal,
+    pd,
+    tris_vol,
+):
     metal_experiments = []
-    citric_sample_vol = better_sample_vol * 0.1
-    tris_vol = better_sample_vol * 0.5
 
-    for i in range (0, 24):
-        metal_experiments.append({
-            'citric acid stock uL': citric_sample_vol,
-            'salt stock uL': round(citric_sample_vol/23*i, 6),
-            'tris buffer stock uL': round(tris_vol, 6),
-        })
+    # Intialise experiments
+    for y in range(0, 2):
+        if y == 0:
+            salt_stock_name = 'magnesium salt stock uL' 
+        elif y == 1:
+            salt_stock_name = 'calcium salt stock uL'
 
+        for i in range (0, number_experiments_per_metal):
+            metal_experiments.append({
+                'citric acid stock uL': citric_sample_vol,
+                'tris buffer stock uL': round(tris_vol, 6),
+                salt_stock_name: round(citric_sample_vol/(number_experiments_per_metal-1)*i, 6),
+            })
+
+    # Make up to better_sample_vol with milliq
     for x in metal_experiments:
         temp = 0
         for y in x.items():
             temp += y[1]
         x['milliq uL'] = round(better_sample_vol - temp, 6)
 
+    # Double check volumes
     for x in metal_experiments:
         temp = 0
         for y in x.items():
@@ -598,15 +627,61 @@ def _(better_sample_vol, pd):
         if temp != better_sample_vol:
             print('Issue')
 
+    # Round everything to uL
     for x in metal_experiments:
         for key, value in x.items():
             x[key] = f'{round(value * 1000 * 1000)}'
 
     metal_experiments = pd.DataFrame(metal_experiments)
 
-    metal_experiments.to_csv('metal_experiments.csv', index=False)
+    # Put milliq at the end for simplicity's sake
+    columns = [col for col in metal_experiments.columns if col != 'milliq uL'] + ['milliq uL']
+    metal_experiments = metal_experiments[columns]
 
-    return (tris_vol,)
+    metal_experiments.to_csv('metal_experiments.csv', index=True)
+
+    return
+
+
+@app.cell
+def _(
+    calcium_chloride_mass,
+    calcium_conc,
+    magnesium_chloride_mass,
+    magnesium_conc,
+    metal_stock_volume,
+    tris_conc,
+    tris_mass,
+    tris_stock_volume,
+):
+    ## Stocks
+    # conc=moles/L
+    # conc*L=moles
+    # mass=g/moles
+    # mass*moles=g
+    # g = mass * (conc * L)
+
+    magnesium_chloride_weight = magnesium_chloride_mass * magnesium_conc * metal_stock_volume
+    calcium_chloride_weight = calcium_chloride_mass * calcium_conc * metal_stock_volume
+    tris_weight = tris_mass * tris_conc * tris_stock_volume
+
+    metal_stock_output = f'''Citric acid stock: use old citric acid stock, and dilute 1/10 into samples. This puts the range of citrate ions into soluble range of calcium citrate, and means we don't have to use more DSS, and the ratio of DSS to citrate will be identical to our previous experiments.
+
+    Metal stocks:
+
+    - Magnesium chloride: {round(magnesium_chloride_weight*1000, 5)}mg
+    - Calcium chloride: {round(calcium_chloride_weight*1000, 5)}mg
+    - D2O: {metal_stock_volume*1000*0.05}ml
+    - H2O: {metal_stock_volume*1000*0.95}ml
+
+
+    Tris buffer stock:
+
+    - Tris: {round(tris_weight*1000, 5)}mg
+    - D2O: {tris_stock_volume*1000*0.05}ml
+    - H2O: {tris_stock_volume*1000*0.95}ml
+    '''
+    return (metal_stock_output,)
 
 
 if __name__ == "__main__":

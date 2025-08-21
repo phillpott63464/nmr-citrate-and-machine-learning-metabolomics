@@ -7,7 +7,6 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -17,7 +16,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(graph_molarity, mo, output, stocks):
     mo.md(
         rf"""
@@ -114,7 +113,7 @@ def _():
 
 
 @app.cell
-def _(corrected_pka, np, pkasolver):
+def _(corrected_pka, mo, np, pkasolver):
     import pandas as pd
 
     out_dir = 'experimental'
@@ -259,18 +258,35 @@ def _(corrected_pka, np, pkasolver):
     for idx, x in enumerate(pkasolver_phs):
         pkasolver_phs[idx] += phAlter
 
-    output = '\n\n'.join(
-        [
-            f"""Experiment {idx+1}:
-            Total Volume: {round(x * 1000, 2)} ml,
-            pH: {y},
-            Expected pH: {round(d, 2)},
-            Acid ratio={round(((z*1000)/0.6), 2)},
-            BaseRatio = {round(((i*1000)/0.6), 2)}"""
+    # output = '\n\n'.join(
+    #     [
+    #         f"""Experiment {idx+1}:
+    #         Total Volume: {round(x * 1000, 2)} ml,
+    #         pH: {y},
+    #         Expected pH: {round(d, 2)},
+    #         Acid ratio={round(((z*1000)/0.6), 2)},
+    #         BaseRatio = {round(((i*1000)/0.6), 2)}"""
+    #         for idx, (x, y, z, i, d) in enumerate(
+    #             zip(total_vol, phs, acid_vol, base_vol, expected_phs)
+    #         )
+    #     ]
+    # )
+
+    output = mo.ui.table(
+        data=[
+            {
+                "Experiment": f"Experiment {idx + 1}",
+                "Total Volume (ml)": round(x * 1000, 2),
+                "pH": y,
+                "Expected pH": round(d, 2),
+                "Acid Ratio": round(((z * 1000) / 0.6), 2),
+                "Base Ratio": round(((i * 1000) / 0.6), 2),
+            }
             for idx, (x, y, z, i, d) in enumerate(
                 zip(total_vol, phs, acid_vol, base_vol, expected_phs)
             )
-        ]
+        ],
+        label="Experiment Data",
     )
 
     return (
@@ -467,7 +483,7 @@ def _(corrected_pka, graph_molarity, phfork, phs, plt):
     return fracs, phs_ratio_fig
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(chemicalshift_fig, mo):
     mo.md(
         rf"""
@@ -760,9 +776,23 @@ def _(fidfig, mo, singlefidfig):
 
 
 @app.cell
-def _(data_dir, experiment_number, experiments, np, plt, type_check):
-    import struct
+def _():
     import math
+    return (math,)
+
+
+@app.cell
+def _(
+    data_dir,
+    experiment_number,
+    experiments,
+    math,
+    np,
+    plt,
+    read_bruker,
+    type_check,
+):
+    import struct
     import seaborn as sns
 
     @type_check(experiment=str, experiment_number=str, data_dir=str)
@@ -806,7 +836,8 @@ def _(data_dir, experiment_number, experiments, np, plt, type_check):
 
         for idx, experiment in enumerate(experiments):
             # Read the FID data
-            data = read_fid(experiment, experiment_number, data_dir)
+            # data = read_fid(experiment, experiment_number, data_dir)
+            data = read_bruker(data_dir, experiment, experiment_number)
 
             # Calculate the number of rows and columns for subplots
             n = len(experiments)
@@ -835,7 +866,7 @@ def _(data_dir, experiment_number, experiments, np, plt, type_check):
 
     fiddata = read_fid(experiments[0], experiment_number, data_dir)
 
-    return fiddata, fidfig, math
+    return fiddata, fidfig
 
 
 @app.cell
@@ -911,8 +942,8 @@ def _(data_dir, experiment_number, experiments, extract_phc, math, plt):
 def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
     brukerdata = read_bruker(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
 
-    print(fiddata)
-    print(brukerdata)
+    print(len(fiddata))
+    print(len(brukerdata))
 
     plt.figure(figsize=(12,6))
     plt.subplot(1, 2, 1)
@@ -947,6 +978,7 @@ def _(mo):
 
 @app.cell
 def _(
+    base_vol,
     data_dir,
     experiment_number,
     experiments,
@@ -954,6 +986,10 @@ def _(
     np,
     phs,
     plt,
+    species_1,
+    species_2,
+    species_3,
+    species_4,
 ):
     # 4 protons, because it's a dicitrate
     uranium_proton_ppms = [4.08, 4.19, 4.26, 4.35]
@@ -987,13 +1023,43 @@ def _(
 
     # print(f'{citrate_differences}')
 
-    # plt.plot([x/0.0006 for x in acid_vol], citrate_differences)
-    plt.plot(phs, citrate_differences)
-    # print(len(phs))
-    # plt.plot(citrate_differences, species_1)
-    # plt.plot(citrate_differences, species_2)
-    # plt.plot(citrate_differences, species_3)
-    # plt.plot(citrate_differences, species_4)
+    # Create a figure with a specific size
+    plt.figure(figsize=(15, 5))
+
+    # First subplot
+    plt.subplot(1, 3, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_differences, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
+    plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
+    plt.xlabel('Sodium Citrate Percentage', fontsize=12)
+    plt.ylabel('Peak Differences', fontsize=12)
+    plt.grid(True)
+
+    # Second subplot
+    plt.subplot(1, 3, 2)
+    plt.plot(phs, citrate_differences, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
+    plt.title('Peak Differences vs. pH', fontsize=14)
+    plt.xlabel('pH', fontsize=12)
+    plt.ylabel('Peak Differences', fontsize=12)
+    plt.grid(True)
+
+    # Third subplot
+    plt.subplot(1, 3, 3)
+    plt.plot(citrate_differences, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
+    plt.title('Peak Differences vs. Citrate Species', fontsize=14)
+    plt.xlabel('Peak Differences', fontsize=12)
+    plt.ylabel('Species Response', fontsize=12)
+    plt.legend()
+    plt.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    # Show the plots
+    plt.show()
+
 
     return
 
