@@ -1,6 +1,6 @@
 from manim import *
 
-def create_graph(x, y):
+def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     pts = zip(x, y)
     axes = Axes(
         x_range=[min(x), max(x), (max(x) - min(x)) / 10],
@@ -23,10 +23,26 @@ def create_graph(x, y):
     ])
 
     # Adding axis labels
-    x_label = MathTex("ppm").scale(0.7).next_to(axes.x_axis, RIGHT, buff=0.2)
-    y_label = MathTex("Value").scale(0.7).next_to(axes.y_axis, UP, buff=0.2)
+    if xlabel is not None:
+        x_label = MathTex(xlabel).scale(0.7).next_to(axes.x_axis.get_center(), RIGHT, buff=0.2)
+    
+    if ylabel is not None:
+        y_label = MathTex(ylabel).scale(0.7).next_to(axes.y_axis.get_center(), UP, buff=0.2)
+
+    # Scale the axes and graph elements
+    axes.scale(scale_factor)
+    poly.scale(scale_factor)
+    dots.scale(scale_factor)
+    labels.scale(scale_factor)
+
+    if xlabel is not None:
+        x_label.scale(scale_factor)
+    
+    if ylabel is not None:
+        y_label.scale(scale_factor)
 
     return poly, axes, dots, labels, x_label, y_label
+
 
 class PlotPoints(Scene):
     def construct(self):
@@ -38,13 +54,14 @@ class PlotPoints(Scene):
 
         sodiumcitratepercentage = [0.0, 13.333333333333336, 18.333333333333336, 21.666666666666668, 30.000000000000004, 11.666666666666666, 33.333333333333336, 48.33333333333334, 46.666666666666664, 53.33333333333334, 55.00000000000001, 56.66666666666668, 63.33333333333334, 68.33333333333333, 71.66666666666667, 75.0, 76.66666666666667, 83.33333333333334, 85.00000000000001, 86.66666666666667, 93.33333333333333, 93.33333333333333, 96.66666666666669, 100.0]
 
-        fig1, axes1, dots1, _, xlabel1, ylabel1 = create_graph(phs, citrate_couplings)
-        fig2, axes2, dots2, _, xlabel2, ylabel2 = create_graph(sodiumcitratepercentage, citrate_couplings)
+        fig1, axes1, dots1, _, xlabel1, ylabel1 = create_graph(phs, citrate_couplings, 'pH', 'ppm')
+        fig2, axes2, dots2, _, xlabel2, ylabel2 = create_graph(sodiumcitratepercentage, citrate_couplings, 'Trisodium Citrate Ratio (%)', 'ppm')
 
         self.play(Create(axes1))
         self.add(xlabel1, ylabel1)
         self.play(Create(fig1), Create(dots1))
         self.wait(2)
 
-        self.play(Transform(fig1, fig2), Transform(axes1, axes2), Transform(dots1, dots2))
+        self.play(Transform(axes1, axes2))
+        self.play(Transform(fig1, fig2), Transform(dots1, dots2), Transform(xlabel1, xlabel2))
         self.wait(2)
