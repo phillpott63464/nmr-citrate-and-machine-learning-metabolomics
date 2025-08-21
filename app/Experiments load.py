@@ -33,6 +33,8 @@ def _(graph_molarity, mo, output, stocks):
 
 @app.cell
 def _():
+    """Load pHs and correct for ionic strengths"""
+
     import optuna
     import numpy as np
     from chempy import electrolytes
@@ -68,13 +70,66 @@ def _():
         # For now, just return ionic strength proportional to conc.
         return conc * 0.1  # crude approximation; you can improve this!
 
+    import phfork
+
+    def simulate_ph_graph(pka, conc, charge=0):
+        ratios = []
+        citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=conc)
+        for i in range(0, 201):
+            na_molarity = conc * 3 * (i / 200)
+            na = phfork.IonAq(charge=1, conc=na_molarity)
+            system = phfork.System(citricacid, na)
+            system.pHsolve()
+
+            ratios.append(
+                {
+                    'pH': round(system.pH, 2),
+                    'acid ratio': 100 - i / 2,
+                    'base ratio': i / 2,
+                }
+            )
+
+        return ratios
+
+    def calculate_ionic_strength_from_ratios(total_conc, ratios):
+        ionic_strength = 0
+        for ratio in ratios:
+            # Calculate concentrations based on the total concentration and ratios
+            acid_ratio = ratio['acid ratio'] / 100 * total_conc
+            base_ratio = ratio['base ratio'] / 100 * total_conc
+
+            # Concentrations of each species
+            H3A_conc = acid_ratio * (1 - base_ratio / total_conc)  # H3A
+            H2A_conc = acid_ratio * (base_ratio / total_conc)      # H2A-
+            HA2_conc = base_ratio / total_conc                      # HA2-
+            A3_conc = base_ratio / total_conc                       # A3-
+
+            # Charges of each species
+            charges = [0, -1, -2, -3]  # H3A, H2A-, HA2-, A3-
+            concentrations = [H3A_conc, H2A_conc, HA2_conc, A3_conc]
+
+            # Calculate ionic strength contribution
+            for c, z in zip(concentrations, charges):
+                ionic_strength += c * (z ** 2)
+
+        return 0.5 * ionic_strength
+
     def debeye_huckel_log_gamma(z, I):
         """Davies equation log10 gamma"""
         sqrt_I = np.sqrt(I)
         return -A_CONST * z**2 * (sqrt_I / (1 + sqrt_I) - 0.3 * I)
 
-    def correct_pkas(pkas, I_old, I_new, charges):
+    def correct_pkas(pkas, old_molarity, new_molarity, charges):
         """Adjust each pKa from old ionic strength to new ionic strength."""
+        # I_old = ionic_strength_from_conc(old_molarity)
+        # I_new = ionic_strength_from_conc(new_molarity)
+
+        old_ratios = simulate_ph_graph(pkas, old_molarity, charge=0)
+        new_ratios = simulate_ph_graph(pkas, new_molarity, charge=0)
+
+        I_old = calculate_ionic_strength_from_ratios(old_molarity, old_ratios)
+        I_new = calculate_ionic_strength_from_ratios(new_molarity, new_ratios)
+
         corrected = []
         for pka, (z_acid, z_base) in zip(pkas, charges):
             log_gamma_old = debeye_huckel_log_gamma(
@@ -109,11 +164,18 @@ def _():
     print(corrected_pka)
 
     pkasolver = [2.95, 3.43, 3.98]
-    return corrected_pka, graph_molarity, np, pkasolver
+    return (
+        corrected_pka,
+        graph_molarity,
+        np,
+        phfork,
+        pkasolver,
+        simulate_ph_graph,
+    )
 
 
 @app.cell
-def _(corrected_pka, mo, np, pkasolver):
+def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
     import pandas as pd
 
     out_dir = 'experimental'
@@ -170,27 +232,6 @@ def _(corrected_pka, mo, np, pkasolver):
             / stocks[stock_type]['molecular_weight']  # g/mol
             / (stocks[stock_type]['volume'] / 1000)  # L
         )
-
-    import phfork
-
-    def simulate_ph_graph(pka, conc, charge=0):
-        ratios = []
-        citricacid = phfork.AcidAq(pKa=pka, charge=0, conc=conc)
-        for i in range(0, 201):
-            na_molarity = conc * 3 * (i / 200)
-            na = phfork.IonAq(charge=1, conc=na_molarity)
-            system = phfork.System(citricacid, na)
-            system.pHsolve()
-
-            ratios.append(
-                {
-                    'pH': round(system.pH, 2),
-                    'acid ratio': 100 - i / 2,
-                    'base ratio': i / 2,
-                }
-            )
-
-        return ratios
 
     ratios = simulate_ph_graph(
         corrected_pka, ((stocks['acid']['molarity'] + stocks['base']['molarity']) / 2)
@@ -295,11 +336,9 @@ def _(corrected_pka, mo, np, pkasolver):
         expected_acid_ratios,
         expected_phs,
         output,
-        phfork,
         phs,
         pkasolver_phs,
         pkasolver_ratios,
-        simulate_ph_graph,
         stocks,
     )
 
@@ -453,43 +492,27 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo, phs_ratio_fig):
+def _(chemicalshift_fig, citratecouplingfig, citratepeakdifferencesfig, mo):
     mo.md(
         rf"""
-    ## Effect of Experimental pHs on specitaion fractions
+    ## Graphs:
 
-    {mo.as_html(phs_ratio_fig)}
-    """
-    )
-    return
-
-
-@app.cell
-def _(corrected_pka, graph_molarity, phfork, phs, plt):
-    citricacid = phfork.AcidAq(
-        pKa=corrected_pka, charge=0, conc=graph_molarity
-    )
-
-    fracs = citricacid.alpha(phs)
-    print(fracs[0])
-
-    fig = plt.figure()
-
-    plt.plot(phs, fracs)
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-
-    phs_ratio_fig = plt.gca()
-
-    return fracs, phs_ratio_fig
-
-
-@app.cell(hide_code=True)
-def _(chemicalshift_fig, mo):
-    mo.md(
-        rf"""
-    ## Speciation Ratios Against Measured Chemical Shifts
+    ### Chemical Shift Against Citrate Speciation
 
     {mo.as_html(chemicalshift_fig)}
+
+    ### Citrate Peak Differences Against Citrate Speciation
+
+    The value between the two protons
+
+    {mo.as_html(citratepeakdifferencesfig)}
+
+    ### Citrate J Coupling Against Citrate Speciation
+
+    The value between the peaks for each proton
+
+    {mo.as_html(citratecouplingfig)}
+
     """
     )
     return
@@ -707,24 +730,7 @@ def _(np):
 
 
 @app.cell
-def _(fracs):
-    species_1 = []
-    species_2 = []
-    species_3 = []
-    species_4 = []
-
-    for i in fracs:
-        species_1.append(i[0])
-        species_2.append(i[1])
-        species_3.append(i[2])
-        species_4.append(i[3])
-
-    print(species_1[0] * 100)
-    return species_1, species_2, species_3, species_4
-
-
-@app.cell
-def _(peak_values, plt, species_1, species_2, species_3, species_4):
+def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     def _1():
         avg_ppm = []
         for peaks in peak_values:
@@ -739,22 +745,199 @@ def _(peak_values, plt, species_1, species_2, species_3, species_4):
 
     avg_ppm = _1()
 
+    citricacid = phfork.AcidAq(
+        pKa=corrected_pka, charge=0, conc=graph_molarity
+    )
 
+    fracs = citricacid.alpha(phs)
 
-    plt.figure(figsize=(14, 8))
+    species_1 = []
+    species_2 = []
+    species_3 = []
+    species_4 = []
 
-    plt.plot(avg_ppm, species_1)
-    plt.plot(avg_ppm, species_2)
-    plt.plot(avg_ppm, species_3)
-    plt.plot(avg_ppm, species_4)
+    for i in fracs:
+        species_1.append(i[0])
+        species_2.append(i[1])
+        species_3.append(i[2])
+        species_4.append(i[3])
+
+    print(species_1[0] * 100)
+
+    plt.figure(figsize=(15, 5))
+
+    plt.subplot(1, 3, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], fracs)
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.ylabel('Speciation Ratio')
+    plt.xlabel('Sodium Citrate Percentage')
+    plt.title('Sodium Citrate Percentage and Trisodium Citrate Speciation')
+
+    plt.subplot(1, 3, 2)
+    plt.plot(phs, fracs)
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.ylabel('Speciation Ratio')
+    plt.xlabel('pH')
+    plt.title('pH and Trisodium Citrate Speciation')
+
+    plt.subplot(1, 3, 3)
+    plt.plot(avg_ppm, fracs)
+    plt.gca().invert_xaxis()
 
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Speciation Ratio')
     plt.xlabel('Chemical shift (PPM)')
     plt.title('Chemical shift of Peaks in Citric Acid and Trisodium Citrate Speciation')
+
+    plt.tight_layout()
+
     chemicalshift_fig = plt.gca()
-    return (chemicalshift_fig,)
+
+    print([x / 0.0006 * 100 for x in base_vol])
+    return chemicalshift_fig, species_1, species_2, species_3, species_4
+
+
+@app.cell
+def _(
+    base_vol,
+    citrate_ppms,
+    np,
+    phs,
+    plt,
+    species_1,
+    species_2,
+    species_3,
+    species_4,
+):
+    citrate_couplings = [[
+        x[0] - x[1],
+        x[2] - x[3],
+    ] for x in citrate_ppms] # Calculate j coupling values
+
+    citrate_couplings = [
+        np.average(x)
+    for x in citrate_couplings] # Average to a single value
+
+
+    plt.figure(figsize=(15, 5))
+
+    # First subplot
+    plt.subplot(1, 3, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_couplings, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
+    plt.title('J Coupling vs. Sodium Citrate Percentage', fontsize=14)
+    plt.xlabel('Sodium Citrate Percentage', fontsize=12)
+    plt.ylabel('J Coupling', fontsize=12)
+    plt.grid(True)
+
+    # Second subplot
+    plt.subplot(1, 3, 2)
+    plt.plot(phs, citrate_couplings, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
+    plt.title('J Coupling vs. pH', fontsize=14)
+    plt.xlabel('pH', fontsize=12)
+    plt.ylabel('J Coupling', fontsize=12)
+    plt.grid(True)
+
+    # Third subplot
+    plt.subplot(1, 3, 3)
+    plt.plot(citrate_couplings, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
+    plt.plot(citrate_couplings, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
+    plt.plot(citrate_couplings, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
+    plt.plot(citrate_couplings, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
+    plt.title('J Coupling vs. Citrate Species', fontsize=14)
+    plt.xlabel('J Coupling', fontsize=12)
+    plt.ylabel('Species Response', fontsize=12)
+    plt.gca().invert_xaxis()
+    plt.legend()
+    plt.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    print(phs)
+    print([float(x) for x in citrate_couplings])
+
+    # Show the plots
+    citratecouplingfig = plt.gca()
+    return (citratecouplingfig,)
+
+
+@app.cell
+def _(
+    base_vol,
+    data_dir,
+    experiment_number,
+    experiments,
+    extract_peak_values,
+    np,
+    phs,
+    plt,
+    species_1,
+    species_2,
+    species_3,
+    species_4,
+):
+    citrate_peaks = [extract_peak_values(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment) for experiment in experiments]
+
+    # print(len(citrate_ppms[0]))
+
+    citrate_ppms = [[x[0] for x in y] for y in citrate_peaks] # Discard intensities, not required for this
+
+    # print(len(citrate_ppms[0]))
+
+    citrate_shifts = [[
+        np.average(x[0:1]),
+        np.average(x[2:3]),
+    ] for x in citrate_ppms] # Average the multiplets together
+
+    # print(len(citrate_shifts[0]))
+
+    citrate_differences = [float(round(x[0] - x[1], 4)) for x in citrate_shifts]
+
+    # print(f'{citrate_differences}')
+
+    # Create a figure with a specific size
+    plt.figure(figsize=(15, 5))
+
+    # First subplot
+    plt.subplot(1, 3, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_differences, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
+    plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
+    plt.xlabel('Sodium Citrate Percentage', fontsize=12)
+    plt.ylabel('Peak Differences', fontsize=12)
+    plt.grid(True)
+
+    # Second subplot
+    plt.subplot(1, 3, 2)
+    plt.plot(phs, citrate_differences, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
+    plt.title('Peak Differences vs. pH', fontsize=14)
+    plt.xlabel('pH', fontsize=12)
+    plt.ylabel('Peak Differences', fontsize=12)
+    plt.grid(True)
+
+    # Third subplot
+    plt.subplot(1, 3, 3)
+    plt.plot(citrate_differences, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
+    plt.plot(citrate_differences, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
+    plt.title('Peak Differences vs. Citrate Species', fontsize=14)
+    plt.xlabel('Peak Differences', fontsize=12)
+    plt.ylabel('Species Response', fontsize=12)
+    plt.gca().invert_xaxis()
+    plt.legend()
+    plt.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    # Show the plots
+    citratepeakdifferencesfig = plt.gca()
+
+
+    return citrate_ppms, citratepeakdifferencesfig
 
 
 @app.cell
@@ -773,12 +956,6 @@ def _(fidfig, mo, singlefidfig):
     """
     )
     return
-
-
-@app.cell
-def _():
-    import math
-    return (math,)
 
 
 @app.cell
@@ -878,7 +1055,30 @@ def _(fiddata, plt):
 
 
 @app.cell
-def _(data_dir, experiment_number, experiments, extract_phc, math, plt):
+def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
+    brukerdata = read_bruker(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
+
+    print(len(fiddata))
+    print(len(brukerdata))
+
+    plt.figure(figsize=(12,6))
+    plt.subplot(1, 2, 1)
+    plt.title('Custom fid reader')
+    plt.plot(fiddata)
+    plt.subplot(1, 2, 2)
+    plt.title('NMR glue')
+    plt.plot(brukerdata)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, nmrgluefig):
+    mo.md(rf"""{mo.as_html(nmrgluefig)}""")
+    return
+
+
+@app.cell
+def _(data_dir, experiment_number, experiments, extract_phc, plt):
     def bruker_fft(data_dir, experiment, experiment_number):
         """Convert time domain data to frequency domain"""
         import nmrglue as ng
@@ -908,6 +1108,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, math, plt):
 
         return data
 
+    import math
     def _():
         # Create a new figure
         ngfig = plt.figure(figsize=(12, 10))
@@ -935,62 +1136,11 @@ def _(data_dir, experiment_number, experiments, extract_phc, math, plt):
         return plt.gca()  # Return the current axes
 
     nmrgluefig = _()
-    return nmrgluefig, read_bruker
+    return math, nmrgluefig, read_bruker
 
 
 @app.cell
-def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
-    brukerdata = read_bruker(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
-
-    print(len(fiddata))
-    print(len(brukerdata))
-
-    plt.figure(figsize=(12,6))
-    plt.subplot(1, 2, 1)
-    plt.title('Custom fid reader')
-    plt.plot(fiddata)
-    plt.subplot(1, 2, 2)
-    plt.title('NMR glue')
-    plt.plot(brukerdata)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo, nmrgluefig):
-    mo.md(rf"""{mo.as_html(nmrgluefig)}""")
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    ## Compare with uranium shifts
-
-    Notes:
-
-    - Graph is weird, why on earth does the difference between the two peaks go down, then up?
-    - Difference between chemical shifts much bigger for sodium than it is for uranium
-    """
-    )
-    return
-
-
-@app.cell
-def _(
-    base_vol,
-    data_dir,
-    experiment_number,
-    experiments,
-    extract_peak_values,
-    np,
-    phs,
-    plt,
-    species_1,
-    species_2,
-    species_3,
-    species_4,
-):
+def _():
     # 4 protons, because it's a dicitrate
     uranium_proton_ppms = [4.08, 4.19, 4.26, 4.35]
 
@@ -1001,71 +1151,6 @@ def _(
     print(f'Uranium chemical shifts: {[round(x, 2) for x in uranium_proton_ppms_converted]}')
     print(f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}')
 
-
-
-
-    citrate_ppms = [extract_peak_values(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment) for experiment in experiments]
-
-    # print(len(citrate_ppms[0]))
-
-    citrate_ppms = [[x[0] for x in y] for y in citrate_ppms] # Discard intensities, not required for this
-
-    # print(len(citrate_ppms[0]))
-
-    citrate_shifts = [[
-        np.average(x[0:1]),
-        np.average(x[2:3]),
-    ] for x in citrate_ppms] # Average the multiplets together
-
-    # print(len(citrate_shifts[0]))
-
-    citrate_differences = [float(round(x[0] - x[1], 4)) for x in citrate_shifts]
-
-    # print(f'{citrate_differences}')
-
-    # Create a figure with a specific size
-    plt.figure(figsize=(15, 5))
-
-    # First subplot
-    plt.subplot(1, 3, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_differences, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
-    plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
-    plt.xlabel('Sodium Citrate Percentage', fontsize=12)
-    plt.ylabel('Peak Differences', fontsize=12)
-    plt.grid(True)
-
-    # Second subplot
-    plt.subplot(1, 3, 2)
-    plt.plot(phs, citrate_differences, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
-    plt.title('Peak Differences vs. pH', fontsize=14)
-    plt.xlabel('pH', fontsize=12)
-    plt.ylabel('Peak Differences', fontsize=12)
-    plt.grid(True)
-
-    # Third subplot
-    plt.subplot(1, 3, 3)
-    plt.plot(citrate_differences, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
-    plt.title('Peak Differences vs. Citrate Species', fontsize=14)
-    plt.xlabel('Peak Differences', fontsize=12)
-    plt.ylabel('Species Response', fontsize=12)
-    plt.legend()
-    plt.grid(True)
-
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-
-    # Show the plots
-    plt.show()
-
-
-    return
-
-
-@app.cell
-def _():
     return
 
 
