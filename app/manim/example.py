@@ -2,10 +2,24 @@ from manim import *
 
 
 def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
+    
+    # Check if y is a list of lists
+    if isinstance(y[0], list):
+        x = x * len(y)
+        y = [item for sublist in y for item in sublist]
+
+    print(len(y))
+    print(len(x))
+
+    y_range = [min(y), max(y), (max(y) - min(y)) / 10]
+
     pts = zip(x, y)
+
+    x_range = [min(x), max(x), (max(x) - min(x)) / 10]
+
     axes = Axes(
-        x_range=[min(x), max(x), (max(x) - min(x)) / 10],
-        y_range=[min(y), max(y), (max(y) - min(y)) / 10],
+        x_range=x_range,
+        y_range=y_range,
         tips=False,
         axis_config={
             'include_numbers': True,
@@ -17,6 +31,7 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
 
     poly = VMobject()
     poly.set_points_as_corners(coord_points)
+    poly.set_stroke('#521671', 3)
     poly.set_stroke('#521671', 3)
 
     dots = VGroup(*[Dot(p, radius=0.06, color=YELLOW) for p in coord_points])
@@ -53,7 +68,7 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     axes.scale(scale_factor)
     poly.scale(scale_factor)
     dots.scale(scale_factor)
-    labels.scale(scale_factor)
+    # labels.scale(scale_factor)
 
     return (poly,
             axes,
@@ -145,9 +160,17 @@ class PlotPoints(Scene):
             100.0,
         ]
 
+        fracs = [
+            [0.6772991971061598, 0.45439125700307126, 0.48424758033528637, 0.3011452604253147, 0.2907755131777061, 0.5021681216817234, 0.09899987515777241, 0.15253434024925097, 0.020441412386397573, 0.008206411114739277, 0.0057522916412178614, 0.002485971666088042, 0.000872972388945377, 0.00034465122021643706, 0.00015054508717356814, 8.314496084343496e-05, 2.688522819128947e-05, 7.703358124439206e-06, 4.324505783719025e-08, 1.17377318234386e-06, 2.989975389044468e-07, 2.2961315383135596e-07, 6.05659999699003e-09, 2.9748930150917754e-10],
+            [0.31679663565215554, 0.5217109673045972, 0.49552715548601045, 0.6438371502225998, 0.6509652879289876, 0.47956683314235604, 0.7008654427250093, 0.7134567118763295, 0.49035532943743293, 0.3500686904413526, 0.30188455668435443, 0.2067741167839782, 0.12331062748043624, 0.07540147132369078, 0.04760653660170764, 0.0338716172464106, 0.01735856128026779, 0.008066406207960128, 0.0002857172637174113, 0.0024523597683712584, 0.001013135687577756, 0.0008530937571245713, 7.802412230907042e-05, 1.0555318732920036e-05],
+            [0.0058990294018595206, 0.02384679215474837, 0.020186799026137285, 0.05479942889622726, 0.05801734235592142, 0.018232622478775568, 0.19753072008892714, 0.1328518565750699, 0.4682857041288478, 0.5945019314676228, 0.6307262362452091, 0.6846934518425104, 0.69342661667402, 0.6567193615205225, 0.5993307869539894, 0.5493333086410558, 0.4461837270973524, 0.33626377827336257, 0.07515129734878387, 0.20397840090409505, 0.13666824375713665, 0.12618181320568847, 0.04001555935214138, 0.014909784005709444],
+            [5.137839825100039e-06, 5.0983537583091266e-05, 3.846515256572336e-05, 0.000218160455858246, 0.00024185653738500345, 3.242269714501942e-05, 0.002603962028291277, 0.001157091299349532, 0.0209175540473217, 0.0472229669762853, 0.06163691542921866, 0.1060464597074234, 0.1823897834565983, 0.2675345159355702, 0.3529121313571293, 0.4167119291516902, 0.5364308263941885, 0.6556621121605528, 0.9245629421424408, 0.7935680655543513, 0.8623183215577467, 0.8729648634240332, 0.9599064104689495, 0.9850796603780684],
+        ]
+
         graphs = [
             [phs, citrate_couplings, 'pH', 'ppm'],
             [sodiumcitratepercentage, citrate_couplings, 'Trisodium Citrate Ratio', 'ppm'],
+            [citrate_couplings, fracs, 'ppm', 'Citrate Speciation Fractions']
         ]
 
         objects = [
@@ -158,12 +181,14 @@ class PlotPoints(Scene):
         print(objects[0])
 
         for i in range(0, len(objects)):
+            print(i)
             if i == 0:
                 self.play(*[Create(x) for x in objects[i]])
-                print(*objects[i][-1])
-                self.add(*objects[i][-1])
                 self.wait(2)
                 continue
             
+            # Transform to the new objects
             self.play(*[Transform(x, y) for x, y in zip(objects[i-1], objects[i])])
+            # Graph 1 + 2 are fine, graph 2 doesn't clear out when graph 3 plays though
             self.wait(2)
+
