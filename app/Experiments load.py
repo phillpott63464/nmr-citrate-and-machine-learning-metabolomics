@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -110,7 +111,7 @@ def _():
 
             # Calculate ionic strength contribution
             for c, z in zip(concentrations, charges):
-                ionic_strength += c * (z ** 2)
+                ionic_strength += c * (z**2)
 
         return 0.5 * ionic_strength
 
@@ -234,11 +235,13 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         )
 
     ratios = simulate_ph_graph(
-        corrected_pka, ((stocks['acid']['molarity'] + stocks['base']['molarity']) / 2)
+        corrected_pka,
+        ((stocks['acid']['molarity'] + stocks['base']['molarity']) / 2),
     )
 
     pkasolver_ratios = simulate_ph_graph(
-        pkasolver,  ((stocks['acid']['molarity'] + stocks['base']['molarity']) / 2)
+        pkasolver,
+        ((stocks['acid']['molarity'] + stocks['base']['molarity']) / 2),
     )
 
     all_expected_phs = [x['pH'] for x in ratios]
@@ -290,7 +293,7 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         a = moles_d2o / (moles_d2o + moles_h2o)
         return a
 
-    a = calculate_ratio(5) #5% D2O
+    a = calculate_ratio(5)   # 5% D2O
     phAlter = 0.3139 * a + 0.0854 * a**2
 
     for idx, x in enumerate(expected_phs):
@@ -299,35 +302,21 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
     for idx, x in enumerate(pkasolver_phs):
         pkasolver_phs[idx] += phAlter
 
-    # output = '\n\n'.join(
-    #     [
-    #         f"""Experiment {idx+1}:
-    #         Total Volume: {round(x * 1000, 2)} ml,
-    #         pH: {y},
-    #         Expected pH: {round(d, 2)},
-    #         Acid ratio={round(((z*1000)/0.6), 2)},
-    #         BaseRatio = {round(((i*1000)/0.6), 2)}"""
-    #         for idx, (x, y, z, i, d) in enumerate(
-    #             zip(total_vol, phs, acid_vol, base_vol, expected_phs)
-    #         )
-    #     ]
-    # )
-
     output = mo.ui.table(
         data=[
             {
-                "Experiment": f"Experiment {idx + 1}",
-                "Total Volume (ml)": round(x * 1000, 2),
-                "pH": y,
-                "Expected pH": round(d, 2),
-                "Acid Ratio": round(((z * 1000) / 0.6), 2),
-                "Base Ratio": round(((i * 1000) / 0.6), 2),
+                'Experiment': f'Experiment {idx + 1}',
+                'Total Volume (ml)': round(x * 1000, 2),
+                'pH': y,
+                'Expected pH': round(d, 2),
+                'Acid Ratio': round(((z * 1000) / 0.6), 2),
+                'Base Ratio': round(((i * 1000) / 0.6), 2),
             }
             for idx, (x, y, z, i, d) in enumerate(
                 zip(total_vol, phs, acid_vol, base_vol, expected_phs)
             )
         ],
-        label="Experiment Data",
+        label='Experiment Data',
     )
 
     return (
@@ -377,8 +366,14 @@ def _(
     moles_base = [
         vol * stocks['base']['molarity'] for vol in base_vol
     ]  # Use base molarity here
-    expected_moles_acid = [ratio * 0.0006 * stocks['acid']['molarity'] for ratio in expected_acid_ratios]
-    expected_moles_base = [(1-ratio) * 0.0006 * stocks['acid']['molarity'] for ratio in expected_acid_ratios]
+    expected_moles_acid = [
+        ratio * 0.0006 * stocks['acid']['molarity']
+        for ratio in expected_acid_ratios
+    ]
+    expected_moles_base = [
+        (1 - ratio) * 0.0006 * stocks['acid']['molarity']
+        for ratio in expected_acid_ratios
+    ]
 
     # Calculate molar ratios
     # molar_ratios = [acid / base if base != 0 else 7 for acid, base in zip(moles_acid, moles_base)]
@@ -387,14 +382,19 @@ def _(
     ]
 
     expected_molar_ratios = [
-        (base - acid) for acid, base in zip(expected_moles_acid, expected_moles_base)
+        (base - acid)
+        for acid, base in zip(expected_moles_acid, expected_moles_base)
     ]
 
     # Plotting
     plt.figure(figsize=(10, 6))
     plt.plot(molar_ratios, phs, label='Experimental pHs', marker='o')
-    plt.plot(expected_molar_ratios, expected_phs, label='Expected pHs', marker='x')
-    plt.plot(expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs', marker='x')
+    plt.plot(
+        expected_molar_ratios, expected_phs, label='Expected pHs', marker='x'
+    )
+    plt.plot(
+        expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs', marker='x'
+    )
 
     for id, point in enumerate(corrected_pka):
         plt.axhline(
@@ -403,11 +403,10 @@ def _(
 
     plt.title('Effect of Molar Ratio on pH Values')
     plt.xlabel('Molar Ratio')
-    # plt.xscale('log') #Problematic line
     plt.ylabel('pH Value')
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))  # Move legend outside
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.grid(True)
-    plt.tight_layout()  # Adjust layout to prevent clipping
+    plt.tight_layout()
 
     phgraph = plt.gca()
     return phgraph, plt
@@ -441,10 +440,18 @@ def _(
     plt.figure(figsize=(10, 6))
 
     # plt.plot([x['acid ratio'] for x in ratios_perfect], [x['pH'] for x in ratios_perfect])
-    plt.plot(molar_ratios_perfect, [x['pH'] for x in ratios_perfect], label='Solved pHs')
+    plt.plot(
+        molar_ratios_perfect,
+        [x['pH'] for x in ratios_perfect],
+        label='Solved pHs',
+    )
     # plt.plot(moles_acid_perfect, [x['pH'] for x in ratios_perfect])
 
-    plt.plot(molar_ratios_perfect, [x['pH'] for x in pkasolver_ratios], label='Pkasolver pHs')
+    plt.plot(
+        molar_ratios_perfect,
+        [x['pH'] for x in pkasolver_ratios],
+        label='Pkasolver pHs',
+    )
 
     def _():
         for id, point in enumerate(corrected_pka):
@@ -492,10 +499,20 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(chemicalshift_fig, citratecouplingfig, citratepeakdifferencesfig, mo):
+def _(
+    chemicalshift_fig,
+    chemicalshift_ph_fig,
+    citratecouplingfig,
+    citratepeakdifferencesfig,
+    mo,
+):
     mo.md(
         rf"""
     ## Graphs:
+
+    ### Chemical Shift Against pH/base ratio
+
+    {mo.as_html(chemicalshift_ph_fig)}
 
     ### Chemical Shift Against Citrate Speciation
 
@@ -537,18 +554,34 @@ def _(np):
                         arg_index = list(type_hints.keys()).index(arg_name)
                         arg_value = args[arg_index]
 
-                    if isinstance(expected_type, type) and not isinstance(arg_value, expected_type):
-                        raise TypeError(f'Expected {arg_name} to be of type {expected_type.__name__}, got {type(arg_value).__name__}')
+                    if isinstance(expected_type, type) and not isinstance(
+                        arg_value, expected_type
+                    ):
+                        raise TypeError(
+                            f'Expected {arg_name} to be of type {expected_type.__name__}, got {type(arg_value).__name__}'
+                        )
 
                     # Check for list of specific type
-                    if isinstance(expected_type, tuple) and expected_type[0] == list:
+                    if (
+                        isinstance(expected_type, tuple)
+                        and expected_type[0] == list
+                    ):
                         if not isinstance(arg_value, list):
-                            raise TypeError(f'Expected {arg_name} to be a list, got {type(arg_value).__name__}')
+                            raise TypeError(
+                                f'Expected {arg_name} to be a list, got {type(arg_value).__name__}'
+                            )
                         for item in arg_value:
-                            if not isinstance(item, (expected_type[1], np.float32, np.float64)):
-                                raise TypeError(f'All items in {arg_name} must be of type {expected_type[1].__name__}, got {type(item).__name__}')
+                            if not isinstance(
+                                item,
+                                (expected_type[1], np.float32, np.float64),
+                            ):
+                                raise TypeError(
+                                    f'All items in {arg_name} must be of type {expected_type[1].__name__}, got {type(item).__name__}'
+                                )
                 return func(*args, **kwargs)
+
             return wrapper
+
         return decorator
 
     @type_check(base_dir=str, experiment_dir=str, count=int)
@@ -566,7 +599,9 @@ def _(np):
             raise FileNotFoundError(f'Directory {dir} does not exist')
 
         if os.path.exists(f'{dir}/acqus') is False:
-            raise FileNotFoundError(f'Directory {dir} does not contain acqusition paramaters')
+            raise FileNotFoundError(
+                f'Directory {dir} does not contain acqusition paramaters'
+            )
 
         sfo1, o1 = None, None
 
@@ -597,7 +632,9 @@ def _(np):
             raise FileNotFoundError(f'Directory {dir} does not exist')
 
         if os.path.exists(f'{dir}/pdata/1/procs') is False:
-            raise FileNotFoundError(f'Directory {dir} does not contain procs paramaters')
+            raise FileNotFoundError(
+                f'Directory {dir} does not contain procs paramaters'
+            )
 
         sf = None
 
@@ -623,9 +660,13 @@ def _(np):
             raise FileNotFoundError(f'Directory {dir} does not exist')
 
         if os.path.exists(f'{dir}/pdata/1/peaklist.xml') is False:
-            raise FileNotFoundError(f'Directory {dir} does not contain a peaklist')
+            raise FileNotFoundError(
+                f'Directory {dir} does not contain a peaklist'
+            )
 
-        with open(f'{data_dir}/{experiment}/{experiment_number}/pdata/1/peaklist.xml') as f:
+        with open(
+            f'{data_dir}/{experiment}/{experiment_number}/pdata/1/peaklist.xml'
+        ) as f:
             xml_data = f.read()
             root = ET.fromstring(xml_data)
 
@@ -639,7 +680,6 @@ def _(np):
 
         return peak_values
 
-
     @type_check(experiment=str, experiment_number=str, data_dir=str)
     def extract_phc(experiment, experiment_number, data_dir):
         """Extract Phase Correction values from the procs file."""
@@ -651,7 +691,9 @@ def _(np):
 
         procs_file_path = f'{dir_path}/pdata/1/procs'
         if not os.path.exists(procs_file_path):
-            raise FileNotFoundError(f'Directory {dir_path} does not contain procs parameters')
+            raise FileNotFoundError(
+                f'Directory {dir_path} does not contain procs parameters'
+            )
 
         phc = {}
 
@@ -663,7 +705,9 @@ def _(np):
                     phc[key] = np.float64(match.group(2))
 
         if not phc:
-            raise ValueError(f'No phase correction values in directory {dir_path}')
+            raise ValueError(
+                f'No phase correction values in directory {dir_path}'
+            )
 
         return phc
 
@@ -672,7 +716,7 @@ def _(np):
         """Calculate PPM shift from SR."""
         return sr / frequency
 
-    @type_check(peak_values=(list, list, float), ppm_shit =(list, float))
+    @type_check(peak_values=(list, list, float), ppm_shit=(list, float))
     def adjust_peak_values(peak_values, ppm_shift):
         """Adjust peak values based on PPM shift."""
         for idx, peaks in enumerate(peak_values):
@@ -685,18 +729,23 @@ def _(np):
 
     @type_check(experiment=str, experiment_number=str, data_dir=str)
     def extract_sr(experiment, experiment_number, data_dir):
-        sfo1, o1 = extract_sfo1_and_o1_values(experiment, experiment_number, data_dir)
+        sfo1, o1 = extract_sfo1_and_o1_values(
+            experiment, experiment_number, data_dir
+        )
         sf = extract_sf_values(experiment, experiment_number, data_dir)
         sr = calculate_sr(o1, sf, sfo1)
         return sr
 
+    data_dir = 'spectra'   # The directory all data is in
+    experiment_dir = '20250811_cit_nacit_titr'   # The experiment name
+    experiment_count = 24   # The number of experiments in format _i
+    experiment_number = (
+        '3'  # The folder in the experiment that contains the acqusition data
+    )
 
-    data_dir = 'spectra' # The directory all data is in
-    experiment_dir = '20250811_cit_nacit_titr' # The experiment name
-    experiment_count = 24 # The number of experiments in format _i
-    experiment_number = '3' # The folder in the experiment that contains the acqusition data
-
-    experiments = get_experiment_directories(data_dir, experiment_dir, experiment_count)
+    experiments = get_experiment_directories(
+        data_dir, experiment_dir, experiment_count
+    )
 
     sr_values, peak_values = [], []
 
@@ -789,14 +838,49 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
 
     plt.ylabel('Speciation Ratio')
     plt.xlabel('Chemical shift (PPM)')
-    plt.title('Chemical shift of Peaks in Citric Acid and Trisodium Citrate Speciation')
+    plt.title(
+        'Chemical shift of Peaks in Citric Acid and Trisodium Citrate Speciation'
+    )
 
     plt.tight_layout()
 
     chemicalshift_fig = plt.gca()
 
     print([x / 0.0006 * 100 for x in base_vol])
-    return chemicalshift_fig, species_1, species_2, species_3, species_4
+    return (
+        avg_ppm,
+        chemicalshift_fig,
+        species_1,
+        species_2,
+        species_3,
+        species_4,
+    )
+
+
+@app.cell
+def _(avg_ppm, base_vol, phs, plt):
+    plt.figure(figsize=(15, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], avg_ppm)
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.ylabel('Average PPM')
+    plt.xlabel('Sodium Citrate Percentage')
+    plt.title('Sodium Citrate Percentage and Average PPM')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(phs, avg_ppm)
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.ylabel('Average PPM')
+    plt.xlabel('pH')
+    plt.title('pH and Average PPM')
+
+    plt.tight_layout()
+
+    chemicalshift_ph_fig = plt.gca()
+    return (chemicalshift_ph_fig,)
 
 
 @app.cell
@@ -811,21 +895,31 @@ def _(
     species_3,
     species_4,
 ):
-    citrate_couplings = [[
-        x[0] - x[1],
-        x[2] - x[3],
-    ] for x in citrate_ppms] # Calculate j coupling values
+    citrate_couplings = [
+        [
+            x[0] - x[1],
+            x[2] - x[3],
+        ]
+        for x in citrate_ppms
+    ]   # Calculate j coupling values
 
     citrate_couplings = [
-        np.average(x)
-    for x in citrate_couplings] # Average to a single value
-
+        np.average(x) for x in citrate_couplings
+    ]   # Average to a single value
 
     plt.figure(figsize=(15, 5))
 
     # First subplot
     plt.subplot(1, 3, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_couplings, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
+    plt.plot(
+        [x / 0.0006 * 100 for x in base_vol],
+        citrate_couplings,
+        color='blue',
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.title('J Coupling vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
     plt.ylabel('J Coupling', fontsize=12)
@@ -833,7 +927,15 @@ def _(
 
     # Second subplot
     plt.subplot(1, 3, 2)
-    plt.plot(phs, citrate_couplings, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
+    plt.plot(
+        phs,
+        citrate_couplings,
+        color='green',
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.title('J Coupling vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
     plt.ylabel('J Coupling', fontsize=12)
@@ -841,10 +943,38 @@ def _(
 
     # Third subplot
     plt.subplot(1, 3, 3)
-    plt.plot(citrate_couplings, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
-    plt.plot(citrate_couplings, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
-    plt.plot(citrate_couplings, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
-    plt.plot(citrate_couplings, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
+    plt.plot(
+        citrate_couplings,
+        species_1,
+        label='H3A',
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_couplings,
+        species_2,
+        label='H2A-',
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_couplings,
+        species_3,
+        label='HA2-',
+        marker='^',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_couplings,
+        species_4,
+        label='A3-',
+        marker='d',
+        linestyle='-',
+        linewidth=2,
+    )
     plt.title('J Coupling vs. Citrate Species', fontsize=14)
     plt.xlabel('J Coupling', fontsize=12)
     plt.ylabel('Species Response', fontsize=12)
@@ -878,22 +1008,36 @@ def _(
     species_3,
     species_4,
 ):
-    citrate_peaks = [extract_peak_values(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment) for experiment in experiments]
+    citrate_peaks = [
+        extract_peak_values(
+            data_dir=data_dir,
+            experiment_number=experiment_number,
+            experiment=experiment,
+        )
+        for experiment in experiments
+    ]
 
     # print(len(citrate_ppms[0]))
 
-    citrate_ppms = [[x[0] for x in y] for y in citrate_peaks] # Discard intensities, not required for this
+    citrate_ppms = [
+        [x[0] for x in y] for y in citrate_peaks
+    ]   # Discard intensities, not required for this
 
     # print(len(citrate_ppms[0]))
 
-    citrate_shifts = [[
-        np.average(x[0:1]),
-        np.average(x[2:3]),
-    ] for x in citrate_ppms] # Average the multiplets together
+    citrate_shifts = [
+        [
+            np.average(x[0:1]),
+            np.average(x[2:3]),
+        ]
+        for x in citrate_ppms
+    ]   # Average the multiplets together
 
     # print(len(citrate_shifts[0]))
 
-    citrate_differences = [float(round(x[0] - x[1], 4)) for x in citrate_shifts]
+    citrate_differences = [
+        float(round(x[0] - x[1], 4)) for x in citrate_shifts
+    ]
 
     # print(f'{citrate_differences}')
 
@@ -902,7 +1046,15 @@ def _(
 
     # First subplot
     plt.subplot(1, 3, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], citrate_differences, color='blue', marker='o', linestyle='-', linewidth=2, markersize=5)
+    plt.plot(
+        [x / 0.0006 * 100 for x in base_vol],
+        citrate_differences,
+        color='blue',
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
     plt.ylabel('Peak Differences', fontsize=12)
@@ -910,7 +1062,15 @@ def _(
 
     # Second subplot
     plt.subplot(1, 3, 2)
-    plt.plot(phs, citrate_differences, color='green', marker='s', linestyle='-', linewidth=2, markersize=5)
+    plt.plot(
+        phs,
+        citrate_differences,
+        color='green',
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.title('Peak Differences vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
     plt.ylabel('Peak Differences', fontsize=12)
@@ -918,10 +1078,38 @@ def _(
 
     # Third subplot
     plt.subplot(1, 3, 3)
-    plt.plot(citrate_differences, species_1, label='H3A', marker='o', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_2, label='H2A-', marker='s', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_3, label='HA2-', marker='^', linestyle='-', linewidth=2)
-    plt.plot(citrate_differences, species_4, label='A3-', marker='d', linestyle='-', linewidth=2)
+    plt.plot(
+        citrate_differences,
+        species_1,
+        label='H3A',
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_differences,
+        species_2,
+        label='H2A-',
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_differences,
+        species_3,
+        label='HA2-',
+        marker='^',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.plot(
+        citrate_differences,
+        species_4,
+        label='A3-',
+        marker='d',
+        linestyle='-',
+        linewidth=2,
+    )
     plt.title('Peak Differences vs. Citrate Species', fontsize=14)
     plt.xlabel('Peak Differences', fontsize=12)
     plt.ylabel('Species Response', fontsize=12)
@@ -934,7 +1122,6 @@ def _(
 
     # Show the plots
     citratepeakdifferencesfig = plt.gca()
-
 
     return citrate_ppms, citratepeakdifferencesfig
 
@@ -977,35 +1164,43 @@ def _(
         with open(dir, 'rb') as fid_file:
             # Read the first few bytes to determine the data type
             # This is a placeholder; you need to implement the logic to read DTYPA and NC
-            dtypa = "int"  # or "double", based on your file
+            dtypa = 'int'  # or "double", based on your file
             nc = 0  # Set this based on your file's parameters
 
             # Read the entire file into a byte array
             fid_data = fid_file.read()
 
-            if dtypa == "int":
+            if dtypa == 'int':
                 # Calculate the number of data points
                 num_points = len(fid_data) // 4  # 4 bytes for each int
                 data = np.zeros(num_points, dtype=np.int32)
 
                 for i in range(num_points):
-                    data[i] = struct.unpack('i', fid_data[i*4:(i+1)*4])[0]
+                    data[i] = struct.unpack(
+                        'i', fid_data[i * 4 : (i + 1) * 4]
+                    )[0]
 
                 # Apply the exponent
-                data = data * (10 ** nc)
+                data = data * (10**nc)
 
-            elif dtypa == "double":
+            elif dtypa == 'double':
                 num_points = len(fid_data) // 8  # 8 bytes for each double
                 data = np.zeros(num_points, dtype=np.float64)
 
                 for i in range(num_points):
-                    data[i] = struct.unpack('d', fid_data[i*8:(i+1)*8])[0]
+                    data[i] = struct.unpack(
+                        'd', fid_data[i * 8 : (i + 1) * 8]
+                    )[0]
 
-            return data[..., ::2] + data[..., 1::2] * 1.j # Stole this line from NMRglue
+            return (
+                data[..., ::2] + data[..., 1::2] * 1.0j
+            )   # Stole this line from NMRglue
 
     def plot_fid_experiments(experiments, experiment_number, data_dir):
         # Set the style for the plots
-        sns.set(style="whitegrid")  # Use Seaborn's whitegrid style for a clean look
+        sns.set(
+            style='whitegrid'
+        )  # Use Seaborn's whitegrid style for a clean look
 
         # Create a new figure
         plt.figure(figsize=(12, 10))
@@ -1022,18 +1217,28 @@ def _(
 
             plt.subplot(rows, cols, idx + 1)
             # plt.plot(data, marker='o', linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=2, markersize=5)
-            plt.plot(data, linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=0.5, markersize=5)
+            plt.plot(
+                data,
+                linestyle='-',
+                color=sns.color_palette('husl', n_colors=n)[idx],
+                linewidth=0.5,
+                markersize=5,
+            )
 
             # Add titles and labels
             plt.title(f'FID Experiment {idx + 1}', fontsize=14)
-            plt.xlabel('Time (ms)', fontsize=12)  # Replace with actual time unit if different
+            plt.xlabel(
+                'Time (ms)', fontsize=12
+            )  # Replace with actual time unit if different
             plt.ylabel('Magnitude', fontsize=12)  # Magnitude of FID data
             plt.grid(True)  # Add grid lines for better readability
             plt.xticks(fontsize=10)
             plt.yticks(fontsize=10)
 
         plt.tight_layout()  # Adjust layout to prevent overlap
-        plt.suptitle('FID Experiments Overview', fontsize=16, y=1.02)  # Main title for the figure
+        plt.suptitle(
+            'FID Experiments Overview', fontsize=16, y=1.02
+        )  # Main title for the figure
         plt.savefig('figs/FID.svg')
         return plt.gca()  # Return the current axes
 
@@ -1055,12 +1260,16 @@ def _(fiddata, plt):
 
 @app.cell
 def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
-    brukerdata = read_bruker(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
+    brukerdata = read_bruker(
+        data_dir=data_dir,
+        experiment=experiments[0],
+        experiment_number=experiment_number,
+    )
 
     print(len(fiddata))
     print(len(brukerdata))
 
-    plt.figure(figsize=(12,6))
+    plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.title('Custom fid reader')
     plt.plot(fiddata)
@@ -1081,33 +1290,59 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
     def bruker_fft(data_dir, experiment, experiment_number):
         """Convert time domain data to frequency domain"""
         import nmrglue as ng
-        phc = extract_phc(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment)
+
+        phc = extract_phc(
+            data_dir=data_dir,
+            experiment_number=experiment_number,
+            experiment=experiment,
+        )
 
         data = read_bruker(data_dir, experiment, experiment_number)
         # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
 
         # Process the spectrum
-        data = ng.proc_base.zf_size(data, 2**15)    # Zero fill to 32768 points
+        data = ng.proc_base.zf_size(
+            data, 2**15
+        )    # Zero fill to 32768 points
         data = ng.proc_base.fft(data)                 # Fourier transform
-        data = ng.proc_base.ps(data, p0=phc['PHC0'], p1=phc['PHC1'])  # Phase correction
+        data = ng.proc_base.ps(
+            data, p0=phc['PHC0'], p1=phc['PHC1']
+        )  # Phase correction
         # data = ng.proc_autophase.autops(data, 'acme') # Automatic phase correction
         data = ng.proc_base.di(data)                  # Discard the imaginaries
         data = ng.proc_base.rev(data)                 # Reverse the data
 
         return data
 
+    def log(msg):
+        with open('log.log', 'a') as f:
+            if isinstance(msg, list):
+                for x in msg:
+                    log(x)  # Recursively log each item in the list
+            else:
+                f.writelines(
+                    str(msg) + '\n'
+                )  # Convert msg to string and add a newline
+
     def read_bruker(data_dir, experiment, experiment_number):
         import nmrglue as ng
-        phc = extract_phc(data_dir=data_dir, experiment_number=experiment_number, experiment=experiment)
 
-        dic, data = ng.bruker.read(f'{data_dir}/{experiment}/{experiment_number}')
+        phc = extract_phc(
+            data_dir=data_dir,
+            experiment_number=experiment_number,
+            experiment=experiment,
+        )
 
+        dic, data = ng.bruker.read(
+            f'{data_dir}/{experiment}/{experiment_number}'
+        )
         # Remove the digital filter
         data = ng.bruker.remove_digital_filter(dic, data)
 
         return data
 
     import math
+
     def _():
         # Create a new figure
         ngfig = plt.figure(figsize=(12, 10))
@@ -1118,19 +1353,27 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         cols = round(math.ceil(n / rows))
 
         for idx, experiment in enumerate(experiments):
-            data = bruker_fft(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
+            data = bruker_fft(
+                data_dir=data_dir,
+                experiment=experiment,
+                experiment_number=experiment_number,
+            )
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(data[19000:22000])  # Adjust the range as needed
             # ax.plot(data)
             ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
-            ax.set_xlabel('Data Points', fontsize=12)  # Replace with actual x-axis label if needed
+            ax.set_xlabel(
+                'Data Points', fontsize=12
+            )  # Replace with actual x-axis label if needed
             ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
             ax.grid(True)  # Add grid lines for better readability
             ax.tick_params(axis='both', which='major', labelsize=10)
 
         plt.tight_layout()  # Adjust layout to prevent overlap
-        plt.suptitle('NMR Experiments Overview', fontsize=16, y=1.02)  # Main title for the figure
+        plt.suptitle(
+            'NMR Experiments Overview', fontsize=16, y=1.02
+        )  # Main title for the figure
         plt.savefig('figs/NMR.svg')
         return plt.gca()  # Return the current axes
 
@@ -1144,14 +1387,18 @@ def _():
     uranium_proton_ppms = [4.08, 4.19, 4.26, 4.35]
 
     uranium_proton_ppms_converted = [
-        x*220/600.05 for x in uranium_proton_ppms
+        x * 220 / 600.05 for x in uranium_proton_ppms
     ]
 
-    print(f'Uranium chemical shifts: {[round(x, 2) for x in uranium_proton_ppms_converted]}')
-    print(f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}')
+    print(
+        f'Uranium chemical shifts: {[round(x, 2) for x in uranium_proton_ppms_converted]}'
+    )
+    print(
+        f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}'
+    )
 
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

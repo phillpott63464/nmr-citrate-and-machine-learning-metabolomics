@@ -30,7 +30,7 @@ substanceDict = {
     'L-Tyrosine': ['SP:3464'],
     'L-Valine': ['SP:3413', 'SP:3490'],
     'Glycine': ['SP:3365', 'SP:3682'],
-    }
+}
 
 # # Amino acid list. This is just a list of names for convenience.
 # aminoAcids = ['L-Alanine', 'L-Arginine', 'L-Asparagine', 'L-Aspartic_Acid', 'L-Cysteine', 'L-Glutamic_Acid', 'L-Glutamine', 'L-Histidine', 'L-Isoleucine', 'L-Leucine', 'L-Lysine', 'L-Methionine', 'L-Proline', 'L-Phenylalanine', 'L-Serine', 'L-Threonine', 'L-Tryptophan', 'L-Tyrosine', 'L-Valine', 'Glycine']
@@ -44,12 +44,17 @@ substanceDict = {
 #     'Citric acid': ['SP:3368'],
 # }
 
-substanceSpectrumIds = [substanceDict[substance][-1] for substance in substanceDict]
+substanceSpectrumIds = [
+    substanceDict[substance][-1] for substance in substanceDict
+]
 
 # The function for actually creating the simulations. See createTrainingData.py for details on the function.
 sampleNumber = 10
 
-cProfile.run('createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)', 'output.prof')
+cProfile.run(
+    'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
+    'output.prof',
+)
 
 with open('results.txt', 'w') as f:
     stats = pstats.Stats('output.prof', stream=f)
@@ -62,19 +67,36 @@ print(intensities.shape)
 
 # Save data to a new timestamped directory in the current working directory.
 cwd = Path(os.path.dirname(os.path.realpath(__file__)))
-outDir = cwd.joinpath(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+outDir = cwd.joinpath(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 if not os.path.isdir(outDir):
     os.makedirs(outDir)
-scales.to_csv(outDir.joinpath('scales.npy'), sep=',', index=True, encoding='utf-8')
+scales.to_csv(
+    outDir.joinpath('scales.npy'), sep=',', index=True, encoding='utf-8'
+)
 # Save as .npy files
 np.save(outDir.joinpath('positions.npy'), positions)
 np.save(outDir.joinpath('intensities.npy'), intensities)
 np.save(outDir.joinpath('components.npy'), components)
 
-#Save as transposed csv files
-np.savetxt(outDir.joinpath('positions.csv'), np.transpose(positions), delimiter=',', header='Positions')
-np.savetxt(outDir.joinpath('intensities.csv'), np.transpose(intensities), delimiter=',', header=','.join([f'Sample_{i}' for i in range(sampleNumber)]))
-np.savetxt(outDir.joinpath('components.csv'), np.transpose(components), delimiter=',', header=','.join([str(substance) for substance in substanceDict]))
+# Save as transposed csv files
+np.savetxt(
+    outDir.joinpath('positions.csv'),
+    np.transpose(positions),
+    delimiter=',',
+    header='Positions',
+)
+np.savetxt(
+    outDir.joinpath('intensities.csv'),
+    np.transpose(intensities),
+    delimiter=',',
+    header=','.join([f'Sample_{i}' for i in range(sampleNumber)]),
+)
+np.savetxt(
+    outDir.joinpath('components.csv'),
+    np.transpose(components),
+    delimiter=',',
+    header=','.join([str(substance) for substance in substanceDict]),
+)
 
 # Quick plot to see an example sample.
 plt.plot(positions, intensities[0])

@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -163,10 +163,16 @@ def _(count, graph_count, substanceDict):
     def genBaseGraph():
         plt.figure(figsize=(graph_count * 4, graph_count * 4))
 
-        for x in range(graph_count**2):  # Changed from range(1, graph_count**2 + 1)
-            plt.subplot(graph_count, graph_count, x + 1)  # Added +1 for subplot numbering
+        for x in range(
+            graph_count**2
+        ):  # Changed from range(1, graph_count**2 + 1)
+            plt.subplot(
+                graph_count, graph_count, x + 1
+            )  # Added +1 for subplot numbering
             plt.plot(
-                [spectra[x]['positions'][i] for i in indices],  # Now using x (0-8)
+                [
+                    spectra[x]['positions'][i] for i in indices
+                ],  # Now using x (0-8)
                 [spectra[x]['intensities'][0][i] for i in indices],
             )
 
@@ -208,7 +214,7 @@ def _(graph_count, indices, plt, spectra):
     ):  # Corrected 'ennumerate' to 'enumerate'
         hilberts.append(
             (
-                #hilbert(
+                # hilbert(
                 (
                     spectrum2['intensities'][
                         0
@@ -226,7 +232,6 @@ def _(graph_count, indices, plt, spectra):
 
     # CreaPerformte visualization grid showing sample spectra
     plt.figure(figsize=(graph_count * 4, graph_count * 4))
-
 
     for graphcounter2 in range(1, graph_count**2 + 1):
         plt.subplot(graph_count, graph_count, graphcounter2)
@@ -1274,5 +1279,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

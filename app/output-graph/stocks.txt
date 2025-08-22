@@ -1,20 +1,8 @@
-Actual requirements:
-Acid weight: 12.486mg
-Acid volume: 5.943ml
-
-
-Base weight: 24.872mg
-Base volume: 8.457ml
 
 Requirements for 50ml 0.01M stock solution:
-Acid weight: 96.06mg
-Acid volume: 50ml
 
-
-Base weight: 129.035mg
-Base volume: 50ml
-
-
-Water requirements: 47.5ml
-D2O requirements: 2.5ml
-DSS requirements: 11.218mg
+- Acid weight: 96.06mg
+- Base weight: 129.035mg
+- Water requirements: 47.5ml
+- D2O requirements: 2.5ml
+- DSS requirements: 11.218mg

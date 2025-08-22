@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.16"
-app = marimo.App(width="medium")
+__generated_with = '0.14.16'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -13,7 +13,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing.""")
+    mo.md(
+        r"""Code taken from [This website](https://machinelearningmastery.com/building-a-regression-model-in-pytorch/) and adapted into marimo notebook format for testing."""
+    )
     return
 
 
@@ -50,7 +52,9 @@ def _(data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""- Define a model. This is a 4 layer MLP using ReLU activation.""")
+    mo.md(
+        r"""- Define a model. This is a 4 layer MLP using ReLU activation."""
+    )
     return
 
 
@@ -76,7 +80,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""- Define a loss function (mean square error) and optimizer (adam)""")
+    mo.md(
+        r"""- Define a loss function (mean square error) and optimizer (adam)"""
+    )
     return
 
 
@@ -112,9 +118,13 @@ def _(X, device, torch, y):
         X, y, train_size=train_ratio, shuffle=True
     )
     X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
-    y_train = torch.tensor(y_train, dtype=torch.float32).reshape(-1, 1).to(device)
+    y_train = (
+        torch.tensor(y_train, dtype=torch.float32).reshape(-1, 1).to(device)
+    )
     X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
-    y_test = torch.tensor(y_test, dtype=torch.float32).reshape(-1, 1).to(device)
+    y_test = (
+        torch.tensor(y_test, dtype=torch.float32).reshape(-1, 1).to(device)
+    )
     return X_test, X_train, y_test, y_train
 
 
@@ -230,5 +240,5 @@ def _():
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
