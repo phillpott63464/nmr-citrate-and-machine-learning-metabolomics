@@ -94,6 +94,7 @@ def validate_and_sort_limits(t):
     except Exception:
         raise TypeError('limits must be a tuple of two real numbers.')
 
+
 @nb.njit(parallel=True, fastmath=True)
 def add_lorentzians(linspace, peaklist):
     result = np.zeros(linspace.shape, dtype=np.float64)
@@ -121,6 +122,7 @@ def add_gaussians(linspace, peaklist):
         result[i] = total
     return result
 
+
 def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     """
     Numpy Arrays of the simulated lineshape for a peaklist.
@@ -143,13 +145,32 @@ def peakListFromSpinSystemMatrix(spinSystemMatrix, frequency, width):
     x, y : numpy.array
         Arrays for frequency (x) and intensity (y) for the simulated lineshape.
     """
-    breaks = [index + 1 for index in range(len(spinSystemMatrix) - 1) if not np.any(spinSystemMatrix[:index + 1, index + 1:] != 0)]
+    breaks = [
+        index + 1
+        for index in range(len(spinSystemMatrix) - 1)
+        if not np.any(spinSystemMatrix[: index + 1, index + 1 :] != 0)
+    ]
     breaks = [0] + breaks + [len(spinSystemMatrix)]
-    matrices = [spinSystemMatrix[breakpoint:breaks[index + 1], breakpoint:breaks[index + 1]] for index, breakpoint in enumerate(breaks[:-1])]
+    matrices = [
+        spinSystemMatrix[
+            breakpoint : breaks[index + 1], breakpoint : breaks[index + 1]
+        ]
+        for index, breakpoint in enumerate(breaks[:-1])
+    ]
     # Suppress the printing from qm
     output = sys.stdout
     sys.stdout = open(os.devnull, 'w')
-    peaklist = [item for sublist in [qm_spinsystem([ssm[index][index] * frequency for index in range(len(ssm))], ssm) for ssm in matrices] for item in sublist]
+    peaklist = [
+        item
+        for sublist in [
+            qm_spinsystem(
+                [ssm[index][index] * frequency for index in range(len(ssm))],
+                ssm,
+            )
+            for ssm in matrices
+        ]
+        for item in sublist
+    ]
     sys.stdout = output
     peaklist_out = [(peak[0] / frequency, peak[1], width) for peak in peaklist]
     # df_out = pd.DataFrame(peaklist_out, columns=['chemical_shift', 'height', 'width', 'multiplet_id'])

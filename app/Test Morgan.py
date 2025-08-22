@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -13,7 +13,9 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(rf"""Code block to profile Morgan's code from where I was converting numpy to jax.""")
+    mo.md(
+        rf"""Code block to profile Morgan's code from where I was converting numpy to jax."""
+    )
     return
 
 
@@ -23,6 +25,7 @@ def _():
     import pstats
     from morgan.createTrainingData import createTrainingData
     import jax
+
     # from jax.config import config
 
     # config.update('jax_platform_name', 'rocm')
@@ -64,14 +67,16 @@ def _():
 def _(cProfile, createTrainingData, substanceSpectrumIds):
     sampleNumber = 100
 
-    _ = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1) #Prebuild before everything
+    _ = createTrainingData(
+        substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1
+    )   # Prebuild before everything
 
     cProfile.run(
         'createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=sampleNumber, scale=0.5)',
         'morgan/output.prof',
     )
 
-    dumbvar = True # So that the next cell always runs when this is rerun
+    dumbvar = True   # So that the next cell always runs when this is rerun
 
     return (dumbvar,)
 
@@ -94,7 +99,9 @@ def _(dumbvar, pstats):
 def _(createTrainingData, substanceSpectrumIds):
     # Ensure the plot is reasonable
 
-    substance = createTrainingData(substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5)
+    substance = createTrainingData(
+        substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5
+    )
 
     import matplotlib.pyplot as plt
 
@@ -102,5 +109,5 @@ def _(createTrainingData, substanceSpectrumIds):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
