@@ -35,6 +35,9 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
             .scale(0.7)
             .next_to(axes.x_axis.get_center(), RIGHT, buff=0.2)
         )
+        x_label.scale(scale_factor)
+    else:
+        x_label = ''
 
     if ylabel is not None:
         y_label = (
@@ -42,6 +45,9 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
             .scale(0.7)
             .next_to(axes.y_axis.get_center(), UP, buff=0.2)
         )
+        y_label.scale(scale_factor)
+    else:
+        y_label = ''
 
     # Scale the axes and graph elements
     axes.scale(scale_factor)
@@ -49,14 +55,12 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     dots.scale(scale_factor)
     labels.scale(scale_factor)
 
-    if xlabel is not None:
-        x_label.scale(scale_factor)
-
-    if ylabel is not None:
-        y_label.scale(scale_factor)
-
-    return poly, axes, dots, labels, x_label, y_label
-
+    return (poly,
+            axes,
+            dots,
+            labels,
+            x_label,
+            y_label)
 
 class PlotPoints(Scene):
     def construct(self):
@@ -88,7 +92,6 @@ class PlotPoints(Scene):
             7.09,
             7.53,
         ]
-
         citrate_couplings = [
             0.02620699999999987,
             0.026074500000000222,
@@ -115,7 +118,6 @@ class PlotPoints(Scene):
             0.024997499999999784,
             0.024977000000000027,
         ]
-
         sodiumcitratepercentage = [
             0.0,
             13.333333333333336,
@@ -143,25 +145,25 @@ class PlotPoints(Scene):
             100.0,
         ]
 
-        fig1, axes1, dots1, _, xlabel1, ylabel1 = create_graph(
-            phs, citrate_couplings, 'pH', 'ppm'
-        )
-        fig2, axes2, dots2, _, xlabel2, ylabel2 = create_graph(
-            sodiumcitratepercentage,
-            citrate_couplings,
-            'Trisodium Citrate Ratio (%)',
-            'ppm',
-        )
+        graphs = [
+            [phs, citrate_couplings, 'pH', 'ppm'],
+            [sodiumcitratepercentage, citrate_couplings, 'Trisodium Citrate Ratio', 'ppm'],
+        ]
 
-        self.play(Create(axes1))
-        self.add(xlabel1, ylabel1)
-        self.play(Create(fig1), Create(dots1))
-        self.wait(2)
+        objects = [
+            create_graph(*graph)
+            for graph in graphs
+        ]
 
-        self.play(Transform(axes1, axes2))
-        self.play(
-            Transform(fig1, fig2),
-            Transform(dots1, dots2),
-            Transform(xlabel1, xlabel2),
-        )
-        self.wait(2)
+        print(objects[0])
+
+        for i in range(0, len(objects)):
+            if i == 0:
+                self.play(*[Create(x) for x in objects[i]])
+                print(*objects[i][-1])
+                self.add(*objects[i][-1])
+                self.wait(2)
+                continue
+            
+            self.play(*[Transform(x, y) for x, y in zip(objects[i-1], objects[i])])
+            self.wait(2)
