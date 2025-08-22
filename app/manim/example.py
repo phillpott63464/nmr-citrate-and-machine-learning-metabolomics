@@ -144,7 +144,7 @@ class PlotPoints(Scene):
                 continue
             
             # Transform to the new objects
-            self.play(*[Transform(x, y) for x, y in zip(objects[i-1], objects[i])])
+            self.play(*[Transform(x, y) for x, y in zip(objects[0], objects[i])])
             # Graph 1 + 2 are fine, graph 2 doesn't clear out when graph 3 plays though
             self.wait(2)
 
