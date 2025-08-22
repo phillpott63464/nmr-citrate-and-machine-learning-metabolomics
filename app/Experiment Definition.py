@@ -393,7 +393,7 @@ def _(options, ratios):
     return (experiments,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, stock_output):
     mo.md(
         rf"""

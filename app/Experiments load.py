@@ -183,7 +183,7 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
     base_molecular_weight = 258.07   # g/mol
     dss_molecular_weight = 224.36   # g/mol
 
-    imported = pd.read_csv(f'{out_dir}/eppendorfs.csv')
+    imported = pd.read_csv(f'{out_dir}/na-eppendorfs.csv')
     # imported = imported.to_dict(orient='split', index=False)
 
     acid_vol = [
@@ -512,7 +512,6 @@ def _(chemicalshift_fig, citratecouplingfig, citratepeakdifferencesfig, mo):
     The value between the peaks for each proton
 
     {mo.as_html(citratecouplingfig)}
-
     """
     )
     return
@@ -785,7 +784,7 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     plt.subplot(1, 3, 3)
     plt.plot(avg_ppm, fracs)
     plt.gca().invert_xaxis()
-
+    balance = '0.1'   # In quotations because reasons?
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Speciation Ratio')
