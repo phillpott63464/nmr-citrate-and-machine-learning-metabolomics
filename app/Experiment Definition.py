@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -11,12 +11,15 @@ def _():
     import phfork
     from chempy import electrolytes
     import numpy as np
+
     return electrolytes, mo, np, phfork
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
+    mo.md(
+        r"""# Experimental Method for Citric Acid Speciation Chemical Shift"""
+    )
     return
 
 
@@ -159,7 +162,6 @@ def _(simulate_ph_graph):
 @app.cell
 def _():
     """Import data from bufferdata.csv, convert to dict"""
-
 
     import pandas as pd
 
@@ -348,7 +350,9 @@ def _(corrected_pka, graph_molarity, np, phfork):
     plt.plot(phs, fracs, linewidth=2)
 
     # Add a legend with a title
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'], title='Species', loc='upper right')
+    plt.legend(
+        ['H3A', 'H2A-', 'HA2-', 'A3-'], title='Species', loc='upper right'
+    )
 
     # Add grid lines for better readability
     plt.grid(True, linestyle='--', alpha=0.7)
@@ -436,9 +440,7 @@ def _(experiments, mo, rounding, sample_vol, stock_molarity):
         )
 
     experiment_output = mo.ui.table(
-        data=volumed_experiments,
-        pagination=True,
-        label="Experiment output"
+        data=volumed_experiments, pagination=True, label='Experiment output'
     )
     return acid_vol, base_vol, experiment_output, volumed_experiments
 
@@ -552,21 +554,21 @@ def _(
 @app.cell
 def _():
     better_sample_vol = 0.0015   # l # Use a bigger volume to give leeway
-    citric_sample_vol = better_sample_vol * 0.1 # L, 1/10th
-    tris_vol = better_sample_vol * 0.5 # L, 1/2
+    citric_sample_vol = better_sample_vol * 0.1   # L, 1/10th
+    tris_vol = better_sample_vol * 0.5   # L, 1/2
 
-    calcium_conc = 0.005*10 #M
-    magnesium_conc = 0.00234*10 #M
-    tris_conc = 0.05 * 2 #M
+    calcium_conc = 0.005 * 10   # M
+    magnesium_conc = 0.00234 * 10   # M
+    tris_conc = 0.05 * 2   # M
 
-    magnesium_chloride_mass = 95.21 #g/mol
-    calcium_chloride_mass = 110.98 #g/mol
-    tris_mass = 121.14 #g/mol
+    magnesium_chloride_mass = 95.21   # g/mol
+    calcium_chloride_mass = 110.98   # g/mol
+    tris_mass = 121.14   # g/mol
 
-    metal_stock_volume = 15/1000 #mL to L
-    tris_stock_volume = 50/1000 #mL to L
+    metal_stock_volume = 15 / 1000   # mL to L
+    tris_stock_volume = 50 / 1000   # mL to L
 
-    number_experiments_per_metal = 12 # Count (not including 0)
+    number_experiments_per_metal = 12   # Count (not including 0)
     return (
         better_sample_vol,
         calcium_chloride_mass,
@@ -596,23 +598,30 @@ def _(
     # Intialise experiments
     for y in range(0, 2):
         if y == 0:
-            salt_stock_name = 'magnesium salt stock uL' 
+            salt_stock_name = 'magnesium salt stock µL'
         elif y == 1:
-            salt_stock_name = 'calcium salt stock uL'
+            salt_stock_name = 'calcium salt stock µL'
 
-        for i in range (0, number_experiments_per_metal):
-            metal_experiments.append({
-                'citric acid stock uL': citric_sample_vol,
-                'tris buffer stock uL': round(tris_vol, 6),
-                salt_stock_name: round(citric_sample_vol/(number_experiments_per_metal-1)*i, 6),
-            })
+        for i in range(0, number_experiments_per_metal):
+            metal_experiments.append(
+                {
+                    'citric acid stock µL': citric_sample_vol,
+                    'tris buffer stock µL': round(tris_vol, 6),
+                    salt_stock_name: round(
+                        citric_sample_vol
+                        / (number_experiments_per_metal - 1)
+                        * i,
+                        6,
+                    ),
+                }
+            )
 
     # Make up to better_sample_vol with milliq
     for x in metal_experiments:
         temp = 0
         for y in x.items():
             temp += y[1]
-        x['milliq uL'] = round(better_sample_vol - temp, 6)
+        x['milliq µL'] = round(better_sample_vol - temp, 6)
 
     # Double check volumes
     for x in metal_experiments:
@@ -622,7 +631,7 @@ def _(
         if temp != better_sample_vol:
             print('Issue')
 
-    # Round everything to uL
+    # Round everything to µL
     for x in metal_experiments:
         for key, value in x.items():
             x[key] = f'{round(value * 1000 * 1000)}'
@@ -630,8 +639,12 @@ def _(
     metal_experiments = pd.DataFrame(metal_experiments)
 
     # Put milliq at the end for simplicity's sake
-    columns = [col for col in metal_experiments.columns if col != 'milliq uL'] + ['milliq uL']
+    columns = [
+        col for col in metal_experiments.columns if col != 'milliq µL'
+    ] + ['milliq µL']
     metal_experiments = metal_experiments[columns]
+
+    metal_experiments.index = range(25, 25 + len(metal_experiments))
 
     metal_experiments.to_csv('metal_experiments.csv', index=True)
 
@@ -656,11 +669,15 @@ def _(
     # mass*moles=g
     # g = mass * (conc * L)
 
-    magnesium_chloride_weight = magnesium_chloride_mass * magnesium_conc * metal_stock_volume
-    calcium_chloride_weight = calcium_chloride_mass * calcium_conc * metal_stock_volume
+    magnesium_chloride_weight = (
+        magnesium_chloride_mass * magnesium_conc * metal_stock_volume
+    )
+    calcium_chloride_weight = (
+        calcium_chloride_mass * calcium_conc * metal_stock_volume
+    )
     tris_weight = tris_mass * tris_conc * tris_stock_volume
 
-    metal_stock_output = f'''Citric acid stock: use old citric acid stock, and dilute 1/10 into samples. This puts the range of citrate ions into soluble range of calcium citrate, and means we don't have to use more DSS, and the ratio of DSS to citrate will be identical to our previous experiments.
+    metal_stock_output = f"""Citric acid stock: use old citric acid stock, and dilute 1/10 into samples. This puts the range of citrate ions into soluble range of calcium citrate, and means we don't have to use more DSS, and the ratio of DSS to citrate will be identical to our previous experiments.
 
     Metal stocks:
 
@@ -675,9 +692,9 @@ def _(
     - Tris: {round(tris_weight*1000, 5)}mg
     - D2O: {tris_stock_volume*1000*0.05}ml
     - H2O: {tris_stock_volume*1000*0.95}ml
-    '''
+    """
     return (metal_stock_output,)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
