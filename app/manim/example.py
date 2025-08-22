@@ -1,5 +1,6 @@
 from manim import *
 
+
 def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     
     # Check if y is a list of lists
@@ -31,15 +32,16 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     poly = VMobject()
     poly.set_points_as_corners(coord_points)
     poly.set_stroke('#521671', 3)
+    poly.set_stroke('#521671', 3)
 
     dots = VGroup(*[Dot(p, radius=0.06, color=YELLOW) for p in coord_points])
 
-    # labels = VGroup(
-    #     *[
-    #         MathTex(f'({x},{y})').scale(0.5).next_to(pt, UR, buff=0.06)
-    #         for (x, y), pt in zip(pts, coord_points)
-    #     ]
-    # )
+    labels = VGroup(
+        *[
+            MathTex(f'({x},{y})').scale(0.5).next_to(pt, UR, buff=0.06)
+            for (x, y), pt in zip(pts, coord_points)
+        ]
+    )
 
     # Adding axis labels
     if xlabel is not None:
@@ -71,7 +73,7 @@ def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
     return (poly,
             axes,
             dots,
-            # labels,
+            labels,
             x_label,
             y_label)
 
