@@ -1,81 +1,37 @@
 from manim import *
 
-
-def create_graph(x, y, xlabel=None, ylabel=None, scale_factor=0.8):
-    
-    # Check if y is a list of lists
-    if isinstance(y[0], list):
-        x = x * len(y)
-        y = [item for sublist in y for item in sublist]
-
-    print(len(y))
-    print(len(x))
-
-    y_range = [min(y), max(y), (max(y) - min(y)) / 10]
-
-    pts = zip(x, y)
-
-    x_range = [min(x), max(x), (max(x) - min(x)) / 10]
-
+def create_graph_multi(x, y_lists, xlabel=None, ylabel=None, scale_factor=0.8):
+    colors = [BLUE, RED, GREEN, ORANGE]  # Pick as many as needed
     axes = Axes(
-        x_range=x_range,
-        y_range=y_range,
+        x_range=[min(x), max(x), (max(x) - min(x)) / 10],
+        y_range=[min(min(sub) for sub in y_lists), max(max(sub) for sub in y_lists), 
+                 (max(max(sub) for sub in y_lists) - min(min(sub) for sub in y_lists)) / 10],
         tips=False,
-        axis_config={
-            'include_numbers': True,
-            'decimal_number_config': {'num_decimal_places': 2},
-        },
+        axis_config={'include_numbers': True, 'decimal_number_config': {'num_decimal_places': 2}}
     ).to_edge(DOWN)
-
-    coord_points = [axes.coords_to_point(x, y) for x, y in pts]
-
-    poly = VMobject()
-    poly.set_points_as_corners(coord_points)
-    poly.set_stroke('#521671', 3)
-    poly.set_stroke('#521671', 3)
-
-    dots = VGroup(*[Dot(p, radius=0.06, color=YELLOW) for p in coord_points])
-
-    labels = VGroup(
-        *[
-            MathTex(f'({x},{y})').scale(0.5).next_to(pt, UR, buff=0.06)
-            for (x, y), pt in zip(pts, coord_points)
-        ]
-    )
-
-    # Adding axis labels
-    if xlabel is not None:
-        x_label = (
-            MathTex(xlabel)
-            .scale(0.7)
-            .next_to(axes.x_axis.get_center(), RIGHT, buff=0.2)
-        )
-        x_label.scale(scale_factor)
-    else:
-        x_label = ''
-
-    if ylabel is not None:
-        y_label = (
-            MathTex(ylabel)
-            .scale(0.7)
-            .next_to(axes.y_axis.get_center(), UP, buff=0.2)
-        )
-        y_label.scale(scale_factor)
-    else:
-        y_label = ''
-
-    # Scale the axes and graph elements
+    
     axes.scale(scale_factor)
-    poly.scale(scale_factor)
-    dots.scale(scale_factor)
-    # labels.scale(scale_factor)
+    
+    polys = VGroup()
+    dots = VGroup()
+    labels = VGroup()
+    
+    for i, y in enumerate(y_lists):
+        coord_points = [axes.coords_to_point(xi, yi) for xi, yi in zip(x, y)]
+        poly = VMobject()
+        poly.set_points_as_corners(coord_points)
+        poly.set_stroke(colors[i % len(colors)], 3)
+        polys.add(poly)
+        dots.add(*[Dot(p, radius=0.06, color=YELLOW) for p in coord_points])
+        labels.add(*[MathTex(f'({xi},{yi})').scale(0.5).next_to(pt, UR, buff=0.06)
+                     for xi, yi, pt in zip(x, y, coord_points)])
+    
+    # Axis labels (same as your code)
+    x_label = MathTex(xlabel).scale(0.7).next_to(axes.x_axis.get_center(), RIGHT, buff=0.2) if xlabel else ''
+    y_label = MathTex(ylabel).scale(0.7).next_to(axes.y_axis.get_center(), UP, buff=0.2) if ylabel else ''
+    
+    return polys, axes, dots, labels, x_label, y_label
 
-    return (poly,
-            axes,
-            dots,
-            labels,
-            x_label,
-            y_label)
 
 class PlotPoints(Scene):
     def construct(self):
