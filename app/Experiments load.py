@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.17'
-app = marimo.App(width='medium')
+__generated_with = "0.14.17"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -534,7 +534,7 @@ def _(
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(np):
     """
     Obtain chemical shifts and SR values from source
@@ -675,7 +675,7 @@ def _(np):
                 intensity = np.float64(peak.get('intensity'))
                 peak_values.append([f1, intensity])
 
-        if len(peak_values) is 0:
+        if len(peak_values) == 0:
             raise ValueError(f'No peaklist values in directory {dir}.')
 
         return peak_values
@@ -810,12 +810,24 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
         species_3.append(i[2])
         species_4.append(i[3])
 
+    print([float(x) for x in species_1])
+    print([float(x) for x in species_2])
+    print([float(x) for x in species_3])
+    print([float(x) for x in species_4])
+
     print(species_1[0] * 100)
 
     plt.figure(figsize=(15, 5))
 
     plt.subplot(1, 3, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], fracs)
+    plt.plot(
+        [x / 0.0006 * 100 for x in base_vol],
+        fracs,
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Speciation Ratio')
@@ -823,7 +835,14 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     plt.title('Sodium Citrate Percentage and Trisodium Citrate Speciation')
 
     plt.subplot(1, 3, 2)
-    plt.plot(phs, fracs)
+    plt.plot(
+        phs,
+        fracs,
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Speciation Ratio')
@@ -831,9 +850,15 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     plt.title('pH and Trisodium Citrate Speciation')
 
     plt.subplot(1, 3, 3)
-    plt.plot(avg_ppm, fracs)
+    plt.plot(
+        avg_ppm,
+        fracs,
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
     plt.gca().invert_xaxis()
-    balance = '0.1'   # In quotations because reasons?
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Speciation Ratio')
@@ -847,14 +872,7 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     chemicalshift_fig = plt.gca()
 
     print([x / 0.0006 * 100 for x in base_vol])
-    return (
-        avg_ppm,
-        chemicalshift_fig,
-        species_1,
-        species_2,
-        species_3,
-        species_4,
-    )
+    return avg_ppm, chemicalshift_fig, fracs
 
 
 @app.cell
@@ -863,7 +881,6 @@ def _(avg_ppm, base_vol, phs, plt):
 
     plt.subplot(1, 2, 1)
     plt.plot([x / 0.0006 * 100 for x in base_vol], avg_ppm)
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Average PPM')
     plt.xlabel('Sodium Citrate Percentage')
@@ -871,7 +888,6 @@ def _(avg_ppm, base_vol, phs, plt):
 
     plt.subplot(1, 2, 2)
     plt.plot(phs, avg_ppm)
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
     plt.ylabel('Average PPM')
     plt.xlabel('pH')
@@ -884,17 +900,7 @@ def _(avg_ppm, base_vol, phs, plt):
 
 
 @app.cell
-def _(
-    base_vol,
-    citrate_ppms,
-    np,
-    phs,
-    plt,
-    species_1,
-    species_2,
-    species_3,
-    species_4,
-):
+def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     citrate_couplings = [
         [
             x[0] - x[1],
@@ -945,41 +951,16 @@ def _(
     plt.subplot(1, 3, 3)
     plt.plot(
         citrate_couplings,
-        species_1,
-        label='H3A',
+        fracs,
         marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.plot(
-        citrate_couplings,
-        species_2,
-        label='H2A-',
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.plot(
-        citrate_couplings,
-        species_3,
-        label='HA2-',
-        marker='^',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.plot(
-        citrate_couplings,
-        species_4,
-        label='A3-',
-        marker='d',
         linestyle='-',
         linewidth=2,
     )
     plt.title('J Coupling vs. Citrate Species', fontsize=14)
     plt.xlabel('J Coupling', fontsize=12)
-    plt.ylabel('Species Response', fontsize=12)
+    plt.ylabel('Speciation Ratio', fontsize=12)
     plt.gca().invert_xaxis()
-    plt.legend()
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
     plt.grid(True)
 
     # Adjust layout to prevent overlap
@@ -1000,13 +981,10 @@ def _(
     experiment_number,
     experiments,
     extract_peak_values,
+    fracs,
     np,
     phs,
     plt,
-    species_1,
-    species_2,
-    species_3,
-    species_4,
 ):
     citrate_peaks = [
         extract_peak_values(
@@ -1080,41 +1058,17 @@ def _(
     plt.subplot(1, 3, 3)
     plt.plot(
         citrate_differences,
-        species_1,
-        label='H3A',
+        fracs,
         marker='o',
         linestyle='-',
         linewidth=2,
     )
-    plt.plot(
-        citrate_differences,
-        species_2,
-        label='H2A-',
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.plot(
-        citrate_differences,
-        species_3,
-        label='HA2-',
-        marker='^',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.plot(
-        citrate_differences,
-        species_4,
-        label='A3-',
-        marker='d',
-        linestyle='-',
-        linewidth=2,
-    )
+
     plt.title('Peak Differences vs. Citrate Species', fontsize=14)
     plt.xlabel('Peak Differences', fontsize=12)
-    plt.ylabel('Species Response', fontsize=12)
+    plt.ylabel('Speciation Ratio', fontsize=12)
     plt.gca().invert_xaxis()
-    plt.legend()
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
     plt.grid(True)
 
     # Adjust layout to prevent overlap
@@ -1244,10 +1198,7 @@ def _(
 
     # Example usage
     fidfig = plot_fid_experiments(experiments, experiment_number, data_dir)
-
-    fiddata = read_fid(experiments[0], experiment_number, data_dir)
-
-    return fiddata, fidfig
+    return fidfig, read_fid
 
 
 @app.cell
@@ -1259,15 +1210,46 @@ def _(fiddata, plt):
 
 
 @app.cell
-def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
+def _(
+    data_dir,
+    experiment_number,
+    experiments,
+    np,
+    plt,
+    read_bruker,
+    read_fid,
+):
     brukerdata = read_bruker(
         data_dir=data_dir,
-        experiment=experiments[0],
+        experiment=experiments[10],
         experiment_number=experiment_number,
     )
 
+    fiddata = read_fid(experiments[10], experiment_number, data_dir)#[60:]
+
     print(len(fiddata))
     print(len(brukerdata))
+
+    # fiddata = fiddata[len(fiddata) - len(brukerdata):]
+
+    def _(fiddata, brukerdata):
+        error = 0
+        diff = len(fiddata) - len(brukerdata)
+        if diff > 0:
+            brukerdata = np.pad(brukerdata, (0, diff), 'constant', constant_values=0)
+        elif diff < 0:
+            fiddata = np.pad(fiddata, (0, diff), 'constant', constant_values=0)
+
+        for fidpoint, brukerpoint in zip(fiddata, brukerdata):
+            diff = fidpoint - brukerpoint
+            error += diff**2
+            # print(diff)
+
+        print(f'Error: {error}')
+
+    _(fiddata, brukerdata)
+
+    print(fiddata[0], brukerdata[0])
 
     plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
@@ -1276,7 +1258,7 @@ def _(data_dir, experiment_number, experiments, fiddata, plt, read_bruker):
     plt.subplot(1, 2, 2)
     plt.title('NMR glue')
     plt.plot(brukerdata)
-    return
+    return (fiddata,)
 
 
 @app.cell(hide_code=True)
@@ -1400,5 +1382,5 @@ def _():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
