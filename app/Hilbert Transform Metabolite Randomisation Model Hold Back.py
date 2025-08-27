@@ -461,13 +461,20 @@ def _(
 
 @app.cell
 def _(
+    baseline_distortion,
     dataset_filepath,
+    downsample,
     get_spectrum_batch,
     h5py,
     os,
+    partial,
     pickle,
+    preprocess_spectra,
     processed_cache_key,
     processed_data_dir,
+    ranged,
+    reverse,
+    substanceDict,
 ):
     """Create a streaming dataset class for PyTorch compatibility"""
 
@@ -475,29 +482,23 @@ def _(
         """
         Streaming dataset that loads NMR data from HDF5 on-demand
         """
-        def __init__(self, filepath, preprocess_func=None, preproessed_enabled=False):
+        def __init__(self, filepath, preprocessed_enabled=False):
             self.filepath = filepath
-            self.preprocess_func = preprocess_func
-            self.preprocessed_enabled = preproessed_enabled
+            self.preprocessed_enabled = preprocessed_enabled
             self.cache_dir = f'{processed_data_dir}/{processed_cache_key}'
             os.makedirs(self.cache_dir, exist_ok=True)
             with h5py.File(filepath, 'r') as f:
                 self.length = f['intensities'].shape[0]
                 self.positions = f['positions'][:]
 
-        def _cache_path(self, idx):
+        def _cache_path(self, idx, preprocess_scale):
             # You may want to include preprocessing parameters in the key for robustness
-            return os.path.join(self.cache_dir, f"spectrum_{idx}.pkl")
+            return os.path.join(self.cache_dir, f"{preprocess_scale}-spectrum_{idx}.pkl")
 
         def __len__(self):
             return self.length
 
-        def updatePreprocess(self, preprocess_func, preprocess_enabled=True):
-            """Update preprocessing function"""
-            self.preprocess_func = preprocess_func
-            self.preprocessed_enabled = preprocess_enabled
-
-        def __getitem__(self, idx):
+        def __getitem__(self, idx, preprocess_scale=None):
             if isinstance(idx, slice):
                 # Handle slicing
                 indices = range(*idx.indices(self.length))
@@ -506,8 +507,18 @@ def _(
 
             out_batch = []
             for i in indices:
-                cache_path = self._cache_path(i)
-                if self.preprocess_func and self.preprocessed_enabled:
+                cache_path = self._cache_path(i, preprocess_scale)
+                if self.preprocessed_enabled:
+                    preprocess_func = preprocess_func = partial(
+                        preprocess_spectra,
+                        substanceDict=substanceDict,
+                        baseline_distortion=baseline_distortion,
+                        ranged=ranged,
+                        downsample=downsample,
+                        reverse=reverse,
+                        scale=preprocess_scale
+                    )
+
                     if os.path.exists(cache_path):
                         with open(cache_path, "rb") as f:
                             spectrum = pickle.load(f)
@@ -518,7 +529,7 @@ def _(
                             'positions': self.positions,
                             'scales': batch['scales'][0],
                         }
-                        spectrum = self.preprocess_func(spectrum)
+                        spectrum = preprocess_func(spectrum)
                         with open(cache_path, "wb") as f:
                             pickle.dump(spectrum, f)
                 else:
@@ -782,10 +793,9 @@ def _(np):
 
         # Select only certain chemical shift ranges
         if ranged:
-            ranges = []
+            ranges = [[-0.1, 0.1]]
             # Handle different types of scales parameter
             if isinstance(scales, dict):
-                ranges.append([-0.1, 0.1])
                 # Training data: scales is a dictionary of substance concentrations
                 for scale in scales:
                     for substance in substanceDict:
@@ -932,16 +942,7 @@ def _(np):
 
 
 @app.cell
-def _(
-    baseline_distortion,
-    downsample,
-    partial,
-    preprocess_peaks,
-    preprocess_ratio,
-    ranged,
-    reverse,
-    substanceDict,
-):
+def _(preprocess_peaks, preprocess_ratio, ranged):
     """Parallel preprocessing pipeline for spectra and references"""
 
     def preprocess_spectra(
@@ -951,6 +952,7 @@ def _(
         ranged=ranged,
         baseline_distortion=False,
         downsample=None,
+        scale=None,
     ):
         """
         Complete preprocessing pipeline for a single spectrum
@@ -958,10 +960,16 @@ def _(
         Returns:
             dict: Preprocessed spectrum with intensities, positions, scales, components, ratios
         """
+
+        if scale is not None:
+            scales = scale
+        else:
+            scales = spectra['scales']
+
         new_positions, new_intensities = preprocess_peaks(
             intensities=spectra['intensities'],
             positions=spectra['positions'],
-            scales=spectra['scales'],
+            scales=scales,
             ranged=ranged,
             substanceDict=substanceDict,
             baseline_distortion=baseline_distortion,
@@ -978,17 +986,8 @@ def _(
             'ratios': ratios,
         }
 
-    preprocess_func = partial(
-        preprocess_spectra,
-        substanceDict=substanceDict,
-        baseline_distortion=baseline_distortion,
-        ranged=ranged,
-        downsample=downsample,
-        reverse=reverse,
-    )
-
     """Preprocess function for streaming dataset"""
-    return (preprocess_func,)
+    return (preprocess_spectra,)
 
 
 @app.cell
@@ -997,7 +996,6 @@ def _(
     baseline_distortion,
     dataset_filepath,
     downsample,
-    preprocess_func,
     preprocess_peaks,
     ranged,
     reference_spectra,
@@ -1021,7 +1019,7 @@ def _(
     #     for spectrum in spectra
     # ]
 
-    preprocessed_spectra = StreamingNMRDataset(dataset_filepath, preprocess_func=preprocess_func, preproessed_enabled=True)
+    preprocessed_spectra = StreamingNMRDataset(dataset_filepath, preprocessed_enabled=True)
 
     # Process reference spectra
     print("Preprocessing reference spectra...")
@@ -1119,17 +1117,18 @@ def _(graph_count, plt, preprocessed_spectra, reverse):
 
         for graphcounter2 in range(1, graph_count**2 + 1):
             plt.subplot(graph_count, graph_count, graphcounter2)
+            complex_data = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['intensities']
 
             if reverse:
                 # Time domain: plot magnitude of complex data
-                complex_data = preprocessed_spectra[graphcounter2]['intensities']
+                # complex_data = preprocessed_spectra[graphcounter2, 'SP:3368']['intensities']
                 plt.plot(complex_data)
                 plt.title(f'Sample {graphcounter2} (Time Domain)')
                 plt.xlabel('Time Points')
                 plt.ylabel('Magnitude')
             else:
                 # Frequency domain: normal plotting
-                plt.plot(preprocessed_spectra[graphcounter2]['positions'], preprocessed_spectra[graphcounter2]['intensities'])
+                plt.plot(preprocessed_spectra[graphcounter2]['positions'], complex_data)
                 plt.title(f'Sample {graphcounter2} (Frequency Domain)')
                 plt.xlabel('Data Points')
                 plt.ylabel('Intensity')
@@ -1285,24 +1284,50 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
             'test_dataset': test_dataset,
         }, data_length
 
-    return (load_datasets_from_files,)
+    return
 
 
 @app.cell
-def _(error, preprocessed_reference_spectra, preprocessed_spectra, tqdm):
-    """Length tester"""
+def _(
+    error,
+    preprocessed_reference_spectra,
+    preprocessed_spectra,
+    reference_spectra,
+):
+    """Length tester. Ensures the length of every input will always be identical. Also just so happens to cache all preprocessing"""
+
+    import multiprocessing
 
     lengths = set()
     for spectrum in preprocessed_reference_spectra:
         lengths.add(len(preprocessed_reference_spectra[spectrum][0]))
 
-    # Only print unique lengths
     print(sorted(lengths))
 
-    for spectrum in tqdm(preprocessed_spectra):
-        lengths.add(len(spectrum['intensities']))
-        if len(lengths) > 1:
-            raise error('Not all spectra are the same size')
+    print((len(reference_spectra)+1)*len(preprocessed_spectra))
+
+    def check_spectrum_length(args):
+        i, reference_spectra, preprocessed_spectra = args
+        local_lengths = set()
+        for substance in reference_spectra:
+            local_lengths.add(len(preprocessed_spectra.__getitem__(i, substance)['intensities']))
+        local_lengths.add(len(preprocessed_spectra.__getitem__(i, None)['intensities']))
+        return local_lengths
+
+    def _():
+        with multiprocessing.Pool() as pool:
+            results = pool.map(
+                check_spectrum_length,
+                [(i, reference_spectra, preprocessed_spectra) for i in range(len(preprocessed_spectra))]
+            )
+        # Flatten and check for uniqueness
+        all_lengths = set()
+        for result in results:
+            all_lengths.update(result)
+            if len(all_lengths) > 1:
+                raise error('Not all spectra are the same size')
+
+    _()
 
     print(sorted(lengths))
 
@@ -1310,22 +1335,9 @@ def _(error, preprocessed_reference_spectra, preprocessed_spectra, tqdm):
     return
 
 
-@app.cell
-def _(
-    h5py,
-    held_back_metabolites,
-    load_datasets_from_files,
-    np,
-    os,
-    preprocessed_reference_spectra,
-    preprocessed_spectra,
-    processed_cache_key,
-    processed_data_dir,
-    random,
-    substanceDict,
-    tqdm,
-):
-    """Main training data preparation with smart caching based on preprocessing"""
+app._unparsable_cell(
+    r"""
+    \"\"\"Main training data preparation with smart caching based on preprocessing\"\"\"
 
     def get_training_data_mlp(
         spectra,
@@ -1336,17 +1348,17 @@ def _(
         val_ratio=0.15,
         test_ratio=0.15,
     ):
-        """
+        \"\"\"
         Create training datasets with hold-back validation for metabolite detection
         Streams data directly to HDF5 to avoid memory issues
-        """
+        \"\"\"
         # Check for existing cached datasets based on processed data
         existing_datasets = load_datasets_from_files(processed_cache_key)
 
         if existing_datasets is not None:
             return existing_datasets
 
-        print("Creating new processed datasets with hold-back validation...")
+        print(\"Creating new processed datasets with hold-back validation...\")
 
         # Get spectrum IDs for held-back metabolites
         held_back_key_test = substanceDict[held_back_metabolites[0]][0]
@@ -1360,7 +1372,7 @@ def _(
         val_with_holdback = []
         test_with_holdback = []
 
-        for i in tqdm(range(len(spectra)), desc="Processing Spectra"):
+        for i in tqdm(range(len(spectra)), desc=\"Processing Spectra\"):
             spectrum = spectra[i]
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(i)
@@ -1415,7 +1427,7 @@ def _(
         os.makedirs(processed_data_dir, exist_ok=True)
         file_path = f'{processed_data_dir}/{processed_cache_key}_datasets.h5'
 
-        print(f"Streaming processed datasets to {file_path}...")
+        print(f\"Streaming processed datasets to {file_path}...\")
 
         with h5py.File(file_path, 'w') as f:
             # Create datasets with known sizes and consistent dtype
@@ -1468,8 +1480,8 @@ def _(
             train_idx = 0
             for i, spec_idx in tqdm(enumerate(train_spectra), total=len(train_spectra)):
                 if i in train_indices:
-                    spectrum = spectra[spec_idx]  # Load one spectrum at a time
                     for substance in reference_spectra:
+                        spectrum = spectra.__getitem__(spec_idx, substance)  # Load one spectrum at a time
                         if substance not in [held_back_key_test, held_back_key_validation]:
                             # Ensure consistent data types
                             spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
@@ -1492,7 +1504,7 @@ def _(
             # Stream validation data (negative samples)
             val_idx = 0
             for i in tqdm(val_indices, total=len(val_indices)):
-                spectrum = spectra[train_spectra[i]]
+                spectrum = spectra.__getitem__(train_spectra[i], held_back_key_validation[1])
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
 
@@ -1505,7 +1517,7 @@ def _(
 
             # Stream validation data (positive samples with held-back metabolite)
             for spec_idx in tqdm(val_with_holdback, total=len(val_with_holdback)):
-                spectrum = spectra[spec_idx]
+                spectrum = spectra.__getitem__(spec_idx, held_back_key_validation[1])
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
 
@@ -1519,7 +1531,7 @@ def _(
             # Stream test data (positive samples with held-back metabolite)
             test_idx = 0
             for spec_idx in tqdm(test_with_holdback, total=len(test_with_holdback)):
-                spectrum = spectra[spec_idx]
+                spectrum = spectra.__getitem__(spec_idx, held_back_key_test[1])
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_test][1], dtype=np.complex64)
 
@@ -1537,9 +1549,10 @@ def _(
             f.attrs['test_size'] = test_count
 
         file_size_mb = os.path.getsize(file_path) / (1024**2)
-        print(f"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB")
+        print(f\"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB\")
 
-        # Load and return streamable datasets
+        # Load and (cell-26
+    )return streamable datasets
         return load_datasets_from_files(processed_cache_key)
 
 
@@ -1551,7 +1564,9 @@ def _(
         processed_cache_key=processed_cache_key,
     )
 
-    return data_length, training_data
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)
