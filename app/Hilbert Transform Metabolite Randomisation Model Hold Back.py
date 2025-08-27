@@ -174,7 +174,7 @@ def _():
     from morgan.createTrainingData import createTrainingData
     import morgan
     import numpy as np # type: ignore
-    import tqdm # type: ignore
+    from tqdm import tqdm # type: ignore
     import itertools
     import random
     import pickle
@@ -183,7 +183,17 @@ def _():
     import h5py # type: ignore
     import hashlib
 
-    return createTrainingData, h5py, hashlib, itertools, np, os, random, tqdm
+    return (
+        createTrainingData,
+        h5py,
+        hashlib,
+        itertools,
+        np,
+        os,
+        pickle,
+        random,
+        tqdm,
+    )
 
 
 @app.cell
@@ -302,7 +312,7 @@ def _(createTrainingData, h5py, itertools, np, os, random, raw_data_dir, tqdm):
 
             print(f"Streaming {len(combinations)} combinations with {count} samples each...")
 
-            for combo_idx, combination in enumerate(tqdm.tqdm(combinations, desc="Generating combinations")):
+            for combo_idx, combination in enumerate(tqdm(combinations, desc="Generating combinations")):
                 # Extract spectrum IDs for this combination
                 spectrum_ids = [combination[substance][0] for substance in combination]
 
@@ -416,14 +426,19 @@ def _(
     combo_number,
     count,
     create_streaming_dataset,
+    downsample,
+    generate_processed_cache_key,
     generate_raw_cache_key,
     load_streaming_dataset,
+    reverse,
     substanceDict,
 ):
     """Updated main data generation pipeline using streaming"""
 
     # Generate cache key for raw data
     raw_cache_key = generate_raw_cache_key(substanceDict, combo_number, count)
+    # Generate cache key that includes preprocessing parameters
+    processed_cache_key = generate_processed_cache_key(raw_cache_key, downsample, reverse)
 
     dataset_filepath = create_streaming_dataset(substanceDict, combo_number, count, raw_cache_key) # Creates the dataset
     dataset_metadata = load_streaming_dataset(dataset_filepath) # Loads the dataset metadata
@@ -436,11 +451,24 @@ def _(
     print(f'Held-back metabolites: {held_back_metabolites}')
     print(f'Dataset file: {dataset_filepath}')
 
-    return combinations, dataset_filepath, held_back_metabolites, raw_cache_key
+    return (
+        combinations,
+        dataset_filepath,
+        held_back_metabolites,
+        processed_cache_key,
+    )
 
 
 @app.cell
-def _(dataset_filepath, get_spectrum_batch, h5py):
+def _(
+    dataset_filepath,
+    get_spectrum_batch,
+    h5py,
+    os,
+    pickle,
+    processed_cache_key,
+    processed_data_dir,
+):
     """Create a streaming dataset class for PyTorch compatibility"""
 
     class StreamingNMRDataset:
@@ -451,11 +479,15 @@ def _(dataset_filepath, get_spectrum_batch, h5py):
             self.filepath = filepath
             self.preprocess_func = preprocess_func
             self.preprocessed_enabled = preproessed_enabled
-
-            # Load metadata
+            self.cache_dir = f'{processed_data_dir}/{processed_cache_key}'
+            os.makedirs(self.cache_dir, exist_ok=True)
             with h5py.File(filepath, 'r') as f:
                 self.length = f['intensities'].shape[0]
                 self.positions = f['positions'][:]
+
+        def _cache_path(self, idx):
+            # You may want to include preprocessing parameters in the key for robustness
+            return os.path.join(self.cache_dir, f"spectrum_{idx}.pkl")
 
         def __len__(self):
             return self.length
@@ -474,20 +506,33 @@ def _(dataset_filepath, get_spectrum_batch, h5py):
 
             out_batch = []
             for i in indices:
-                # Handle single index
-                batch = get_spectrum_batch(self.filepath, i, 1)
-                spectrum = {
-                    'intensities': batch['intensities'][0],
-                    'positions': self.positions,
-                    'scales': batch['scales'][0],
-                }
+                cache_path = self._cache_path(i)
                 if self.preprocess_func and self.preprocessed_enabled:
-                    spectrum = self.preprocess_func(spectrum)
+                    if os.path.exists(cache_path):
+                        with open(cache_path, "rb") as f:
+                            spectrum = pickle.load(f)
+                    else:
+                        batch = self.get_batch(i, 1)
+                        spectrum = {
+                            'intensities': batch['intensities'][0],
+                            'positions': self.positions,
+                            'scales': batch['scales'][0],
+                        }
+                        spectrum = self.preprocess_func(spectrum)
+                        with open(cache_path, "wb") as f:
+                            pickle.dump(spectrum, f)
+                else:
+                    batch = self.get_batch(i, 1)
+                    spectrum = {
+                        'intensities': batch['intensities'][0],
+                        'positions': self.positions,
+                        'scales': batch['scales'][0],
+                    }
                 out_batch.append(spectrum)
-            
+
             if len(out_batch) == 1:
                 return out_batch[0]
-            
+
             return out_batch
 
         def get_batch(self, start_idx, batch_size):
@@ -776,8 +821,8 @@ def _(np):
                 next_power <<= 1  # Equivalent to next_power *= 2
 
             if downsample is not None:
-                if next_power < np.log2(downsample):
-                    next_power = np.log2(downsample)
+                if next_power < downsample:
+                    next_power = downsample
 
             # Calculate how much padding we need
             pad_needed = next_power - length
@@ -1158,7 +1203,7 @@ def _():
 
 
 @app.cell
-def _(Dataset, h5py, torch):
+def _(Dataset, dataset_name, h5py, torch):
     """Streamable dataset class for memory-efficient data loading"""
 
     class StreamableNMRDataset(Dataset):
@@ -1184,11 +1229,11 @@ def _(Dataset, h5py, torch):
             # Load individual samples on demand to minimize memory usage
             with h5py.File(self.file_path, 'r') as f:
                 data = torch.tensor(
-                    f[f'{self.dataset_name}_data'][idx], 
+                    f[f'{dataset_name}_data'][idx], 
                     dtype=torch.complex64
                 )
                 labels = torch.tensor(
-                    f[f'{self.dataset_name}_labels'][idx], 
+                    f[f'{dataset_name}_labels'][idx], 
                     dtype=torch.float32
                 )
             return data, labels
@@ -1239,9 +1284,29 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
 
 
 @app.cell
+def _(error, preprocessed_reference_spectra, preprocessed_spectra, tqdm):
+    """Length tester"""
+
+    lengths = set()
+    for spectrum in preprocessed_reference_spectra:
+        lengths.add(len(preprocessed_reference_spectra[spectrum][0]))
+
+    # Only print unique lengths
+    print(sorted(lengths))
+
+    for spectrum in tqdm(preprocessed_spectra):
+        lengths.add(len(spectrum['intensities']))
+        if len(lengths) > 1:
+            raise error('Not all spectra are the same size')
+
+    print(sorted(lengths))
+
+
+    return
+
+
+@app.cell
 def _(
-    downsample,
-    generate_processed_cache_key,
     h5py,
     held_back_metabolites,
     load_datasets_from_files,
@@ -1249,10 +1314,9 @@ def _(
     os,
     preprocessed_reference_spectra,
     preprocessed_spectra,
+    processed_cache_key,
     processed_data_dir,
     random,
-    raw_cache_key,
-    reverse,
     substanceDict,
     tqdm,
 ):
@@ -1291,7 +1355,7 @@ def _(
         val_with_holdback = []
         test_with_holdback = []
 
-        for i in tqdm.tqdm(range(len(spectra)), desc="Processing Spectra"):
+        for i in tqdm(range(len(spectra)), desc="Processing Spectra"):
             spectrum = spectra[i]
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(i)
@@ -1397,7 +1461,7 @@ def _(
 
             # Stream training data directly to HDF5
             train_idx = 0
-            for i, spec_idx in tqdm.tqdm(enumerate(train_spectra)):
+            for i, spec_idx in tqdm(enumerate(train_spectra)):
                 if i in train_indices:
                     spectrum = spectra[spec_idx]  # Load one spectrum at a time
                     for substance in reference_spectra:
@@ -1422,7 +1486,7 @@ def _(
 
             # Stream validation data (negative samples)
             val_idx = 0
-            for i in tqdm.tqdm(val_indices):
+            for i in tqdm(val_indices):
                 spectrum = spectra[train_spectra[i]]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1435,7 +1499,7 @@ def _(
                 val_idx += 1
 
             # Stream validation data (positive samples with held-back metabolite)
-            for spec_idx in tqdm.tqdm(val_with_holdback):
+            for spec_idx in tqdm(val_with_holdback):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1449,7 +1513,7 @@ def _(
 
             # Stream test data (positive samples with held-back metabolite)
             test_idx = 0
-            for spec_idx in tqdm.tqdm(test_with_holdback):
+            for spec_idx in tqdm(test_with_holdback):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_test][1], dtype=np.complex64)
@@ -1473,8 +1537,6 @@ def _(
         # Load and return streamable datasets
         return load_datasets_from_files(processed_cache_key)
 
-    # Generate cache key that includes preprocessing parameters
-    processed_cache_key = generate_processed_cache_key(raw_cache_key, downsample, reverse)
 
     # Execute training data preparation with preprocessing-aware caching
     training_data, data_length = get_training_data_mlp(
@@ -1484,7 +1546,7 @@ def _(
         processed_cache_key=processed_cache_key,
     )
 
-    return data_length, processed_cache_key, training_data
+    return data_length, training_data
 
 
 @app.cell(hide_code=True)
@@ -2156,7 +2218,7 @@ def _(
             model.train()
 
             # Training loop with DataLoader
-            with tqdm.tqdm(train_loader, unit='batch', mininterval=0, disable=True) as bar:
+            with tqdm(train_loader, unit='batch', mininterval=0, disable=True) as bar:
                 bar.set_description(f'Epoch {epoch}')
                 for data_batch, labels_batch in bar:
                     # Move batch to GPU only when needed
@@ -2393,7 +2455,7 @@ def _(
 
     # Run hyperparameter optimization if more trials are needed
     if trials - completed_trials > 0:
-        with tqdm.tqdm(
+        with tqdm(
             total=trials - completed_trials, desc='Optimizing'
         ) as pbar:
 
