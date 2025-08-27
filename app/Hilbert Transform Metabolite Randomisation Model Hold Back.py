@@ -725,7 +725,7 @@ def _(np):
         Returns:
             tuple: (positions, intensities)
         """
-    
+
         # Select only certain chemical shift ranges
         if ranged:
             ranges = []
@@ -1245,6 +1245,7 @@ def _(
     raw_cache_key,
     reverse,
     substanceDict,
+    tqdm,
 ):
     """Main training data preparation with smart caching based on preprocessing"""
 
@@ -1281,7 +1282,7 @@ def _(
         val_with_holdback = []
         test_with_holdback = []
 
-        for i in range(len(spectra)):
+        for i in tqdm.tqdm(range(len(spectra)), desc="Processing Spectra"):
             spectrum = spectra[i]
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(i)
@@ -1387,7 +1388,7 @@ def _(
 
             # Stream training data directly to HDF5
             train_idx = 0
-            for i, spec_idx in enumerate(train_spectra):
+            for i, spec_idx in tqdm.tqdm(enumerate(train_spectra)):
                 if i in train_indices:
                     spectrum = spectra[spec_idx]  # Load one spectrum at a time
                     for substance in reference_spectra:
@@ -1412,7 +1413,7 @@ def _(
 
             # Stream validation data (negative samples)
             val_idx = 0
-            for i in val_indices:
+            for i in tqdm.tqdm(val_indices):
                 spectrum = spectra[train_spectra[i]]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1425,7 +1426,7 @@ def _(
                 val_idx += 1
 
             # Stream validation data (positive samples with held-back metabolite)
-            for spec_idx in val_with_holdback:
+            for spec_idx in tqdm.tqdm(val_with_holdback):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1439,7 +1440,7 @@ def _(
 
             # Stream test data (positive samples with held-back metabolite)
             test_idx = 0
-            for spec_idx in test_with_holdback:
+            for spec_idx in tqdm.tqdm(test_with_holdback):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_test][1], dtype=np.complex64)
