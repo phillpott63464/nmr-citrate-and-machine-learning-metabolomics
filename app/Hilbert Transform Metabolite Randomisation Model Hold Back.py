@@ -1265,11 +1265,16 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
         test_dataset = StreamableNMRDataset(file_path, 'test')
 
         # Load metadata
-        with h5py.File(file_path, 'r') as f:
-            data_length = f.attrs['data_length']
-            train_size = f.attrs['train_size']
-            val_size = f.attrs['val_size'] 
-            test_size = f.attrs['test_size']
+        try:
+            with h5py.File(file_path, 'r') as f:
+                data_length = f.attrs['data_length']
+                train_size = f.attrs['train_size']
+                val_size = f.attrs['val_size'] 
+                test_size = f.attrs['test_size']
+        except:
+            print('Dataset corrupted, removing')
+            os.remove(file_path)
+            return None
 
         print(f"Loaded processed datasets - Train: {train_size}, Val: {val_size}, Test: {test_size}")
         print(f"Feature vector length: {data_length}")
@@ -1461,7 +1466,7 @@ def _(
 
             # Stream training data directly to HDF5
             train_idx = 0
-            for i, spec_idx in tqdm(enumerate(train_spectra)):
+            for i, spec_idx in tqdm(enumerate(train_spectra), total=len(train_spectra)):
                 if i in train_indices:
                     spectrum = spectra[spec_idx]  # Load one spectrum at a time
                     for substance in reference_spectra:
@@ -1486,7 +1491,7 @@ def _(
 
             # Stream validation data (negative samples)
             val_idx = 0
-            for i in tqdm(val_indices):
+            for i in tqdm(val_indices, total=len(val_indices)):
                 spectrum = spectra[train_spectra[i]]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1499,7 +1504,7 @@ def _(
                 val_idx += 1
 
             # Stream validation data (positive samples with held-back metabolite)
-            for spec_idx in tqdm(val_with_holdback):
+            for spec_idx in tqdm(val_with_holdback, total=len(val_with_holdback)):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
@@ -1513,7 +1518,7 @@ def _(
 
             # Stream test data (positive samples with held-back metabolite)
             test_idx = 0
-            for spec_idx in tqdm(test_with_holdback):
+            for spec_idx in tqdm(test_with_holdback, total=len(test_with_holdback)):
                 spectrum = spectra[spec_idx]
                 spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
                 reference_intensities = np.asarray(reference_spectra[held_back_key_test][1], dtype=np.complex64)
