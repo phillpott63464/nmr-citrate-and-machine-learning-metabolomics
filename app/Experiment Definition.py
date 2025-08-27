@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.17'
-app = marimo.App(width='medium')
+__generated_with = "0.14.17"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -9,17 +9,14 @@ def _():
     import marimo as mo
     from phfork import AcidAq, IonAq, System
     import phfork
-    from chempy import electrolytes
     import numpy as np
 
-    return electrolytes, mo, np, phfork
+    return mo, np, phfork
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""# Experimental Method for Citric Acid Speciation Chemical Shift"""
-    )
+    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
     return
 
 
@@ -40,7 +37,9 @@ def _(mo):
 
 
 @app.cell
-def _(electrolytes):
+def _():
+    from chempy import electrolytes
+
     # Graph constants
     EPS_R = 78.3   # relative permittivity of water at 25°C/298K
     T = 298  # K
@@ -60,7 +59,6 @@ def _(electrolytes):
     dss_molecular_weight = 224.36   # g/mol
     dss_molarity = 0.001
     rounding = 3
-    balance = '0.1'   # In quotations because reasons?
 
     options = [
         0,
@@ -516,6 +514,7 @@ def _(
     better_sample_vol,
     calcium_conc,
     magnesium_conc,
+    metal_experiment_output,
     metal_stock_output,
     mo,
     stock_molarity,
@@ -545,7 +544,7 @@ def _(
 
     ### Experiment preparation:
 
-    Found in metal_experiments.csv
+    {metal_experiment_output}
     """
     )
     return
@@ -553,7 +552,8 @@ def _(
 
 @app.cell
 def _():
-    better_sample_vol = 0.0015   # l # Use a bigger volume to give leeway
+    # Metal experiment constants
+    better_sample_vol = 0.0015   # l, Use a bigger volume to give leeway, 1.5mL is the maximum the eppendorf can hold
     citric_sample_vol = better_sample_vol * 0.1   # L, 1/10th
     tris_vol = better_sample_vol * 0.5   # L, 1/2
 
@@ -564,20 +564,29 @@ def _():
     magnesium_chloride_mass = 95.21   # g/mol
     calcium_chloride_mass = 110.98   # g/mol
     tris_mass = 121.14   # g/mol
+    hcl_mass = 36.46 # g/mol
+    tris_chloride_mass = 157.59 # g/mol
 
     metal_stock_volume = 15 / 1000   # mL to L
     tris_stock_volume = 50 / 1000   # mL to L
 
     number_experiments_per_metal = 12   # Count (not including 0)
+
+    d2o_percentage = 0.05 # %
+    d2o_density = 1.1044 # g/ml
     return (
         better_sample_vol,
         calcium_chloride_mass,
         calcium_conc,
         citric_sample_vol,
+        d2o_density,
+        d2o_percentage,
+        hcl_mass,
         magnesium_chloride_mass,
         magnesium_conc,
         metal_stock_volume,
         number_experiments_per_metal,
+        tris_chloride_mass,
         tris_conc,
         tris_mass,
         tris_stock_volume,
@@ -594,25 +603,34 @@ def _(
     tris_vol,
 ):
     metal_experiments = []
+    metal_eppendorfs_csv = [] # Blank csv to print and write eppendorf weights into
 
     # Intialise experiments
     for y in range(0, 2):
         if y == 0:
-            salt_stock_name = 'magnesium salt stock µL'
+            salt_stock_name = 'magnesium salt stock / µL'
         elif y == 1:
-            salt_stock_name = 'calcium salt stock µL'
+            salt_stock_name = 'calcium salt stock / µL'
 
         for i in range(0, number_experiments_per_metal):
             metal_experiments.append(
                 {
-                    'citric acid stock µL': citric_sample_vol,
-                    'tris buffer stock µL': round(tris_vol, 6),
-                    salt_stock_name: round(
+                    'citric acid stock / µL': citric_sample_vol,
+                    'tris buffer stock / µL': round(tris_vol, 6),
+                    salt_stock_name:
                         citric_sample_vol
                         / (number_experiments_per_metal - 1)
                         * i,
-                        6,
-                    ),
+                }
+            )
+
+            metal_eppendorfs_csv.append(
+                {
+                    'eppendorf base weight / g': None,
+                    'post citric acid stock weight / g': None,
+                    'post salt stock weight / g': None,
+                    'post tris buffer weight / g': None,
+                    'post milliq weight / g': None,
                 }
             )
 
@@ -623,20 +641,21 @@ def _(
             temp += y[1]
         x['milliq µL'] = round(better_sample_vol - temp, 6)
 
+    # Round everything to µL
+    for x in metal_experiments:
+        for key, value in x.items():
+            x[key] = round(value * 1000 * 1000)
+
     # Double check volumes
     for x in metal_experiments:
         temp = 0
         for y in x.items():
             temp += y[1]
-        if temp != better_sample_vol:
+        if temp != better_sample_vol*1000*1000:
             print('Issue')
 
-    # Round everything to µL
-    for x in metal_experiments:
-        for key, value in x.items():
-            x[key] = f'{round(value * 1000 * 1000)}'
-
     metal_experiments = pd.DataFrame(metal_experiments)
+    metal_eppendorfs_csv = pd.DataFrame(metal_eppendorfs_csv)
 
     # Put milliq at the end for simplicity's sake
     columns = [
@@ -644,20 +663,24 @@ def _(
     ] + ['milliq µL']
     metal_experiments = metal_experiments[columns]
 
-    metal_experiments.index = range(25, 25 + len(metal_experiments))
-
-    metal_experiments.to_csv('metal_experiments.csv', index=True)
-
-    return
+    metal_experiments.index = range(25, 25 + len(metal_experiments)) # Start index after the number of experiments actually done
+    metal_eppendorfs_csv.index = range(25, 25 + len(metal_eppendorfs_csv))
+    return metal_eppendorfs_csv, metal_experiments
 
 
 @app.cell
 def _(
     calcium_chloride_mass,
     calcium_conc,
+    d2o_density,
+    d2o_percentage,
+    hcl_mass,
     magnesium_chloride_mass,
     magnesium_conc,
+    metal_experiments,
     metal_stock_volume,
+    mo,
+    tris_chloride_mass,
     tris_conc,
     tris_mass,
     tris_stock_volume,
@@ -675,26 +698,86 @@ def _(
     calcium_chloride_weight = (
         calcium_chloride_mass * calcium_conc * metal_stock_volume
     )
+
+    # This value comes from data for biochemical research, it has a buffer table, this is the amount of HCl you need for the ph. 47ml of 0.1M into 100ml of pH 7.2 buffer. Since our stock is double concentration of what we're going to put into the sample, double it.
+    hcl_moles = 0.0047 * 0.1 * 2
+
     tris_weight = tris_mass * tris_conc * tris_stock_volume
+    hcl_weight = hcl_mass * hcl_moles
+    tris_chloride_weight = tris_chloride_mass * hcl_moles
+
+    # Convert tris_weight and tris_chloride_weight to moles, remove moles of tris_chloride from tris, convert back to weight
+    tris_chloride_moles = tris_chloride_weight/tris_chloride_mass
+    tris_moles = tris_weight/tris_mass
+    tris_weight_chloride_corrected = (tris_moles - tris_chloride_moles) * tris_mass
 
     metal_stock_output = f"""Citric acid stock: use old citric acid stock, and dilute 1/10 into samples. This puts the range of citrate ions into soluble range of calcium citrate, and means we don't have to use more DSS, and the ratio of DSS to citrate will be identical to our previous experiments.
 
     Metal stocks:
 
+    - Conical flask/total volume: {metal_stock_volume*1000}mL
     - Magnesium chloride: {round(magnesium_chloride_weight*1000, 5)}mg
     - Calcium chloride: {round(calcium_chloride_weight*1000, 5)}mg
-    - D2O: {metal_stock_volume*1000*0.05}ml
-    - H2O: {metal_stock_volume*1000*0.95}ml
+    - D2O: {metal_stock_volume*1000*d2o_percentage}ml/{round(metal_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
+    - H2O: {metal_stock_volume*1000*(1-d2o_percentage)}ml/g
 
 
     Tris buffer stock:
 
-    - Tris: {round(tris_weight*1000, 5)}mg
-    - D2O: {tris_stock_volume*1000*0.05}ml
-    - H2O: {tris_stock_volume*1000*0.95}ml
+    Using the ratio of chloride moles to tris moles found in Data for Biochemical Research, Third Edition, for buffer pH 7.20, as at this pH tris does not interact strongly with calcium ions (found from [This](https://doi.org/10.1007/s007750100264) publication). Tris peaks found [Here](https://www.chemicalbook.com/SpectrumEN_77-86-1_1HNMR.htm).
+
+    - Conical flask/total volume: {tris_stock_volume*1000}mL
+    - Tris: {round(tris_weight*1000, 5)}mg if HCl OR {round(tris_weight_chloride_corrected*1000, 5)}mg if tris chloride
+    - HCl: {round(hcl_weight*1000, 5)}mg OR tris chloride: {round(tris_chloride_weight*1000, 5)}mg
+    - D2O: {tris_stock_volume*1000*d2o_percentage}ml/{round(tris_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
+    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml/g
     """
-    return (metal_stock_output,)
+
+    metal_stock_output_csv = f"""
+    Metal stocks:
+
+    - Conical flask/total volume: {metal_stock_volume*1000}mL
+    - Magnesium chloride: {round(magnesium_chloride_weight*1000, 5)}mg
+    - Calcium chloride: {round(calcium_chloride_weight*1000, 5)}mg
+    - D2O: {metal_stock_volume*1000*d2o_percentage}ml/{round(metal_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
+    - H2O: {metal_stock_volume*1000*(1-d2o_percentage)}ml/g
 
 
-if __name__ == '__main__':
+    Tris buffer stock:
+
+    - Conical flask/total volume: {tris_stock_volume*1000}mL
+    - Tris: {round(tris_weight*1000, 5)}mg if HCl OR {round(tris_weight_chloride_corrected*1000, 5)}mg if tris chloride
+    - HCl: {round(hcl_weight*1000, 5)}mg OR tris chloride: {round(tris_chloride_weight*1000, 5)}mg
+    - D2O: {tris_stock_volume*1000*d2o_percentage}ml/{round(tris_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
+    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml/g
+    """
+
+    metal_experiment_output = mo.ui.table(
+        data=metal_experiments, pagination=True, label='Experiment output'
+    )
+
+    print(
+        (tris_weight + hcl_weight) - 
+        (tris_weight_chloride_corrected + tris_chloride_weight)
+    )
+
+    print(hcl_moles - tris_chloride_moles)
+    return metal_experiment_output, metal_stock_output, metal_stock_output_csv
+
+
+@app.cell
+def _(metal_eppendorfs_csv, metal_experiments, metal_stock_output_csv):
+    """Write to file"""
+    def _():
+        metal_experiments.to_csv('metal_experiments.csv', index=True)
+        with open ('metal_experiments.csv', 'a') as f:
+            f.writelines(metal_stock_output_csv)
+
+        metal_eppendorfs_csv.to_csv('experimental/metal_eppendorfs_blank.csv', index=True)
+
+    _()
+    return
+
+
+if __name__ == "__main__":
     app.run()
