@@ -44,14 +44,14 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 1000                    # Number of samples per metabolite combination
-    trials = 100                  # Number of hyperparameter optimization trialss
+    count = 100                    # Number of samples per metabolite combination
+    trials = 10                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'ensemble'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
-    downsample = 2**13             # Target resolution for ML model (None = no downsampling)
+    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    downsample = 2**11             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
 
@@ -725,13 +725,13 @@ def _(np):
         Returns:
             tuple: (positions, intensities)
         """
-
+    
         # Select only certain chemical shift ranges
         if ranged:
-            ranges = [[-0.1, 0.1]]
-
+            ranges = []
             # Handle different types of scales parameter
             if isinstance(scales, dict):
+                ranges.append([-0.1, 0.1])
                 # Training data: scales is a dictionary of substance concentrations
                 for scale in scales:
                     for substance in substanceDict:
@@ -767,8 +767,8 @@ def _(np):
                 next_power <<= 1  # Equivalent to next_power *= 2
 
             if downsample is not None:
-                if next_power < downsample:
-                    next_power = downsample
+                if next_power < np.log2(downsample):
+                    next_power = np.log2(downsample)
 
             # Calculate how much padding we need
             pad_needed = next_power - length
@@ -824,7 +824,7 @@ def _(np):
 
         # Convert to FID if needed
         if reverse:
-            # Apply Hilbert transform for time-domain representation2.65, 3.04, 2.99, 3.31, 3.33, 2.96, 3.83, 3.65, 4.36, 4.61, 
+            # Apply Hilbert transform for time-domain representation
             from scipy.signal import hilbert # type: ignore
             from scipy.fft import ifft # type: ignore
 
@@ -975,7 +975,7 @@ def _(
         spectrum: preprocess_peaks(
             intensities=reference_spectra[spectrum][0],
             positions=spectra[0]['positions'],
-            scales=reference_spectra[spectrum][1],
+            scales=f'{spectrum}',
             substanceDict = substanceDict,
             ranged=ranged,
             baseline_distortion=baseline_distortion,
