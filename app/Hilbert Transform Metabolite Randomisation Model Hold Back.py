@@ -1208,7 +1208,7 @@ def _():
 
 
 @app.cell
-def _(Dataset, dataset_name, h5py, torch):
+def _(Dataset, h5py, torch):
     """Streamable dataset class for memory-efficient data loading"""
 
     class StreamableNMRDataset(Dataset):
@@ -1221,11 +1221,12 @@ def _(Dataset, dataset_name, h5py, torch):
 
         def __init__(self, file_path, dataset_name):
             self.file_path = file_path
-            self.dataset_name = dataset_name
+            self.dataset_data_name = f'{dataset_name}_data'
+            self.dataset_labels_name = f'{dataset_name}_labels'
 
             # Verify file structure and get dataset length
             with h5py.File(self.file_path, 'r') as f:
-                self.length = f[f'{dataset_name}_data'].shape[0]
+                self.length = f[f'{self.dataset_data_name}'].shape[0]
 
         def __len__(self):
             return self.length
@@ -1234,11 +1235,11 @@ def _(Dataset, dataset_name, h5py, torch):
             # Load individual samples on demand to minimize memory usage
             with h5py.File(self.file_path, 'r') as f:
                 data = torch.tensor(
-                    f[f'{dataset_name}_data'][idx], 
+                    f[f'{self.dataset_data_name}'][idx], 
                     dtype=torch.complex64
                 )
                 labels = torch.tensor(
-                    f[f'{dataset_name}_labels'][idx], 
+                    f[f'{self.dataset_labels_name}'][idx], 
                     dtype=torch.float32
                 )
             return data, labels
@@ -1449,14 +1450,32 @@ def _(
         print(f"Streaming processed datasets to {file_path}...")
 
         with h5py.File(file_path, 'w') as f:
+            spectrumtype = sample_spectrum['intensities'].dtype
             # Create datasets with known sizes and consistent dtype
             train_data_ds = f.create_dataset(
                 'train_data', 
                 shape=(train_count, data_length),
-                dtype=np.complex64,
+                dtype=spectrumtype,
                 compression='gzip', 
                 compression_opts=9
             )
+    
+            val_data_ds = f.create_dataset(
+                'val_data', 
+                shape=(val_count, data_length),
+                dtype=spectrumtype,
+                compression='gzip', 
+                compression_opts=9
+            )
+    
+            test_data_ds = f.create_dataset(
+                'test_data', 
+                shape=(test_count, data_length),
+                dtype=spectrumtype,
+                compression='gzip', 
+                compression_opts=9
+            )
+    
             train_labels_ds = f.create_dataset(
                 'train_labels', 
                 shape=(train_count, 2),
@@ -1465,13 +1484,6 @@ def _(
                 compression_opts=9
             )
 
-            val_data_ds = f.create_dataset(
-                'val_data', 
-                shape=(val_count, data_length),
-                dtype=np.complex64,
-                compression='gzip', 
-                compression_opts=9
-            )
             val_labels_ds = f.create_dataset(
                 'val_labels', 
                 shape=(val_count, 2),
@@ -1480,13 +1492,6 @@ def _(
                 compression_opts=9
             )
 
-            test_data_ds = f.create_dataset(
-                'test_data', 
-                shape=(test_count, data_length),
-                dtype=np.complex64,
-                compression='gzip', 
-                compression_opts=9
-            )
             test_labels_ds = f.create_dataset(
                 'test_labels', 
                 shape=(test_count, 2),
