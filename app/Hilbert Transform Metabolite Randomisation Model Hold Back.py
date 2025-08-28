@@ -917,6 +917,12 @@ def _(np):
             if 'positions' in locals() and not np.array_equal(positions, [0, 0]):
                 positions = positions[::step]
 
+        if reverse:
+            positions = np.asarray(positions, dtype=np.complex64)
+            intensities = np.asarray(intensities, dtype=np.complex64)
+        else:
+            positions = np.asarray(positions, dtype=np.float32)
+            intensities = np.asarray(intensities, dtype=np.float32)
 
         return positions, intensities
 
@@ -1284,7 +1290,7 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
             'test_dataset': test_dataset,
         }, data_length
 
-    return
+    return (load_datasets_from_files,)
 
 
 @app.cell
@@ -1335,9 +1341,22 @@ def _(
     return
 
 
-app._unparsable_cell(
-    r"""
-    \"\"\"Main training data preparation with smart caching based on preprocessing\"\"\"
+@app.cell
+def _(
+    h5py,
+    held_back_metabolites,
+    load_datasets_from_files,
+    np,
+    os,
+    preprocessed_reference_spectra,
+    preprocessed_spectra,
+    processed_cache_key,
+    processed_data_dir,
+    random,
+    substanceDict,
+    tqdm,
+):
+    """Main training data preparation with smart caching based on preprocessing"""
 
     def get_training_data_mlp(
         spectra,
@@ -1348,17 +1367,17 @@ app._unparsable_cell(
         val_ratio=0.15,
         test_ratio=0.15,
     ):
-        \"\"\"
+        """
         Create training datasets with hold-back validation for metabolite detection
         Streams data directly to HDF5 to avoid memory issues
-        \"\"\"
+        """
         # Check for existing cached datasets based on processed data
         existing_datasets = load_datasets_from_files(processed_cache_key)
 
         if existing_datasets is not None:
             return existing_datasets
 
-        print(\"Creating new processed datasets with hold-back validation...\")
+        print("Creating new processed datasets with hold-back validation...")
 
         # Get spectrum IDs for held-back metabolites
         held_back_key_test = substanceDict[held_back_metabolites[0]][0]
@@ -1372,7 +1391,7 @@ app._unparsable_cell(
         val_with_holdback = []
         test_with_holdback = []
 
-        for i in tqdm(range(len(spectra)), desc=\"Processing Spectra\"):
+        for i in tqdm(range(len(spectra)), desc="Processing Spectra"):
             spectrum = spectra[i]
             if held_back_key_test in spectrum['ratios']:
                 test_with_holdback.append(i)
@@ -1417,8 +1436,8 @@ app._unparsable_cell(
         sample_reference = reference_spectra[sample_reference_key]
 
         # Ensure both are numpy arrays with same dtype
-        spectrum_intensities = np.asarray(sample_spectrum['intensities'], dtype=np.complex64)
-        reference_intensities = np.asarray(sample_reference[1], dtype=np.complex64)
+        spectrum_intensities = sample_spectrum['intensities']
+        reference_intensities = sample_reference[1]
 
         sample_data = np.concatenate([spectrum_intensities, reference_intensities])
         data_length = len(sample_data)
@@ -1427,7 +1446,7 @@ app._unparsable_cell(
         os.makedirs(processed_data_dir, exist_ok=True)
         file_path = f'{processed_data_dir}/{processed_cache_key}_datasets.h5'
 
-        print(f\"Streaming processed datasets to {file_path}...\")
+        print(f"Streaming processed datasets to {file_path}...")
 
         with h5py.File(file_path, 'w') as f:
             # Create datasets with known sizes and consistent dtype
@@ -1484,8 +1503,8 @@ app._unparsable_cell(
                         spectrum = spectra.__getitem__(spec_idx, substance)  # Load one spectrum at a time
                         if substance not in [held_back_key_test, held_back_key_validation]:
                             # Ensure consistent data types
-                            spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
-                            reference_intensities = np.asarray(reference_spectra[substance][1], dtype=np.complex64)
+                            spectrum_intensities = spectrum['intensities']
+                            reference_intensities = reference_spectra[substance][1]
 
                             # Create data sample
                             temp_data = np.concatenate([spectrum_intensities, reference_intensities])
@@ -1505,8 +1524,8 @@ app._unparsable_cell(
             val_idx = 0
             for i in tqdm(val_indices, total=len(val_indices)):
                 spectrum = spectra.__getitem__(train_spectra[i], held_back_key_validation[1])
-                spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
-                reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
+                spectrum_intensities = spectrum['intensities']
+                reference_intensities = reference_spectra[held_back_key_validation][1]
 
                 temp_data = np.concatenate([spectrum_intensities, reference_intensities])
                 temp_label = np.array([0.0, 0.0], dtype=np.float32)  # Not present
@@ -1518,8 +1537,8 @@ app._unparsable_cell(
             # Stream validation data (positive samples with held-back metabolite)
             for spec_idx in tqdm(val_with_holdback, total=len(val_with_holdback)):
                 spectrum = spectra.__getitem__(spec_idx, held_back_key_validation[1])
-                spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
-                reference_intensities = np.asarray(reference_spectra[held_back_key_validation][1], dtype=np.complex64)
+                spectrum_intensities = spectrum['intensities']
+                reference_intensities = reference_spectra[held_back_key_validation][1]
 
                 temp_data = np.concatenate([spectrum_intensities, reference_intensities])
                 temp_label = np.array([1.0, spectrum['ratios'][held_back_key_validation]], dtype=np.float32)
@@ -1532,8 +1551,8 @@ app._unparsable_cell(
             test_idx = 0
             for spec_idx in tqdm(test_with_holdback, total=len(test_with_holdback)):
                 spectrum = spectra.__getitem__(spec_idx, held_back_key_test[1])
-                spectrum_intensities = np.asarray(spectrum['intensities'], dtype=np.complex64)
-                reference_intensities = np.asarray(reference_spectra[held_back_key_test][1], dtype=np.complex64)
+                spectrum_intensities = spectrum['intensities']
+                reference_intensities = reference_spectra[held_back_key_test][1]
 
                 temp_data = np.concatenate([spectrum_intensities, reference_intensities])
                 temp_label = np.array([1.0, spectrum['ratios'][held_back_key_test]], dtype=np.float32)
@@ -1549,10 +1568,9 @@ app._unparsable_cell(
             f.attrs['test_size'] = test_count
 
         file_size_mb = os.path.getsize(file_path) / (1024**2)
-        print(f\"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB\")
+        print(f"Processed datasets saved successfully. File size: {file_size_mb:.2f} MB")
 
-        # Load and (cell-26
-    )return streamable datasets
+        # Load and return streamable datasets
         return load_datasets_from_files(processed_cache_key)
 
 
@@ -1564,9 +1582,7 @@ app._unparsable_cell(
         processed_cache_key=processed_cache_key,
     )
 
-    """,
-    name="_"
-)
+    return data_length, training_data
 
 
 @app.cell(hide_code=True)
