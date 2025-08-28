@@ -1123,18 +1123,18 @@ def _(graph_count, plt, preprocessed_spectra, reverse):
 
         for graphcounter2 in range(1, graph_count**2 + 1):
             plt.subplot(graph_count, graph_count, graphcounter2)
-            complex_data = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['intensities']
+            complex_data_intensities = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['intensities']
+            complex_data_positions = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['positions']
 
             if reverse:
                 # Time domain: plot magnitude of complex data
-                # complex_data = preprocessed_spectra[graphcounter2, 'SP:3368']['intensities']
-                plt.plot(complex_data)
+                plt.plot(complex_data_intensities)
                 plt.title(f'Sample {graphcounter2} (Time Domain)')
                 plt.xlabel('Time Points')
                 plt.ylabel('Magnitude')
             else:
                 # Frequency domain: normal plotting
-                plt.plot(preprocessed_spectra[graphcounter2]['positions'], complex_data)
+                plt.plot(complex_data_positions, complex_data_intensities)
                 plt.title(f'Sample {graphcounter2} (Frequency Domain)')
                 plt.xlabel('Data Points')
                 plt.ylabel('Intensity')
@@ -1300,6 +1300,7 @@ def _(
     preprocessed_reference_spectra,
     preprocessed_spectra,
     reference_spectra,
+    tqdm,
 ):
     """Length tester. Ensures the length of every input will always be identical. Also just so happens to cache all preprocessing"""
 
@@ -1322,11 +1323,14 @@ def _(
         return local_lengths
 
     def _():
+        tasks = [(i, reference_spectra, preprocessed_spectra)
+             for i in range(len(preprocessed_spectra))]
+
         with multiprocessing.Pool() as pool:
-            results = pool.map(
-                check_spectrum_length,
-                [(i, reference_spectra, preprocessed_spectra) for i in range(len(preprocessed_spectra))]
-            )
+            results = []
+            for res in tqdm(pool.imap(check_spectrum_length, tasks), total=len(tasks)):
+                results.append(res)
+
         # Flatten and check for uniqueness
         all_lengths = set()
         for result in results:
@@ -1459,7 +1463,7 @@ def _(
                 compression='gzip', 
                 compression_opts=9
             )
-    
+
             val_data_ds = f.create_dataset(
                 'val_data', 
                 shape=(val_count, data_length),
@@ -1467,7 +1471,7 @@ def _(
                 compression='gzip', 
                 compression_opts=9
             )
-    
+
             test_data_ds = f.create_dataset(
                 'test_data', 
                 shape=(test_count, data_length),
@@ -1475,7 +1479,7 @@ def _(
                 compression='gzip', 
                 compression_opts=9
             )
-    
+
             train_labels_ds = f.create_dataset(
                 'train_labels', 
                 shape=(train_count, 2),
