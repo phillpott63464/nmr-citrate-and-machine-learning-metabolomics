@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.14.17'
-app = marimo.App(width='medium')
+__generated_with = "0.14.17"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -1494,11 +1494,18 @@ def _():
         + (calcium_chloride_stock['d2o'] / d2o_density)
     )
 
-    return
+    return calcium_chloride_stock, magnesium_chloride_stock, tris_buffer_stock
 
 
 @app.cell
-def _(out_dir, pd):
+def _(
+    calcium_chloride_stock,
+    magnesium_chloride_stock,
+    out_dir,
+    pd,
+    stocks,
+    tris_buffer_stock,
+):
     metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
     metal_real_experiments = []
 
@@ -1508,15 +1515,29 @@ def _(out_dir, pd):
             row[col] = metal_imported.at[midx, col]
         metal_real_experiments.append(row)
 
-    print(metal_imported)
+    for mexperiment in metal_real_experiments:
+        mexperiment['citric acid stock / L'] = (mexperiment['post citric acid stock weight / g'] - mexperiment['eppendorf base weight / g']) / 1000
+        mexperiment['salt stock / L'] = (mexperiment['post salt stock weight / g'] - mexperiment['post citric acid stock weight / g']) / 1000
+        mexperiment['tris buffer / L'] = (mexperiment['post tris buffer weight / g'] - mexperiment['post salt stock weight / g']) / 1000
+        mexperiment['mq / L'] = (mexperiment['post milliq weight / g'] - mexperiment['post tris buffer weight / g']) / 1000
 
-    # for mexperiment in metal_real_experiments:
-    #     print(mexperiment)
-    #     mexperiment['citric acid stock / L'] = mexperiment['post citric acid stock weight / g'] - experiment['eppendorf base weight / g']
-    # mexperiment['']
+        mexperiment['total vol / L'] = mexperiment['citric acid stock / L'] + mexperiment['salt stock / L'] + mexperiment['tris buffer / L'] + mexperiment['mq / L']
 
+        # print(mexperiment['total vol / L'])
+    
+        # c1v1 = c2v2
+        # c2=c1v2/v2
+        mexperiment['citric acid molarity'] = stocks['acid']['molarity'] * mexperiment['citric acid stock / L'] / mexperiment['total vol / L']
+        mexperiment['tris buffer molarity'] = tris_buffer_stock['tris molarity'] * mexperiment['citric acid stock / L'] / mexperiment['total vol / L']
+        if mexperiment['Unnamed: 0'] in range(25, 37):
+            salt_molarity = magnesium_chloride_stock['molarity']
+        else:
+            salt_molarity = calcium_chloride_stock['molarity']
+        mexperiment['salt stock molarity'] = salt_molarity * mexperiment['salt stock / L'] /  mexperiment['total vol / L']
+
+        print(mexperiment['salt stock molarity']*1000)
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
