@@ -324,7 +324,9 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         base_vol,
         expected_acid_ratios,
         expected_phs,
+        out_dir,
         output,
+        pd,
         phs,
         pkasolver_phs,
         pkasolver_ratios,
@@ -493,42 +495,6 @@ def _(mo):
     [Source](https://www.researchgate.net/figure/Experimentally-determined-titration-curve-for-citric-acid_fig7_351108949)
 
     Fairly similar
-    """
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(
-    chemicalshift_fig,
-    chemicalshift_ph_fig,
-    citratecouplingfig,
-    citratepeakdifferencesfig,
-    mo,
-):
-    mo.md(
-        rf"""
-    ## Graphs:
-
-    ### Chemical Shift Against pH/base ratio
-
-    {mo.as_html(chemicalshift_ph_fig)}
-
-    ### Chemical Shift Against Citrate Speciation
-
-    {mo.as_html(chemicalshift_fig)}
-
-    ### Citrate Peak Differences Against Citrate Speciation
-
-    The value between the two protons
-
-    {mo.as_html(citratepeakdifferencesfig)}
-
-    ### Citrate J Coupling Against Citrate Speciation
-
-    The value between the peaks for each proton
-
-    {mo.as_html(citratecouplingfig)}
     """
     )
     return
@@ -723,6 +689,8 @@ def _(np):
             for peak in peaks:
                 peak[0] += ppm_shift[idx]
 
+        return peak_values
+
     @type_check(o1=float, sf=float, sfo1=float)
     def calculate_sr(o1, sf, sfo1):
         return o1 + sf * 1e6 - sfo1 * 1e6
@@ -760,7 +728,7 @@ def _(np):
     for sr in sr_values:
         ppm_shift.append(calculate_ppm_shift(sr, frequency=600.5))
 
-    adjust_peak_values(peak_values, ppm_shift)
+    peak_values = adjust_peak_values(peak_values, ppm_shift)
 
     # # Uncomment to print results
     # print(sr_values)
@@ -768,22 +736,37 @@ def _(np):
     # print(peak_values[0])
     return (
         data_dir,
+        experiment,
         experiment_number,
         experiments,
         extract_peak_values,
         extract_phc,
         peak_values,
-        type_check,
     )
 
 
+@app.cell(hide_code=True)
+def _(chemicalshift_ph_fig, mo):
+    mo.md(
+        rf"""
+    ## Graphs:
+
+    ### Chemical Shift Against pH/base ratio
+
+    {mo.as_html(chemicalshift_ph_fig)}
+    """
+    )
+    return
+
+
 @app.cell
-def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
+def _(base_vol, peak_values, phs, plt):
     def _1():
         avg_ppm = []
         for peaks in peak_values:
             average = 0
             for peak in peaks:
+                # print(peak)
                 average += peak[0]
 
             average /= len(peaks)
@@ -793,6 +776,69 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
 
     avg_ppm = _1()
 
+    plt.figure(figsize=(15, 5))
+
+    plt.subplot(1, 3, 1)
+    plt.plot([x / 0.0006 * 100 for x in base_vol], avg_ppm)
+
+    plt.ylabel('Average PPM')
+    plt.xlabel('Sodium Citrate Percentage')
+    plt.title('Sodium Citrate Percentage and Average PPM')
+
+    plt.subplot(1, 3, 2)
+    plt.plot(phs, avg_ppm)
+
+    plt.ylabel('Average PPM')
+    plt.xlabel('pH')
+    plt.title('pH and Average PPM')
+
+    def _2():
+        avg_ppms = []
+        for peaks in peak_values:
+            avg_ppms.append(
+                [
+                    (peaks[0][0] + peaks[1][0]) / 2,
+                    (peaks[2][0] + peaks[3][0]) / 2,
+                ]
+            )
+
+        return avg_ppms
+
+    avg_ppms = _2()
+
+    plt.subplot(1, 3, 3)
+    plt.plot(phs, avg_ppms)
+
+    plt.ylabel('Average PPM Per Peak')
+    plt.xlabel('pH')
+    plt.title('pH and Average PPM Per Peak')
+    plt.legend(
+        [
+            'Peak 2 (furthest from reference at 0)',
+            'Peak 1 (closest to reference at 0)',
+        ]
+    )
+
+    plt.tight_layout()
+
+    chemicalshift_ph_fig = plt.gca()
+    return avg_ppm, chemicalshift_ph_fig
+
+
+@app.cell(hide_code=True)
+def _(chemicalshift_fig, mo):
+    mo.md(
+        rf"""
+    ### Chemical Shift Against Citrate Speciation
+
+    {mo.as_html(chemicalshift_fig)}
+    """
+    )
+    return
+
+
+@app.cell
+def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     citricacid = phfork.AcidAq(
         pKa=corrected_pka, charge=0, conc=graph_molarity
     )
@@ -872,36 +918,26 @@ def _(base_vol, corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     chemicalshift_fig = plt.gca()
 
     print([x / 0.0006 * 100 for x in base_vol])
-    return avg_ppm, chemicalshift_fig, fracs
+    return chemicalshift_fig, fracs
 
 
-@app.cell
-def _(avg_ppm, base_vol, phs, plt):
-    plt.figure(figsize=(15, 5))
+@app.cell(hide_code=True)
+def _(citratecouplingfig, mo):
+    mo.md(
+        rf"""
+    ### Citrate J Coupling Against Citrate Speciation
 
-    plt.subplot(1, 2, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], avg_ppm)
+    The value between the peaks for each proton
 
-    plt.ylabel('Average PPM')
-    plt.xlabel('Sodium Citrate Percentage')
-    plt.title('Sodium Citrate Percentage and Average PPM')
-
-    plt.subplot(1, 2, 2)
-    plt.plot(phs, avg_ppm)
-
-    plt.ylabel('Average PPM')
-    plt.xlabel('pH')
-    plt.title('pH and Average PPM')
-
-    plt.tight_layout()
-
-    chemicalshift_ph_fig = plt.gca()
-    return (chemicalshift_ph_fig,)
+    {mo.as_html(citratecouplingfig)}
+    """
+    )
+    return
 
 
 @app.cell
 def _(base_vol, citrate_ppms, fracs, np, phs, plt):
-    citrate_couplings = [
+    citrate_couplings_raw = [
         [
             x[0] - x[1],
             x[2] - x[3],
@@ -910,7 +946,7 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     ]   # Calculate j coupling values
 
     citrate_couplings = [
-        np.average(x) for x in citrate_couplings
+        np.average(x) for x in citrate_couplings_raw
     ]   # Average to a single value
 
     plt.figure(figsize=(15, 5))
@@ -972,6 +1008,20 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     # Show the plots
     citratecouplingfig = plt.gca()
     return (citratecouplingfig,)
+
+
+@app.cell(hide_code=True)
+def _(citratepeakdifferencesfig, mo):
+    mo.md(
+        rf"""
+    ### Citrate Peak Differences Against Citrate Speciation
+
+    The value between the two protons
+
+    {mo.as_html(citratepeakdifferencesfig)}
+    """
+    )
+    return
 
 
 @app.cell
@@ -1080,75 +1130,23 @@ def _(
     return citrate_ppms, citratepeakdifferencesfig
 
 
-@app.cell
-def _(fidfig, mo, singlefidfig):
+@app.cell(hide_code=True)
+def _(fidfig, mo):
     mo.md(
         rf"""
     ## FID Spectra from Experimental
     ### All
 
     {mo.as_html(fidfig)}
-
-    ### Single, higher resolution
-
-
-    {mo.as_html(singlefidfig)}
     """
     )
     return
 
 
 @app.cell
-def _(
-    data_dir,
-    experiment_number,
-    experiments,
-    math,
-    np,
-    plt,
-    read_bruker,
-    type_check,
-):
+def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
     import struct
     import seaborn as sns
-
-    @type_check(experiment=str, experiment_number=str, data_dir=str)
-    def read_fid(experiment, experiment_number, data_dir):
-        dir = f'{data_dir}/{experiment}/{experiment_number}/fid'
-        with open(dir, 'rb') as fid_file:
-            # Read the first few bytes to determine the data type
-            # This is a placeholder; you need to implement the logic to read DTYPA and NC
-            dtypa = 'int'  # or "double", based on your file
-            nc = 0  # Set this based on your file's parameters
-
-            # Read the entire file into a byte array
-            fid_data = fid_file.read()
-
-            if dtypa == 'int':
-                # Calculate the number of data points
-                num_points = len(fid_data) // 4  # 4 bytes for each int
-                data = np.zeros(num_points, dtype=np.int32)
-
-                for i in range(num_points):
-                    data[i] = struct.unpack(
-                        'i', fid_data[i * 4 : (i + 1) * 4]
-                    )[0]
-
-                # Apply the exponent
-                data = data * (10**nc)
-
-            elif dtypa == 'double':
-                num_points = len(fid_data) // 8  # 8 bytes for each double
-                data = np.zeros(num_points, dtype=np.float64)
-
-                for i in range(num_points):
-                    data[i] = struct.unpack(
-                        'd', fid_data[i * 8 : (i + 1) * 8]
-                    )[0]
-
-            return (
-                data[..., ::2] + data[..., 1::2] * 1.0j
-            )   # Stole this line from NMRglue
 
     def plot_fid_experiments(experiments, experiment_number, data_dir):
         # Set the style for the plots
@@ -1161,7 +1159,6 @@ def _(
 
         for idx, experiment in enumerate(experiments):
             # Read the FID data
-            # data = read_fid(experiment, experiment_number, data_dir)
             data = read_bruker(data_dir, experiment, experiment_number)
 
             # Calculate the number of rows and columns for subplots
@@ -1198,67 +1195,33 @@ def _(
 
     # Example usage
     fidfig = plot_fid_experiments(experiments, experiment_number, data_dir)
-    return fidfig, read_fid
+    return (fidfig,)
+
+
+@app.cell(hide_code=True)
+def _(mo, singlefidfig):
+    mo.md(
+        rf"""
+    ### Single, higher resolution
+
+    {mo.as_html(singlefidfig)}
+    """
+    )
+    return
 
 
 @app.cell
-def _(fiddata, plt):
+def _(data_dir, experiment_number, experiments, plt, read_bruker):
+    fiddata = read_bruker(
+        data_dir=data_dir,
+        experiment=experiments[0],
+        experiment_number=experiment_number,
+    )
+
     plt.plot(fiddata, linestyle='-', linewidth=0.5, markersize=5)
     plt.savefig('figs/singleFID.svg')
     singlefidfig = plt.gca()
     return (singlefidfig,)
-
-
-@app.cell
-def _(
-    data_dir,
-    experiment_number,
-    experiments,
-    np,
-    plt,
-    read_bruker,
-    read_fid,
-):
-    brukerdata = read_bruker(
-        data_dir=data_dir,
-        experiment=experiments[10],
-        experiment_number=experiment_number,
-    )
-
-    fiddata = read_fid(experiments[10], experiment_number, data_dir)#[60:]
-
-    print(len(fiddata))
-    print(len(brukerdata))
-
-    # fiddata = fiddata[len(fiddata) - len(brukerdata):]
-
-    def _(fiddata, brukerdata):
-        error = 0
-        diff = len(fiddata) - len(brukerdata)
-        if diff > 0:
-            brukerdata = np.pad(brukerdata, (0, diff), 'constant', constant_values=0)
-        elif diff < 0:
-            fiddata = np.pad(fiddata, (0, diff), 'constant', constant_values=0)
-
-        for fidpoint, brukerpoint in zip(fiddata, brukerdata):
-            diff = fidpoint - brukerpoint
-            error += diff**2
-            # print(diff)
-
-        print(f'Error: {error}')
-
-    _(fiddata, brukerdata)
-
-    print(fiddata[0], brukerdata[0])
-
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.title('Custom fid reader')
-    plt.plot(fiddata)
-    plt.subplot(1, 2, 2)
-    plt.title('NMR glue')
-    plt.plot(brukerdata)
-    return (fiddata,)
 
 
 @app.cell(hide_code=True)
@@ -1269,6 +1232,16 @@ def _(mo, nmrgluefig):
 
 @app.cell
 def _(data_dir, experiment_number, experiments, extract_phc, plt):
+    def log(msg):
+        with open('log.log', 'a') as f:
+            if isinstance(msg, list):
+                for x in msg:
+                    log(x)  # Recursively log each item in the list
+            else:
+                f.writelines(
+                    str(msg) + '\n'
+                )  # Convert msg to string and add a newline
+
     def bruker_fft(data_dir, experiment, experiment_number):
         """Convert time domain data to frequency domain"""
         import nmrglue as ng
@@ -1290,21 +1263,10 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         data = ng.proc_base.ps(
             data, p0=phc['PHC0'], p1=phc['PHC1']
         )  # Phase correction
-        # data = ng.proc_autophase.autops(data, 'acme') # Automatic phase correction
         data = ng.proc_base.di(data)                  # Discard the imaginaries
-        data = ng.proc_base.rev(data)                 # Reverse the data
+        data = ng.proc_base.rev(data)                 # Reverse the data=
 
         return data
-
-    def log(msg):
-        with open('log.log', 'a') as f:
-            if isinstance(msg, list):
-                for x in msg:
-                    log(x)  # Recursively log each item in the list
-            else:
-                f.writelines(
-                    str(msg) + '\n'
-                )  # Convert msg to string and add a newline
 
     def read_bruker(data_dir, experiment, experiment_number):
         import nmrglue as ng
@@ -1360,7 +1322,55 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         return plt.gca()  # Return the current axes
 
     nmrgluefig = _()
-    return math, nmrgluefig, read_bruker
+    return bruker_fft, math, nmrgluefig, read_bruker
+
+
+@app.cell
+def _(mo, singlefftfig):
+    mo.md(
+        rf"""
+    ## Single FFT, higher resolution
+
+    {mo.as_html(singlefftfig)}
+    """
+    )
+    return
+
+
+@app.cell
+def _(bruker_fft, data_dir, experiment_number, experiments, plt):
+    def _():
+        # plt.figure(figsize=(15, 5))
+
+        data = bruker_fft(
+            data_dir=data_dir,
+            experiment=experiments[8],
+            experiment_number=experiment_number,
+        )
+
+        plt.plot(data[19000:22000])
+        plt.title(f'NMR Experiment', fontsize=14)
+        plt.xlabel(
+            'Data Points', fontsize=12
+        )  # Replace with actual x-axis label if needed
+        plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
+        plt.grid(True)  # Add grid lines for better readability
+
+        plt.legend()
+
+        plt.tight_layout()  # Adjust layout to prevent overlap
+
+        return plt.gca()
+
+    singlefftfig = _()
+
+    # singlefftfig.show()
+    return (singlefftfig,)
+
+
+@app.cell
+def _():
+    return
 
 
 @app.cell
@@ -1378,6 +1388,104 @@ def _():
     print(
         f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}'
     )
+
+    return
+
+
+@app.cell
+def _():
+    """Metal Experiments load"""
+
+    magnesium_chloride_mass = 95.21   # g/mol
+    calcium_chloride_mass = 110.98   # g/mol
+    tris_mass = 121.14   # g/mol
+    tris_chloride_mass = 157.59   # g/mol
+    d2o_density = 1.1044   # g/ml
+
+    tris_buffer_stock = {
+        'boat tris': 0.49,
+        'flask': 35.56,
+        'flask and tris': 36.06,
+        'boat tris hcl': 0.15,
+        'flask and tris hcl': 36.19,
+        'flask and tris hcl rinse': 38.87,
+        'flask and d2o': 39.15,
+        'flask and mq': 85.62,
+    }
+
+    tris_buffer_stock['tris'] = (
+        tris_buffer_stock['flask and tris'] - tris_buffer_stock['flask']
+    )
+
+    tris_buffer_stock['tris hcl'] = (
+        tris_buffer_stock['flask and tris hcl']
+        - tris_buffer_stock['flask and tris']
+    )
+
+    tris_buffer_stock['d2o'] = (
+        tris_buffer_stock['flask and d2o']
+        - tris_buffer_stock['flask and tris hcl rinse']
+    )
+
+    tris_buffer_stock['mq'] = (
+        tris_buffer_stock['flask and mq'] - tris_buffer_stock['flask and d2o']
+    ) + (
+        tris_buffer_stock['flask and tris hcl rinse']
+        - tris_buffer_stock['flask and tris hcl']
+    )
+
+    tris_buffer_stock['tris molarity'] = (
+        (tris_buffer_stock['tris'] + tris_buffer_stock['tris hcl']) / tris_mass
+    ) / (tris_buffer_stock['mq'] + (tris_buffer_stock['d2o'] / d2o_density))
+
+    tris_buffer_stock['chloride molarity'] = (
+        tris_buffer_stock['tris hcl'] / tris_chloride_mass
+    ) / (tris_buffer_stock['mq'] + (tris_buffer_stock['d2o'] / d2o_density))
+
+
+    magnesium_chloride_stock = {
+        'flask': 12.79513,
+        'boat chloride': 23.61/1000,
+        'flask and chloride': 12.81384,
+        'flask and d2o': 13.08,
+        'flask and mq': 17.80
+    }
+
+    magnesium_chloride_stock['chloride'] = magnesium_chloride_stock['flask and chloride'] - magnesium_chloride_stock['flask']
+    magnesium_chloride_stock['d2o'] = magnesium_chloride_stock['flask and d2o'] - magnesium_chloride_stock['flask and chloride']
+    magnesium_chloride_stock['mq'] = magnesium_chloride_stock['flask and mq'] - magnesium_chloride_stock['flask and d2o']
+    magnesium_chloride_stock['molarity'] = (magnesium_chloride_stock['chloride']/magnesium_chloride_mass) / (magnesium_chloride_stock['mq'] + (magnesium_chloride_stock['d2o'] / d2o_density))
+
+    calcium_chloride_stock = {
+        'flask': 12.62002,
+        'boat chloride': 36.77/1000,
+        'flask and chloride': 12.8560,
+        'flask and d2o': 12.92,
+        'flask and mq': 17.70
+    }
+    calcium_chloride_stock['chloride'] = calcium_chloride_stock['flask and chloride'] - calcium_chloride_stock['flask']
+    calcium_chloride_stock['d2o'] = calcium_chloride_stock['flask and d2o'] - calcium_chloride_stock['flask and chloride']
+    calcium_chloride_stock['mq'] = calcium_chloride_stock['flask and mq'] - calcium_chloride_stock['flask and d2o']
+    calcium_chloride_stock['molarity'] = (calcium_chloride_stock['chloride']/calcium_chloride_mass) / (calcium_chloride_stock['mq'] + (calcium_chloride_stock['d2o'] / d2o_density))
+
+    return
+
+
+@app.cell
+def _(experiment, out_dir, pd):
+    metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
+    metal_real_experiments = []
+
+    for midx in range(len(metal_imported)):
+        row = {}
+        for col in metal_imported.columns:
+            row[col] = metal_imported.at[midx, col]
+        metal_real_experiments.append(row)
+
+    for mexperiment in metal_real_experiments:
+        print(mexperiment)
+        mexperiment['citric acid stock / L'] = mexperiment['post citric acid stock weight / g'] - experiment['eppendorf base weight / g']
+        # mexperiment['']
 
     return
 

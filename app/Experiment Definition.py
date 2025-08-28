@@ -561,13 +561,13 @@ def _():
     magnesium_conc = 0.00234 * 10   # M
     tris_conc = 0.05 * 2   # M
 
-    magnesium_chloride_mass = 95.21   # g/mol
-    calcium_chloride_mass = 110.98   # g/mol
+    magnesium_chloride_mass = 203.30   # g/mol
+    calcium_chloride_mass = 147.02   # g/mol
     tris_mass = 121.14   # g/mol
     hcl_mass = 36.46 # g/mol
     tris_chloride_mass = 157.59 # g/mol
 
-    metal_stock_volume = 15 / 1000   # mL to L
+    metal_stock_volume = 5 / 1000   # mL to L
     tris_stock_volume = 50 / 1000   # mL to L
 
     number_experiments_per_metal = 12   # Count (not including 0)
@@ -730,7 +730,7 @@ def _(
     - Tris: {round(tris_weight*1000, 5)}mg if HCl OR {round(tris_weight_chloride_corrected*1000, 5)}mg if tris chloride
     - HCl: {round(hcl_weight*1000, 5)}mg OR tris chloride: {round(tris_chloride_weight*1000, 5)}mg
     - D2O: {tris_stock_volume*1000*d2o_percentage}ml/{round(tris_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
-    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml/g
+    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml and identical g
     """
 
     metal_stock_output_csv = f"""
@@ -749,11 +749,11 @@ def _(
     - Tris: {round(tris_weight*1000, 5)}mg if HCl OR {round(tris_weight_chloride_corrected*1000, 5)}mg if tris chloride
     - HCl: {round(hcl_weight*1000, 5)}mg OR tris chloride: {round(tris_chloride_weight*1000, 5)}mg
     - D2O: {tris_stock_volume*1000*d2o_percentage}ml/{round(tris_stock_volume*1000*d2o_percentage*d2o_density, 5)}g
-    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml/g
+    - H2O: {tris_stock_volume*1000*(1-d2o_percentage)}ml and identical g
     """
 
     metal_experiment_output = mo.ui.table(
-        data=metal_experiments, pagination=True, label='Experiment output'
+        data=metal_experiments, pagination=True
     )
 
     print(
@@ -762,6 +762,7 @@ def _(
     )
 
     print(hcl_moles - tris_chloride_moles)
+
     return metal_experiment_output, metal_stock_output, metal_stock_output_csv
 
 
