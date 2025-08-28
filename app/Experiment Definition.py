@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -16,7 +16,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
+    mo.md(
+        r"""# Experimental Method for Citric Acid Speciation Chemical Shift"""
+    )
     return
 
 
@@ -564,16 +566,16 @@ def _():
     magnesium_chloride_mass = 203.30   # g/mol
     calcium_chloride_mass = 147.02   # g/mol
     tris_mass = 121.14   # g/mol
-    hcl_mass = 36.46 # g/mol
-    tris_chloride_mass = 157.59 # g/mol
+    hcl_mass = 36.46   # g/mol
+    tris_chloride_mass = 157.59   # g/mol
 
     metal_stock_volume = 5 / 1000   # mL to L
     tris_stock_volume = 50 / 1000   # mL to L
 
     number_experiments_per_metal = 12   # Count (not including 0)
 
-    d2o_percentage = 0.05 # %
-    d2o_density = 1.1044 # g/ml
+    d2o_percentage = 0.05   # %
+    d2o_density = 1.1044   # g/ml
     return (
         better_sample_vol,
         calcium_chloride_mass,
@@ -603,7 +605,9 @@ def _(
     tris_vol,
 ):
     metal_experiments = []
-    metal_eppendorfs_csv = [] # Blank csv to print and write eppendorf weights into
+    metal_eppendorfs_csv = (
+        []
+    )   # Blank csv to print and write eppendorf weights into
 
     # Intialise experiments
     for y in range(0, 2):
@@ -617,10 +621,9 @@ def _(
                 {
                     'citric acid stock / µL': citric_sample_vol,
                     'tris buffer stock / µL': round(tris_vol, 6),
-                    salt_stock_name:
-                        citric_sample_vol
-                        / (number_experiments_per_metal - 1)
-                        * i,
+                    salt_stock_name: citric_sample_vol
+                    / (number_experiments_per_metal - 1)
+                    * i,
                 }
             )
 
@@ -651,7 +654,7 @@ def _(
         temp = 0
         for y in x.items():
             temp += y[1]
-        if temp != better_sample_vol*1000*1000:
+        if temp != better_sample_vol * 1000 * 1000:
             print('Issue')
 
     metal_experiments = pd.DataFrame(metal_experiments)
@@ -663,7 +666,9 @@ def _(
     ] + ['milliq µL']
     metal_experiments = metal_experiments[columns]
 
-    metal_experiments.index = range(25, 25 + len(metal_experiments)) # Start index after the number of experiments actually done
+    metal_experiments.index = range(
+        25, 25 + len(metal_experiments)
+    )   # Start index after the number of experiments actually done
     metal_eppendorfs_csv.index = range(25, 25 + len(metal_eppendorfs_csv))
     return metal_eppendorfs_csv, metal_experiments
 
@@ -707,9 +712,11 @@ def _(
     tris_chloride_weight = tris_chloride_mass * hcl_moles
 
     # Convert tris_weight and tris_chloride_weight to moles, remove moles of tris_chloride from tris, convert back to weight
-    tris_chloride_moles = tris_chloride_weight/tris_chloride_mass
-    tris_moles = tris_weight/tris_mass
-    tris_weight_chloride_corrected = (tris_moles - tris_chloride_moles) * tris_mass
+    tris_chloride_moles = tris_chloride_weight / tris_chloride_mass
+    tris_moles = tris_weight / tris_mass
+    tris_weight_chloride_corrected = (
+        tris_moles - tris_chloride_moles
+    ) * tris_mass
 
     metal_stock_output = f"""Citric acid stock: use old citric acid stock, and dilute 1/10 into samples. This puts the range of citrate ions into soluble range of calcium citrate, and means we don't have to use more DSS, and the ratio of DSS to citrate will be identical to our previous experiments.
 
@@ -757,8 +764,8 @@ def _(
     )
 
     print(
-        (tris_weight + hcl_weight) - 
-        (tris_weight_chloride_corrected + tris_chloride_weight)
+        (tris_weight + hcl_weight)
+        - (tris_weight_chloride_corrected + tris_chloride_weight)
     )
 
     print(hcl_moles - tris_chloride_moles)
@@ -769,16 +776,19 @@ def _(
 @app.cell
 def _(metal_eppendorfs_csv, metal_experiments, metal_stock_output_csv):
     """Write to file"""
+
     def _():
         metal_experiments.to_csv('metal_experiments.csv', index=True)
-        with open ('metal_experiments.csv', 'a') as f:
+        with open('metal_experiments.csv', 'a') as f:
             f.writelines(metal_stock_output_csv)
 
-        metal_eppendorfs_csv.to_csv('experimental/metal_eppendorfs_blank.csv', index=True)
+        metal_eppendorfs_csv.to_csv(
+            'experimental/metal_eppendorfs_blank.csv', index=True
+        )
 
     _()
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

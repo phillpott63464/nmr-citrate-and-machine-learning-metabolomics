@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.14.17'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -736,7 +736,6 @@ def _(np):
     # print(peak_values[0])
     return (
         data_dir,
-        experiment,
         experiment_number,
         experiments,
         extract_peak_values,
@@ -1442,37 +1441,64 @@ def _():
         tris_buffer_stock['tris hcl'] / tris_chloride_mass
     ) / (tris_buffer_stock['mq'] + (tris_buffer_stock['d2o'] / d2o_density))
 
-
     magnesium_chloride_stock = {
         'flask': 12.79513,
-        'boat chloride': 23.61/1000,
+        'boat chloride': 23.61 / 1000,
         'flask and chloride': 12.81384,
         'flask and d2o': 13.08,
-        'flask and mq': 17.80
+        'flask and mq': 17.80,
     }
 
-    magnesium_chloride_stock['chloride'] = magnesium_chloride_stock['flask and chloride'] - magnesium_chloride_stock['flask']
-    magnesium_chloride_stock['d2o'] = magnesium_chloride_stock['flask and d2o'] - magnesium_chloride_stock['flask and chloride']
-    magnesium_chloride_stock['mq'] = magnesium_chloride_stock['flask and mq'] - magnesium_chloride_stock['flask and d2o']
-    magnesium_chloride_stock['molarity'] = (magnesium_chloride_stock['chloride']/magnesium_chloride_mass) / (magnesium_chloride_stock['mq'] + (magnesium_chloride_stock['d2o'] / d2o_density))
+    magnesium_chloride_stock['chloride'] = (
+        magnesium_chloride_stock['flask and chloride']
+        - magnesium_chloride_stock['flask']
+    )
+    magnesium_chloride_stock['d2o'] = (
+        magnesium_chloride_stock['flask and d2o']
+        - magnesium_chloride_stock['flask and chloride']
+    )
+    magnesium_chloride_stock['mq'] = (
+        magnesium_chloride_stock['flask and mq']
+        - magnesium_chloride_stock['flask and d2o']
+    )
+    magnesium_chloride_stock['molarity'] = (
+        magnesium_chloride_stock['chloride'] / magnesium_chloride_mass
+    ) / (
+        magnesium_chloride_stock['mq']
+        + (magnesium_chloride_stock['d2o'] / d2o_density)
+    )
 
     calcium_chloride_stock = {
         'flask': 12.62002,
-        'boat chloride': 36.77/1000,
+        'boat chloride': 36.77 / 1000,
         'flask and chloride': 12.8560,
         'flask and d2o': 12.92,
-        'flask and mq': 17.70
+        'flask and mq': 17.70,
     }
-    calcium_chloride_stock['chloride'] = calcium_chloride_stock['flask and chloride'] - calcium_chloride_stock['flask']
-    calcium_chloride_stock['d2o'] = calcium_chloride_stock['flask and d2o'] - calcium_chloride_stock['flask and chloride']
-    calcium_chloride_stock['mq'] = calcium_chloride_stock['flask and mq'] - calcium_chloride_stock['flask and d2o']
-    calcium_chloride_stock['molarity'] = (calcium_chloride_stock['chloride']/calcium_chloride_mass) / (calcium_chloride_stock['mq'] + (calcium_chloride_stock['d2o'] / d2o_density))
+    calcium_chloride_stock['chloride'] = (
+        calcium_chloride_stock['flask and chloride']
+        - calcium_chloride_stock['flask']
+    )
+    calcium_chloride_stock['d2o'] = (
+        calcium_chloride_stock['flask and d2o']
+        - calcium_chloride_stock['flask and chloride']
+    )
+    calcium_chloride_stock['mq'] = (
+        calcium_chloride_stock['flask and mq']
+        - calcium_chloride_stock['flask and d2o']
+    )
+    calcium_chloride_stock['molarity'] = (
+        calcium_chloride_stock['chloride'] / calcium_chloride_mass
+    ) / (
+        calcium_chloride_stock['mq']
+        + (calcium_chloride_stock['d2o'] / d2o_density)
+    )
 
     return
 
 
 @app.cell
-def _(experiment, out_dir, pd):
+def _(out_dir, pd):
     metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
     metal_real_experiments = []
 
@@ -1482,13 +1508,15 @@ def _(experiment, out_dir, pd):
             row[col] = metal_imported.at[midx, col]
         metal_real_experiments.append(row)
 
-    for mexperiment in metal_real_experiments:
-        print(mexperiment)
-        mexperiment['citric acid stock / L'] = mexperiment['post citric acid stock weight / g'] - experiment['eppendorf base weight / g']
-        # mexperiment['']
+    print(metal_imported)
+
+    # for mexperiment in metal_real_experiments:
+    #     print(mexperiment)
+    #     mexperiment['citric acid stock / L'] = mexperiment['post citric acid stock weight / g'] - experiment['eppendorf base weight / g']
+    # mexperiment['']
 
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
