@@ -1414,96 +1414,116 @@ def _():
     d2o_density = 1.1044   # g/ml
 
     tris_buffer_stock = {
-        'boat tris': 0.49,
-        'flask': 35.56,
-        'flask and tris': 36.06,
-        'boat tris hcl': 0.15,
-        'flask and tris hcl': 36.19,
-        'flask and tris hcl rinse': 38.87,
-        'flask and d2o': 39.15,
-        'flask and mq': 85.62,
+        'boat tris / g': 0.49,
+        'flask / g': 35.56,
+        'flask and tris / g': 36.06,
+        'boat tris hcl / g': 0.15,
+        'flask and tris hcl / g': 36.19,
+        'flask and tris hcl rinse / g': 38.87,
+        'flask and d2o / g': 39.15,
+        'flask and mq / g': 85.62,
     }
 
-    tris_buffer_stock['tris'] = (
-        tris_buffer_stock['flask and tris'] - tris_buffer_stock['flask']
+    tris_buffer_stock['tris / g'] = (
+        tris_buffer_stock['flask and tris / g']
+        - tris_buffer_stock['flask / g']
     )
 
-    tris_buffer_stock['tris hcl'] = (
-        tris_buffer_stock['flask and tris hcl']
-        - tris_buffer_stock['flask and tris']
+    tris_buffer_stock['tris hcl / g'] = (
+        tris_buffer_stock['flask and tris hcl / g']
+        - tris_buffer_stock['flask and tris / g']
     )
 
-    tris_buffer_stock['d2o'] = (
-        tris_buffer_stock['flask and d2o']
-        - tris_buffer_stock['flask and tris hcl rinse']
+    tris_buffer_stock['d2o / L'] = (
+        (
+            tris_buffer_stock['flask and d2o / g']
+            - tris_buffer_stock['flask and tris hcl rinse / g']
+        )
+        / d2o_density
+        / 1000
     )
 
-    tris_buffer_stock['mq'] = (
-        tris_buffer_stock['flask and mq'] - tris_buffer_stock['flask and d2o']
-    ) + (
-        tris_buffer_stock['flask and tris hcl rinse']
-        - tris_buffer_stock['flask and tris hcl']
-    )
+    tris_buffer_stock['mq / L'] = (
+        (
+            tris_buffer_stock['flask and mq / g']
+            - tris_buffer_stock['flask and d2o / g']
+        )
+        + (
+            tris_buffer_stock['flask and tris hcl rinse / g']
+            - tris_buffer_stock['flask and tris hcl / g']
+        )
+    ) / 1000
 
     tris_buffer_stock['tris molarity'] = (
-        (tris_buffer_stock['tris'] + tris_buffer_stock['tris hcl']) / tris_mass
-    ) / (tris_buffer_stock['mq'] + (tris_buffer_stock['d2o'] / d2o_density))
+        (tris_buffer_stock['tris / g'] + tris_buffer_stock['tris hcl / g'])
+        / tris_mass
+    ) / (tris_buffer_stock['mq / L'] + (tris_buffer_stock['d2o / L']))
 
     tris_buffer_stock['chloride molarity'] = (
-        tris_buffer_stock['tris hcl'] / tris_chloride_mass
-    ) / (tris_buffer_stock['mq'] + (tris_buffer_stock['d2o'] / d2o_density))
+        tris_buffer_stock['tris hcl / g'] / tris_chloride_mass
+    ) / (tris_buffer_stock['mq / L'] + (tris_buffer_stock['d2o / L']))
+
+    print(tris_buffer_stock['d2o / L'])
+    print(tris_buffer_stock['chloride molarity'])
 
     magnesium_chloride_stock = {
-        'flask': 12.79513,
-        'boat chloride': 23.61 / 1000,
-        'flask and chloride': 12.81384,
-        'flask and d2o': 13.08,
-        'flask and mq': 17.80,
+        'flask / g': 12.79513,
+        'boat chloride / g': 23.61 / 1000,
+        'flask and chloride / g': 12.81384,
+        'flask and d2o / g': 13.08,
+        'flask and mq / g': 17.80,
     }
 
-    magnesium_chloride_stock['chloride'] = (
-        magnesium_chloride_stock['flask and chloride']
-        - magnesium_chloride_stock['flask']
+    magnesium_chloride_stock['chloride / g'] = (
+        magnesium_chloride_stock['flask and chloride / g']
+        - magnesium_chloride_stock['flask / g']
     )
-    magnesium_chloride_stock['d2o'] = (
-        magnesium_chloride_stock['flask and d2o']
-        - magnesium_chloride_stock['flask and chloride']
-    ) / d2o_density / 1000 # L
-    magnesium_chloride_stock['mq'] = (
-        magnesium_chloride_stock['flask and mq']
-        - magnesium_chloride_stock['flask and d2o']
-    ) / 1000 # L
-    magnesium_chloride_stock['molarity'] = (
-        magnesium_chloride_stock['chloride'] / magnesium_chloride_mass
+    magnesium_chloride_stock['d2o / L'] = (
+        (
+            magnesium_chloride_stock['flask and d2o / g']
+            - magnesium_chloride_stock['flask and chloride / g']
+        )
+        / d2o_density
+        / 1000
+    )   # L
+    magnesium_chloride_stock['mq / L'] = (
+        magnesium_chloride_stock['flask and mq / g']
+        - magnesium_chloride_stock['flask and d2o / g']
+    ) / 1000   # L
+    magnesium_chloride_stock['molarity / M'] = (
+        magnesium_chloride_stock['chloride / g'] / magnesium_chloride_mass
     ) / (
-        magnesium_chloride_stock['mq']
-        + (magnesium_chloride_stock['d2o'])
+        magnesium_chloride_stock['mq / L']
+        + (magnesium_chloride_stock['d2o / L'])
     )
 
     calcium_chloride_stock = {
-        'flask': 12.62002,
-        'boat chloride': 36.77 / 1000,
-        'flask and chloride': 12.6560,
-        'flask and d2o': 12.92,
-        'flask and mq': 17.70,
+        'flask / g': 12.62002,
+        'boat chloride / g': 36.77 / 1000,
+        'flask and chloride / g': 12.6560,
+        'flask and d2o / g': 12.92,
+        'flask and mq / g': 17.70,
     }
-    calcium_chloride_stock['chloride'] = (
-        calcium_chloride_stock['flask and chloride']
-        - calcium_chloride_stock['flask']
+    calcium_chloride_stock['chloride / g'] = (
+        calcium_chloride_stock['flask and chloride / g']
+        - calcium_chloride_stock['flask / g']
     )
-    calcium_chloride_stock['d2o'] = (
-        calcium_chloride_stock['flask and d2o']
-        - calcium_chloride_stock['flask and chloride']
-    ) / d2o_density / 1000
-    calcium_chloride_stock['mq'] = (
-        calcium_chloride_stock['flask and mq']
-        - calcium_chloride_stock['flask and d2o']
+    calcium_chloride_stock['d2o / L'] = (
+        (
+            calcium_chloride_stock['flask and d2o / g']
+            - calcium_chloride_stock['flask and chloride / g']
+        )
+        / d2o_density
+        / 1000
+    )
+    calcium_chloride_stock['mq / L'] = (
+        calcium_chloride_stock['flask and mq / g']
+        - calcium_chloride_stock['flask and d2o / g']
     ) / 1000
-    calcium_chloride_stock['molarity'] = (
-        calcium_chloride_stock['chloride'] / calcium_chloride_mass
+    calcium_chloride_stock['molarity / M'] = (
+        calcium_chloride_stock['chloride / g'] / calcium_chloride_mass
     ) / (
-        calcium_chloride_stock['mq']
-        + (calcium_chloride_stock['d2o'])
+        calcium_chloride_stock['mq / L'] + (calcium_chloride_stock['d2o / L'])
     )
     return calcium_chloride_stock, magnesium_chloride_stock, tris_buffer_stock
 
@@ -1518,6 +1538,8 @@ def _(
     stocks,
     tris_buffer_stock,
 ):
+    from collections import OrderedDict
+
     metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
     metal_real_experiments = []
 
@@ -1525,9 +1547,18 @@ def _(
         row = {}
         for col in metal_imported.columns:
             row[col] = metal_imported.at[midx, col]
+        row = OrderedDict(row)
         metal_real_experiments.append(row)
 
     for mexperiment in metal_real_experiments:
+        mexperiment['Sample number'] = mexperiment.pop(
+            'Unnamed: 0'
+        )   # Change name of unnamed: o
+
+        mexperiment.move_to_end(
+            'Sample number', last=False
+        )   # Move sample number to front
+
         mexperiment['citric acid stock / L'] = round(
             (
                 mexperiment['post citric acid stock weight / g']
@@ -1582,19 +1613,19 @@ def _(
             tris_buffer_stock['tris molarity']
             * mexperiment['tris buffer / L']
             / mexperiment['total vol / L'],
-            6,
+            4,
         )
 
-        if mexperiment['Unnamed: 0'] in range(25, 37):
-            salt_molarity = magnesium_chloride_stock['molarity']
+        if mexperiment['Sample number'] in range(25, 37):
+            salt_molarity = magnesium_chloride_stock['molarity / M']
         else:
-            salt_molarity = calcium_chloride_stock['molarity']
+            salt_molarity = calcium_chloride_stock['molarity / M']
 
         mexperiment['salt stock molarity / M'] = round(
             salt_molarity
             * mexperiment['salt stock / L']
             / mexperiment['total vol / L'],
-            7,
+            5,
         )
 
     metal_output = mo.ui.table(
@@ -1602,6 +1633,12 @@ def _(
         label='Experiment Data',
     )
     return (metal_output,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r""" """)
+    return
 
 
 if __name__ == "__main__":
