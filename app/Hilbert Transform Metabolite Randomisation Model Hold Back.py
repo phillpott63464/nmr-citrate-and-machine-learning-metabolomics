@@ -44,14 +44,14 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100                    # Number of samples per metabolite combination
-    trials = 10                  # Number of hyperparameter optimization trialss
+    count = 100                   # Number of samples per metabolite combination
+    trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
-    downsample = 2**11             # Target resolution for ML model (None = no downsampling)
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    downsample = 2**9            # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
 
@@ -67,18 +67,18 @@ def _():
     # NMR metabolite database mapping (substance name -> spectrum ID + chemical shift range)
     substanceDict = {
         'Citric acid': ['SP:3368', [[2.4, 2.8]]],
-        'Succinic acid': ['SP:3211', [[2.0, 2.6]]],
-        'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
-        'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
-        'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
-        'L-Proline': ['SP:3406', [[1.8, 4.3]]],
-        'L-Phenylalanine': ['SP:3507', [[3, 8]]],
-        'L-Serine': ['SP:3732', [[3.5, 4.5]]],
-        'L-Threonine': ['SP:3437', [[3.5, 4.5]]],
-        'L-Tryptophan': ['SP:3455', [[7.0, 8.0]]],
-        'L-Tyrosine': ['SP:3464', [[6.5, 7.5]]],
-        'L-Valine': ['SP:3490', [[0.9, 1.5]]],
-        'Glycine': ['SP:3682', [[3.5, 4.0]]],
+        # 'Succinic acid': ['SP:3211',],
+        # 'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
+        # 'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
+        # 'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
+        # 'L-Proline': ['SP:3406', [[1.8, 4.3]]],
+        # 'L-Phenylalanine': ['SP:3507', [[3, 8]]],
+        'L-Serine': ['SP:3732',],
+        'L-Threonine': ['SP:3437',],
+        'L-Tryptophan': ['SP:3455',],
+        'L-Tyrosine': ['SP:3464',],
+        'L-Valine': ['SP:3490',],
+        'Glycine': ['SP:3682',],
     }
 
     import pandas as pd
@@ -89,13 +89,14 @@ def _():
             centers = multiplets[multiplets['spectrum_id'] == item[0]]
             centers = centers['center']
             centers = centers.to_numpy()
+            centers = set(centers)
 
             arrays = [[x - 0.1, x + 0.1] for x in centers]
 
             if len(item) < 2:
                 item.append(arrays)
             else:
-                item[1] = arrays
+                item[1] += arrays
 
     _()
 
@@ -686,12 +687,16 @@ def _(plt, reference_spectra, spectra, substanceDict):
 
         plt.figure(figsize=(12, 8))
 
+        data = spectra[0]['positions'][20000:250000]
+        data2 = spectra[0]['intensities'][20000:250000]
+
         # Plot reference spectrum for each metabolite
         for substance in substanceDict:
             spectrum_id = substanceDict[substance][0]
+            data2 = reference_spectra[spectrum_id][0][20000:250000]
             plt.plot(
-                spectra[0]['positions'],
-                reference_spectra[spectrum_id][0],
+                data,
+                data2,
                 label=substance,
                 alpha=0.7
             )
@@ -794,6 +799,7 @@ def _(np):
         # Select only certain chemical shift ranges
         if ranged:
             ranges = [[-0.1, 0.1]]
+            # ranges = []
             # Handle different types of scales parameter
             if isinstance(scales, dict):
                 # Training data: scales is a dictionary of substance concentrations
@@ -820,22 +826,14 @@ def _(np):
 
             indicies = sorted(indicies) # Sort indicies for consistent ordering
 
-            # Calculate next power of 2
             length = len(indicies)
             if length == 0:
                 length = 1
 
-            # Find the next power of 2 using bit operations
-            next_power = 1
-            while next_power < length:
-                next_power <<= 1  # Equivalent to next_power *= 2
-
             if downsample is not None:
-                if next_power < downsample:
-                    next_power = downsample
-
-            # Calculate how much padding we need
-            pad_needed = next_power - length
+                pad_needed = downsample - length
+            else:
+                pad_needed = 0
 
             if pad_needed > 0:
                 left_pad = pad_needed // 2
@@ -1087,7 +1085,8 @@ def _(
         plt.subplot(num_substances, 2, 2 * i + 2)
         if reverse:
             # Time domain: plot magnitude of complex data
-            complex_data = preprocessed_reference_spectra[spectrum_id]
+            complex_data = preprocessed_reference_spectra[spectrum_id][1]
+            print(complex_data)
             plt.plot(complex_data, alpha=0.7, label=substance)
             plt.title(f'Preprocessed (Hilbert Transform - Time Domain): {substance}')
             plt.xlabel('Time Points')
@@ -1844,7 +1843,6 @@ def _(math, nn, remove_padding, torch):
             super(TransformerRegressor, self).__init__()
 
             self.input_size = input_size
-            self.window_size = kwargs.get('window_size', 256)
 
             # Hyperparameter configuration
             if trial is not None:
@@ -1854,6 +1852,7 @@ def _(math, nn, remove_padding, torch):
                 self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [512, 1024, 2048]))
 
                 # Sliding window parameters
+                self.window_size = int(trial.suggest_categorical('window_size', [128, 256, 512]))
                 stride_ratio = trial.suggest_float('stride_ratio', 0.25, 0.75)
                 self.stride = int(self.window_size * stride_ratio)
                 self.stride = max(1, self.stride)
@@ -1863,6 +1862,7 @@ def _(math, nn, remove_padding, torch):
                 self.num_layers = kwargs.get('num_layers', 4)
                 self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
                 self.stride = kwargs.get('stride', 128)
+                self.window_size = kwargs.get('window_size', 256)
 
 
             # Ensure attention head compatibility
@@ -1979,7 +1979,7 @@ def _(math, nn, remove_padding, torch):
                 ], dim=-1)
 
                 # Project window to transformer dimension
-                window_embed = self.window_projection(window_input).unsqueeze(1)  # [batch, 1, d_model]
+                window_embed = self.window_projection(window_input)#.unsqueeze(1)  # [batch, 1, d_model]
 
                 # Local transformer processing
                 local_features = self.local_transformer(window_embed)  # [batch, 1, d_model]
