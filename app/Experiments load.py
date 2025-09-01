@@ -1259,9 +1259,12 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
             data, 2**15
         )    # Zero fill to 32768 points
         data = ng.proc_base.fft(data)                 # Fourier transform
-        data = ng.proc_base.ps(
-            data, p0=phc['PHC0'], p1=phc['PHC1']
-        )  # Phase correction
+        # data = ng.proc_base.ps(
+        #     data, p0=phc['PHC0'], p1=phc['PHC1']
+        # )  # Phase correction
+        data = ng.proc_autophase.autops(data, 'peak_minima') # Automatic phase correction
+        if abs(max(data)) > abs(min(data)):
+            data *= -1
         data = ng.proc_base.di(data)                  # Discard the imaginaries
         data = ng.proc_base.rev(data)                 # Reverse the data=
 
@@ -1301,6 +1304,9 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 experiment=experiment,
                 experiment_number=experiment_number,
             )
+
+            if idx == 0:
+                data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(data[19000:22000])  # Adjust the range as needed
@@ -1592,12 +1598,12 @@ def _(
             6,
         )
 
-        mexperiment['total vol / L'] = (
+        mexperiment['total vol / L'] = round((
             mexperiment['citric acid stock / L']
             + mexperiment['salt stock / L']
             + mexperiment['tris buffer / L']
             + mexperiment['mq / L']
-        )
+        ), 5)
 
         # print(mexperiment['total vol / L'])
 
