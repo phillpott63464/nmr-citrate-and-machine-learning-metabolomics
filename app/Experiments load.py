@@ -1,13 +1,12 @@
 import marimo
 
-__generated_with = "0.14.17"
+__generated_with = "0.15.2"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -318,7 +317,6 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         ],
         label='Experiment Data',
     )
-
     return (
         acid_vol,
         base_vol,
@@ -480,7 +478,6 @@ def _(
     plt.grid(True)
     plt.tight_layout()  # Adjust layout to prevent clipping
     plt.show()
-
     return
 
 
@@ -705,14 +702,14 @@ def _(np):
         return sr
 
     data_dir = 'spectra'   # The directory all data is in
-    experiment_dir = '20250811_cit_nacit_titr'   # The experiment name
+    experiment_dir_speciation = '20250811_cit_nacit_titr'   # The experiment name
     experiment_count = 24   # The number of experiments in format _i
     experiment_number = (
         '3'  # The folder in the experiment that contains the acqusition data
     )
 
     experiments = get_experiment_directories(
-        data_dir, experiment_dir, experiment_count
+        data_dir, experiment_dir_speciation, experiment_count
     )
 
     sr_values, peak_values = [], []
@@ -735,12 +732,18 @@ def _(np):
     # print(ppm_shift)
     # print(peak_values[0])
     return (
+        adjust_peak_values,
+        calculate_ppm_shift,
         data_dir,
+        experiment_count,
         experiment_number,
         experiments,
         extract_peak_values,
         extract_phc,
+        extract_sr,
+        get_experiment_directories,
         peak_values,
+        sr_values,
     )
 
 
@@ -1125,7 +1128,6 @@ def _(
 
     # Show the plots
     citratepeakdifferencesfig = plt.gca()
-
     return citrate_ppms, citratepeakdifferencesfig
 
 
@@ -1262,7 +1264,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         # data = ng.proc_base.ps(
         #     data, p0=phc['PHC0'], p1=phc['PHC1']
         # )  # Phase correction
-        data = ng.proc_autophase.autops(data, 'peak_minima') # Automatic phase correction
+        data = ng.proc_autophase.autops(data, 'peak_minima', p0=phc['PHC0'], p1=phc['PHC1']) # Automatic phase correction
         if abs(max(data)) > abs(min(data)):
             data *= -1
         data = ng.proc_base.di(data)                  # Discard the imaginaries
@@ -1272,12 +1274,6 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
     def read_bruker(data_dir, experiment, experiment_number):
         import nmrglue as ng
-
-        phc = extract_phc(
-            data_dir=data_dir,
-            experiment_number=experiment_number,
-            experiment=experiment,
-        )
 
         dic, data = ng.bruker.read(
             f'{data_dir}/{experiment}/{experiment_number}'
@@ -1305,7 +1301,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 experiment_number=experiment_number,
             )
 
-            if idx == 0:
+            if idx == 0: # The first one doesn't flip properly for some reason
                 data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
@@ -1343,17 +1339,18 @@ def _(mo, singlefftfig):
 
 
 @app.cell
-def _(bruker_fft, data_dir, experiment_number, experiments, plt):
+def _(bruker_fft, data_dir, experiment_number, experiments, mo, plt):
     def _():
         # plt.figure(figsize=(15, 5))
 
         data = bruker_fft(
             data_dir=data_dir,
-            experiment=experiments[8],
+            experiment=experiments[16],
             experiment_number=experiment_number,
         )
 
-        plt.plot(data[19000:22000])
+        # plt.plot(data[19000:22000])
+        plt.plot(data)
         plt.title(f'NMR Experiment', fontsize=14)
         plt.xlabel(
             'Data Points', fontsize=12
@@ -1365,11 +1362,13 @@ def _(bruker_fft, data_dir, experiment_number, experiments, plt):
 
         plt.tight_layout()  # Adjust layout to prevent overlap
 
-        return plt.gca()
+        # return plt.gca()
+
+        return plt.gcf()
 
     singlefftfig = _()
 
-    # singlefftfig.show()
+    mo.mpl.interactive(singlefftfig)
     return (singlefftfig,)
 
 
@@ -1393,7 +1392,6 @@ def _():
     print(
         f'Uranium difference between peaks: {[abs(round(x, 2)) for x in [uranium_proton_ppms_converted[0] - uranium_proton_ppms_converted[1], uranium_proton_ppms_converted[2] - uranium_proton_ppms_converted[3]]]}'
     )
-
     return
 
 
@@ -1644,6 +1642,45 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r""" """)
+    return
+
+
+@app.cell
+def _(
+    adjust_peak_values,
+    calculate_ppm_shift,
+    data_dir,
+    experiment_count,
+    experiment_number,
+    extract_peak_values,
+    extract_sr,
+    get_experiment_directories,
+    sr_values,
+):
+    experiment_dir_chelation = '20250811_cit_nacit_titr' # Not fetched it yet
+
+    def _():
+        chelation_experiments = get_experiment_directories(
+            data_dir, experiment_dir_chelation, experiment_count
+        )
+    
+        chelation_sr_values, chelation_peak_values = [], []
+    
+        for experiment in chelation_experiments:
+            chelation_sr_values.append(extract_sr(experiment, experiment_number, data_dir))
+    
+            peaks = extract_peak_values(experiment, experiment_number, data_dir)
+            chelation_peak_values.append(peaks)
+    
+        chelation_ppm_shift = []
+    
+        for sr in sr_values:
+            chelation_ppm_shift.append(calculate_ppm_shift(sr, frequency=600.5))
+
+        # if len(peak_values)
+        chelation_peak_values = adjust_peak_values(chelation_peak_values, chelation_ppm_shift)
+
+    _()
     return
 
 
