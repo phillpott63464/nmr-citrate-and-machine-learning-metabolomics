@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.15.2"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -828,12 +828,14 @@ def _(base_vol, peak_values, phs, plt):
 
 
 @app.cell(hide_code=True)
-def _(chemicalshift_fig, mo):
+def _(chemicalshift_fig, chemicalshift_predicted_fig, mo):
     mo.md(
         rf"""
     ### Chemical Shift Against Citrate Speciation
 
     {mo.as_html(chemicalshift_fig)}
+
+    {mo.as_html(chemicalshift_predicted_fig)}
     """
     )
     return
@@ -846,6 +848,9 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     )
 
     fracs = citricacid.alpha(phs)
+
+    # fracs[0] = [1, 0, 0, 0]
+    # fracs[-1] = [0, 0, 0, 1]
 
     species_1 = []
     species_2 = []
@@ -921,6 +926,115 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
 
     print([x / 0.0006 * 100 for x in base_vol])
     return chemicalshift_fig, fracs
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Properly Fitting Chemical Shift to Speciation
+
+    First, assume the model:
+
+    $\delta_{obs,peak}=f_0\delta_0+f_1\delta_1+f_2\delta_2+f_3\delta_3$
+
+    Where $\delta_{x}$ is unknown chemical shift of each peak in each species. We assume that all 4 species contribute linearly to all 4 peaks. Per experiment, 16 total unknown values, in a 4x4 matrix.
+    """
+    )
+    return
+
+
+@app.cell
+def _(fracs, np, peak_values):
+    """Properly fitting chemical shift to speciation"""
+
+    # fracs = ratio of species in that ph [experiments, 4(0-1)]
+
+    peak_values_no_intensities = [
+        [float(x[0]) for x in y]
+        for y in peak_values
+    ] # Chemical shift of each peak in citrate [experiments, 4(ppm)]
+
+    transposed_peaks = [list(x) for x in zip(*peak_values_no_intensities)]
+
+    linalgout = [np.linalg.lstsq(fracs, peak, rcond=None) for peak in transposed_peaks]
+    linalgout = [list(x) for x in zip(*linalgout)]
+    # deltas, residuals, rank, s
+
+
+    all_deltas = np.array(linalgout[0])
+    # deltas, here, is a matrix of delta_{x} from the above model.
+
+    from scipy.optimize import minimize
+    def find_f(all_deltas, shifts):
+        n_species = all_deltas.shape[1]
+
+        def objective(f):
+            return np.sum((all_deltas @ f - shifts)**2)
+
+        constraints = [
+            {'type': 'eq', 'fun': lambda f: np.sum(f) - 1},
+        ] # Everything must sum to 1
+
+        bounds = [(0, 1)] * n_species # All species ratio must be between 0 and 1
+
+        result = minimize(
+            objective,
+            np.ones(n_species)/n_species,
+            bounds=bounds,
+            constraints=constraints
+        )
+
+        if not result.success:
+            raise OSError({result.message})
+
+        return result.x
+
+    predicted_ratios = []
+    for shifts in peak_values_no_intensities:
+        predicted_ratios.append(
+            find_f(
+                all_deltas=all_deltas,
+                shifts=shifts
+            )
+        )
+
+    return peak_values_no_intensities, predicted_ratios
+
+
+@app.cell
+def _(peak_values_no_intensities, phs, plt):
+    plt.plot(phs, peak_values_no_intensities)
+    return
+
+
+@app.cell
+def _(avg_ppm, plt, predicted_ratios):
+    plt.figure(figsize=(8, 5))
+
+    plt.plot(
+        avg_ppm,
+        predicted_ratios,
+        marker='s',
+        linestyle='-',
+        linewidth=2,
+        markersize=5,
+    )
+    plt.gca().invert_xaxis()
+    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+
+    plt.ylabel('Predicted Speciation Ratio')
+    plt.xlabel('Chemical shift (PPM)')
+    plt.title(
+        'Chemical shift of Peaks in Citric Acid and Predicted Trisodium Citrate Speciation'
+    )
+
+    plt.tight_layout()
+
+    chemicalshift_predicted_fig = plt.gca()
+
+    plt.show()
+    return (chemicalshift_predicted_fig,)
 
 
 @app.cell(hide_code=True)
@@ -1663,17 +1777,17 @@ def _(
         chelation_experiments = get_experiment_directories(
             data_dir, experiment_dir_chelation, experiment_count
         )
-    
+
         chelation_sr_values, chelation_peak_values = [], []
-    
+
         for experiment in chelation_experiments:
             chelation_sr_values.append(extract_sr(experiment, experiment_number, data_dir))
-    
+
             peaks = extract_peak_values(experiment, experiment_number, data_dir)
             chelation_peak_values.append(peaks)
-    
+
         chelation_ppm_shift = []
-    
+
         for sr in sr_values:
             chelation_ppm_shift.append(calculate_ppm_shift(sr, frequency=600.5))
 
