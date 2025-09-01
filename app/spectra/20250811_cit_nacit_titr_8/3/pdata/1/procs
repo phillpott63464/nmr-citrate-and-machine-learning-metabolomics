@@ -1,12 +1,12 @@
 ##TITLE= Parameter file, TopSpin 3.6.1
 ##JCAMPDX= 5.0
 ##DATATYPE= Parameter Values
-##NPOINTS= 27	$$ modification sequence number
+##NPOINTS= 44	$$ modification sequence number
 ##ORIGIN= Bruker BioSpin GmbH
 ##OWNER= ukc
-$$ 2025-08-15 15:22:16.209 +0100  ukc@CZC8417J16
+$$ 2025-08-29 16:26:47.896 +0100  ukc@CZC8417J16
 $$ /opt/DATA/icon/2025/sp/20250811_cit_nacit_titr_8/3/pdata/1/procs
-$$ process /opt/topspin3.6.1/prog/mod/peak
+$$ process /opt/topspin3.6.1/prog/mod/dataserver
 ##$ABSF1= 0
 ##$ABSF2= 0
 ##$ABSG= 0
@@ -39,7 +39,7 @@ $$ process /opt/topspin3.6.1/prog/mod/peak
 ##$F1P= 0
 ##$F2P= 0
 ##$FCOR= 0.5
-##$FTSIZE= 32768
+##$FTSIZE= 16384
 ##$FT_mod= 6
 ##$GAMMA= 0
 ##$GB= 0
@@ -106,7 +106,7 @@ $$ process /opt/topspin3.6.1/prog/mod/peak
 ##$RDPOS= 0
 ##$REVERSE= no
 ##$SF= 600.049945681819
-##$SI= 32768
+##$SI= 16384
 ##$SIGF1= 6
 ##$SIGF2= 5.2
 ##$SINO= 0
@@ -115,7 +115,7 @@ $$ process /opt/topspin3.6.1/prog/mod/peak
 ##$SREF_mod= 1
 ##$SREGLST= <1H.H2O+D2O+salt>
 ##$SSB= 0
-##$STSI= 32768
+##$STSI= 16384
 ##$STSR= 0
 ##$SW_p= 9615.38461538464
 ##$SYMM= 0
@@ -137,6 +137,6 @@ QCI_CPMG_9_128_METABO H2O+D2O+salt /opt/DATA/icon/2022/pp ukc 3
 ##$USERP5= <>
 ##$WDW= 1
 ##$XDIM= 0
-##$YMAX_p= 7319996
-##$YMIN_p= -474562018
+##$YMAX_p= 7319997
+##$YMIN_p= -472815950
 ##END=
