@@ -732,8 +732,6 @@ def _(np):
     # print(ppm_shift)
     # print(peak_values[0])
     return (
-        adjust_peak_values,
-        calculate_ppm_shift,
         data_dir,
         experiment_count,
         experiment_number,
@@ -743,7 +741,6 @@ def _(np):
         extract_sr,
         get_experiment_directories,
         peak_values,
-        sr_values,
     )
 
 
@@ -1369,7 +1366,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
         data = read_bruker(data_dir, experiment, experiment_number)
         # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
-
+    
         # Process the spectrum
         data = ng.proc_base.zf_size(
             data, 2**15
@@ -1378,7 +1375,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         # data = ng.proc_base.ps(
         #     data, p0=phc['PHC0'], p1=phc['PHC1']
         # )  # Phase correction
-        data = ng.proc_autophase.autops(data, 'peak_minima', p0=phc['PHC0'], p1=phc['PHC1']) # Automatic phase correction
+        data = ng.proc_autophase.autops(data, 'peak_minima')#, p0=phc['PHC0'], p1=phc['PHC1']) # Automatic phase correction
         if abs(max(data)) > abs(min(data)):
             data *= -1
         data = ng.proc_base.di(data)                  # Discard the imaginaries
@@ -1438,6 +1435,35 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
     nmrgluefig = _()
     return bruker_fft, math, nmrgluefig, read_bruker
+
+
+@app.cell
+def _(bruker_fft, data_dir, experiment_number, experiments, plt):
+    """Test bruker peak picking"""
+
+    def bruker_peak_pick(data_dir, experiment, experiment_number):
+        import nmrglue as ng
+        data = bruker_fft(data_dir, experiment, experiment_number)
+
+        threshold = 1e6
+        peaks = ng.peakpick.pick(data, pthres=threshold, algorithm="downward")
+
+        return peaks
+
+    brukerpeaks = bruker_peak_pick(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
+    brukerdata = bruker_fft(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
+
+    plt.plot(brukerdata)
+
+    brukerpeaks = [x for x in brukerpeaks if x // 2]
+
+    print(brukerpeaks)
+
+    for peak in brukerpeaks:
+        plt.plot(peak[0], 2e8, marker='o', markersize=8)
+
+    plt.show()
+    return
 
 
 @app.cell
@@ -1761,17 +1787,16 @@ def _(mo):
 
 @app.cell
 def _(
-    adjust_peak_values,
-    calculate_ppm_shift,
+    bruker_fft,
     data_dir,
     experiment_count,
     experiment_number,
-    extract_peak_values,
     extract_sr,
     get_experiment_directories,
-    sr_values,
+    math,
+    plt,
 ):
-    experiment_dir_chelation = '20250811_cit_nacit_titr' # Not fetched it yet
+    experiment_dir_chelation = '20250811_cit_ca_mg_cit_titr' # Not fetched it yet
 
     def _():
         chelation_experiments = get_experiment_directories(
@@ -1782,19 +1807,98 @@ def _(
 
         for experiment in chelation_experiments:
             chelation_sr_values.append(extract_sr(experiment, experiment_number, data_dir))
+        
+        # Create a new figure
+        ngfig = plt.figure(figsize=(12, 10))
 
-            peaks = extract_peak_values(experiment, experiment_number, data_dir)
-            chelation_peak_values.append(peaks)
+        # Calculate the number of rows and columns for subplots
+        n = len(chelation_experiments)
+        rows = round(math.sqrt(n))
+        cols = round(math.ceil(n / rows))
 
-        chelation_ppm_shift = []
+        for idx, experiment in enumerate(chelation_experiments):
+            data = bruker_fft(
+                data_dir=data_dir,
+                experiment=experiment,
+                experiment_number=experiment_number,
+            )
 
-        for sr in sr_values:
-            chelation_ppm_shift.append(calculate_ppm_shift(sr, frequency=600.5))
+            if idx == 0: # The first one doesn't flip properly for some reason
+                data *= -1
 
-        # if len(peak_values)
-        chelation_peak_values = adjust_peak_values(chelation_peak_values, chelation_ppm_shift)
+            ax = ngfig.add_subplot(rows, cols, idx + 1)
+            ax.plot(data[19000:22000])  # Adjust the range as needed
+            # ax.plot(data)
+            ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
+            ax.set_xlabel(
+                'Data Points', fontsize=12
+            )  # Replace with actual x-axis label if needed
+            ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
+            ax.grid(True)  # Add grid lines for better readability
+            ax.tick_params(axis='both', which='major', labelsize=10)
 
-    _()
+        plt.tight_layout()  # Adjust layout to prevent overlap
+        plt.suptitle(
+            'NMR Experiments Overview', fontsize=16, y=1.02
+        )  # Main title for the figure
+        plt.savefig('figs/NMR.svg')
+        return plt.gca()  # Return the current axes
+
+    chelationfig = _()
+    return chelationfig, experiment_dir_chelation
+
+
+@app.cell
+def _(
+    bruker_fft,
+    data_dir,
+    experiment_count,
+    experiment_dir_chelation,
+    experiment_number,
+    get_experiment_directories,
+    mo,
+    plt,
+):
+
+    def _():
+        # plt.figure(figsize=(15, 5))
+
+        chelation_experiments = get_experiment_directories(
+            data_dir, experiment_dir_chelation, experiment_count
+        )
+
+        data = bruker_fft(
+            data_dir=data_dir,
+            experiment=chelation_experiments[16],
+            experiment_number=experiment_number,
+        )
+
+        # plt.plot(data[19000:22000])
+        plt.plot(data)
+        plt.title(f'NMR Experiment', fontsize=14)
+        plt.xlabel(
+            'Data Points', fontsize=12
+        )  # Replace with actual x-axis label if needed
+        plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
+        plt.grid(True)  # Add grid lines for better readability
+
+        plt.legend()
+
+        plt.tight_layout()  # Adjust layout to prevent overlap
+
+        # return plt.gca()
+
+        return plt.gcf()
+
+    singlechelationfig = _()
+
+    mo.mpl.interactive(singlechelationfig)
+    return
+
+
+@app.cell(hide_code=True)
+def _(chelationfig, mo):
+    mo.md(rf"""{mo.as_html(chelationfig)}""")
     return
 
 
