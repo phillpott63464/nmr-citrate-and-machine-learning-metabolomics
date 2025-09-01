@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.14.17"
-app = marimo.App(width="medium")
+__generated_with = '0.15.2'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -702,7 +703,9 @@ def _(np):
         return sr
 
     data_dir = 'spectra'   # The directory all data is in
-    experiment_dir_speciation = '20250811_cit_nacit_titr'   # The experiment name
+    experiment_dir_speciation = (
+        '20250811_cit_nacit_titr'  # The experiment name
+    )
     experiment_count = 24   # The number of experiments in format _i
     experiment_number = (
         '3'  # The folder in the experiment that contains the acqusition data
@@ -732,6 +735,8 @@ def _(np):
     # print(ppm_shift)
     # print(peak_values[0])
     return (
+        adjust_peak_values,
+        calculate_ppm_shift,
         data_dir,
         experiment_count,
         experiment_number,
@@ -741,6 +746,7 @@ def _(np):
         extract_sr,
         get_experiment_directories,
         peak_values,
+        sr_values,
     )
 
 
@@ -825,14 +831,12 @@ def _(base_vol, peak_values, phs, plt):
 
 
 @app.cell(hide_code=True)
-def _(chemicalshift_fig, chemicalshift_predicted_fig, mo):
+def _(chemicalshift_fig, mo):
     mo.md(
         rf"""
     ### Chemical Shift Against Citrate Speciation
 
     {mo.as_html(chemicalshift_fig)}
-
-    {mo.as_html(chemicalshift_predicted_fig)}
     """
     )
     return
@@ -942,44 +946,53 @@ def _(mo):
 
 
 @app.cell
+def _(chemicalshift_predicted_fig, mo):
+    mo.md(rf"""{mo.as_html(chemicalshift_predicted_fig)}""")
+    return
+
+
+@app.cell
 def _(fracs, np, peak_values):
     """Properly fitting chemical shift to speciation"""
 
     # fracs = ratio of species in that ph [experiments, 4(0-1)]
 
     peak_values_no_intensities = [
-        [float(x[0]) for x in y]
-        for y in peak_values
-    ] # Chemical shift of each peak in citrate [experiments, 4(ppm)]
+        [float(x[0]) for x in y] for y in peak_values
+    ]   # Chemical shift of each peak in citrate [experiments, 4(ppm)]
 
     transposed_peaks = [list(x) for x in zip(*peak_values_no_intensities)]
 
-    linalgout = [np.linalg.lstsq(fracs, peak, rcond=None) for peak in transposed_peaks]
+    linalgout = [
+        np.linalg.lstsq(fracs, peak, rcond=None) for peak in transposed_peaks
+    ]
     linalgout = [list(x) for x in zip(*linalgout)]
     # deltas, residuals, rank, s
-
 
     all_deltas = np.array(linalgout[0])
     # deltas, here, is a matrix of delta_{x} from the above model.
 
     from scipy.optimize import minimize
+
     def find_f(all_deltas, shifts):
         n_species = all_deltas.shape[1]
 
         def objective(f):
-            return np.sum((all_deltas @ f - shifts)**2)
+            return np.sum((all_deltas @ f - shifts) ** 2)
 
         constraints = [
             {'type': 'eq', 'fun': lambda f: np.sum(f) - 1},
-        ] # Everything must sum to 1
+        ]   # Everything must sum to 1
 
-        bounds = [(0, 1)] * n_species # All species ratio must be between 0 and 1
+        bounds = [
+            (0, 1)
+        ] * n_species   # All species ratio must be between 0 and 1
 
         result = minimize(
             objective,
-            np.ones(n_species)/n_species,
+            np.ones(n_species) / n_species,
             bounds=bounds,
-            constraints=constraints
+            constraints=constraints,
         )
 
         if not result.success:
@@ -989,13 +1002,7 @@ def _(fracs, np, peak_values):
 
     predicted_ratios = []
     for shifts in peak_values_no_intensities:
-        predicted_ratios.append(
-            find_f(
-                all_deltas=all_deltas,
-                shifts=shifts
-            )
-        )
-
+        predicted_ratios.append(find_f(all_deltas=all_deltas, shifts=shifts))
     return peak_values_no_intensities, predicted_ratios
 
 
@@ -1027,6 +1034,8 @@ def _(avg_ppm, plt, predicted_ratios):
     )
 
     plt.tight_layout()
+
+    plt.savefig('figs/chemicalshift_predicted_fig.svg')
 
     chemicalshift_predicted_fig = plt.gca()
 
@@ -1366,7 +1375,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
         data = read_bruker(data_dir, experiment, experiment_number)
         # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
-    
+
         # Process the spectrum
         data = ng.proc_base.zf_size(
             data, 2**15
@@ -1375,9 +1384,9 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         # data = ng.proc_base.ps(
         #     data, p0=phc['PHC0'], p1=phc['PHC1']
         # )  # Phase correction
-        data = ng.proc_autophase.autops(data, 'peak_minima')#, p0=phc['PHC0'], p1=phc['PHC1']) # Automatic phase correction
-        if abs(max(data)) > abs(min(data)):
-            data *= -1
+        data = ng.proc_autophase.autops(
+            data, 'peak_minima', p0=phc['PHC0'], p1=phc['PHC1']
+        )   # Automatic phase correction
         data = ng.proc_base.di(data)                  # Discard the imaginaries
         data = ng.proc_base.rev(data)                 # Reverse the data=
 
@@ -1412,7 +1421,12 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 experiment_number=experiment_number,
             )
 
-            if idx == 0: # The first one doesn't flip properly for some reason
+            if (
+                idx == 0
+            ):   # The first one doesn't flip properly for some reason
+                data *= -1
+
+            if abs(max(data)) > abs(min(data)):
                 data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
@@ -1435,35 +1449,6 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
     nmrgluefig = _()
     return bruker_fft, math, nmrgluefig, read_bruker
-
-
-@app.cell
-def _(bruker_fft, data_dir, experiment_number, experiments, plt):
-    """Test bruker peak picking"""
-
-    def bruker_peak_pick(data_dir, experiment, experiment_number):
-        import nmrglue as ng
-        data = bruker_fft(data_dir, experiment, experiment_number)
-
-        threshold = 1e6
-        peaks = ng.peakpick.pick(data, pthres=threshold, algorithm="downward")
-
-        return peaks
-
-    brukerpeaks = bruker_peak_pick(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
-    brukerdata = bruker_fft(data_dir=data_dir, experiment=experiments[0], experiment_number=experiment_number)
-
-    plt.plot(brukerdata)
-
-    brukerpeaks = [x for x in brukerpeaks if x // 2]
-
-    print(brukerpeaks)
-
-    for peak in brukerpeaks:
-        plt.plot(peak[0], 2e8, marker='o', markersize=8)
-
-    plt.show()
-    return
 
 
 @app.cell
@@ -1736,12 +1721,15 @@ def _(
             6,
         )
 
-        mexperiment['total vol / L'] = round((
-            mexperiment['citric acid stock / L']
-            + mexperiment['salt stock / L']
-            + mexperiment['tris buffer / L']
-            + mexperiment['mq / L']
-        ), 5)
+        mexperiment['total vol / L'] = round(
+            (
+                mexperiment['citric acid stock / L']
+                + mexperiment['salt stock / L']
+                + mexperiment['tris buffer / L']
+                + mexperiment['mq / L']
+            ),
+            5,
+        )
 
         # print(mexperiment['total vol / L'])
 
@@ -1776,38 +1764,76 @@ def _(
         data=metal_real_experiments,
         label='Experiment Data',
     )
-    return (metal_output,)
+    return metal_output, metal_real_experiments
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r""" """)
-    return
+@app.cell
+def _(
+    adjust_peak_values,
+    calculate_ppm_shift,
+    data_dir,
+    experiment_count,
+    experiment_number,
+    extract_peak_values,
+    extract_sr,
+    get_experiment_directories,
+    sr_values,
+):
+    experiment_dir_chelation = (
+        '20250811_cit_ca_mg_cit_titr'  # Not fetched it yet
+    )
+
+    chelation_experiments = get_experiment_directories(
+        data_dir, experiment_dir_chelation, experiment_count
+    )
+
+    chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
+    chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
+    chelation_experiments[16] = chelation_experiments[15]
+    chelation_experiments[21] = chelation_experiments[20]
+
+    # del chelation_experiments[21]
+    # del chelation_experiments[16]
+
+    def _():
+        chelation_sr_values, chelation_peak_values = [], []
+        for experiment in chelation_experiments:
+            chelation_sr_values.append(
+                extract_sr(experiment, experiment_number, data_dir)
+            )
+            chelation_peak_values.append(
+                extract_peak_values(experiment, experiment_number, data_dir)
+            )
+
+        ppm_shift = []
+
+        for sr in sr_values:
+            ppm_shift.append(calculate_ppm_shift(sr, frequency=600.5))
+
+        chelation_peak_values = adjust_peak_values(
+            chelation_peak_values, ppm_shift
+        )
+
+        return chelation_sr_values, chelation_peak_values
+
+    chelation_sr_values, chelation_peak_values = _()
+    return (
+        chelation_experiments,
+        chelation_peak_values,
+        experiment_dir_chelation,
+    )
 
 
 @app.cell
 def _(
     bruker_fft,
+    chelation_experiments,
     data_dir,
-    experiment_count,
     experiment_number,
-    extract_sr,
-    get_experiment_directories,
     math,
     plt,
 ):
-    experiment_dir_chelation = '20250811_cit_ca_mg_cit_titr' # Not fetched it yet
-
     def _():
-        chelation_experiments = get_experiment_directories(
-            data_dir, experiment_dir_chelation, experiment_count
-        )
-
-        chelation_sr_values, chelation_peak_values = [], []
-
-        for experiment in chelation_experiments:
-            chelation_sr_values.append(extract_sr(experiment, experiment_number, data_dir))
-        
         # Create a new figure
         ngfig = plt.figure(figsize=(12, 10))
 
@@ -1823,7 +1849,9 @@ def _(
                 experiment_number=experiment_number,
             )
 
-            if idx == 0: # The first one doesn't flip properly for some reason
+            if (
+                idx == 0
+            ):   # The first one doesn't flip properly for some reason
                 data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
@@ -1842,10 +1870,10 @@ def _(
             'NMR Experiments Overview', fontsize=16, y=1.02
         )  # Main title for the figure
         plt.savefig('figs/NMR.svg')
-        return plt.gca()  # Return the current axes
+        return plt.gca()
 
     chelationfig = _()
-    return chelationfig, experiment_dir_chelation
+    return (chelationfig,)
 
 
 @app.cell
@@ -1859,7 +1887,6 @@ def _(
     mo,
     plt,
 ):
-
     def _():
         # plt.figure(figsize=(15, 5))
 
@@ -1869,7 +1896,7 @@ def _(
 
         data = bruker_fft(
             data_dir=data_dir,
-            experiment=chelation_experiments[16],
+            experiment=chelation_experiments[0],
             experiment_number=experiment_number,
         )
 
@@ -1902,5 +1929,76 @@ def _(chelationfig, mo):
     return
 
 
-if __name__ == "__main__":
+@app.cell
+def _(chelation_peak_values, metal_real_experiments, plt):
+    chelation_peak_values_no_intensities = [
+        [float(x[0]) for x in y] for y in chelation_peak_values
+    ]   # Chemical shift of each peak in citrate [experiments, 4(ppm)]
+
+    def _():
+        magnesium_peaks, calcium_peaks = [], []
+        for idx, mexperiment in enumerate(metal_real_experiments):
+            if mexperiment['Sample number'] in range(25, 37):
+                magnesium_peaks.append(
+                    chelation_peak_values_no_intensities[idx]
+                )
+                continue
+
+            calcium_peaks.append(chelation_peak_values_no_intensities[idx])
+
+        return magnesium_peaks, calcium_peaks
+
+    magneisum_peaks, calcium_peaks = _()
+    magnesium_percentages = [
+        exp['salt stock molarity / M']
+        for exp in metal_real_experiments
+        if exp.get('Sample number') in range(25, 37)
+    ]
+
+    calcium_percentages = [
+        exp['salt stock molarity / M']
+        for exp in metal_real_experiments
+        if exp.get('Sample number') > 36
+    ]
+
+    plt.figure(figsize=(15, 15))
+
+    plt.subplot(2, 1, 1)
+    plt.plot(
+        magnesium_percentages,
+        magneisum_peaks,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
+    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.ylabel('Speciation Ratio', fontsize=12)
+    # plt.legend(['Proton A split 1', 'Proton A split 2', 'Proton B split 1', 'Proton B split 2'])
+
+    plt.subplot(2, 1, 2)
+    plt.plot(
+        calcium_percentages,
+        calcium_peaks,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.title('Calcium Molarity vs Citrate Chemical Shift', fontsize=14)
+    plt.xlabel('Calcium Molarity / M', fontsize=12)
+    plt.ylabel('Chemical Shift / ppm', fontsize=12)
+    # plt.legend(['Proton A split 1', 'Proton A split 2', 'Proton B split 1', 'Proton B split 2'])
+
+    # plt.gca().invert_xaxis()
+    plt.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    plt.savefig('figs/chelation.svg')
+    return
+
+
+if __name__ == '__main__':
     app.run()
