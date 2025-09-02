@@ -850,27 +850,6 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
 
     fracs = citricacid.alpha(phs)
 
-    # fracs[0] = [1, 0, 0, 0]
-    # fracs[-1] = [0, 0, 0, 1]
-
-    species_1 = []
-    species_2 = []
-    species_3 = []
-    species_4 = []
-
-    for i in fracs:
-        species_1.append(i[0])
-        species_2.append(i[1])
-        species_3.append(i[2])
-        species_4.append(i[3])
-
-    print([float(x) for x in species_1])
-    print([float(x) for x in species_2])
-    print([float(x) for x in species_3])
-    print([float(x) for x in species_4])
-
-    print(species_1[0] * 100)
-
     plt.figure(figsize=(15, 5))
 
     plt.subplot(1, 3, 1)
@@ -924,9 +903,7 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     plt.tight_layout()
 
     chemicalshift_fig = plt.gca()
-
-    print([x / 0.0006 * 100 for x in base_vol])
-    return chemicalshift_fig, fracs
+    return chemicalshift_fig, citricacid, fracs
 
 
 @app.cell
@@ -972,6 +949,20 @@ def _(fracs, np, peak_values):
     all_deltas = np.array(linalgout[0])
     # deltas, here, is a matrix of delta_{x} from the above model.
 
+    def find_peaks(all_deltas, ratios):
+        out = []
+        for deltas in all_deltas:
+            out.append(find_peak(deltas, ratios))
+
+        return out
+
+    def find_peak(deltas, ratios):
+        temp = 0
+        for delta, ratio in zip(deltas, ratios):
+            temp += delta * ratio
+
+        return temp
+
     from scipy.optimize import minimize
 
     def find_f(all_deltas, shifts):
@@ -1003,7 +994,7 @@ def _(fracs, np, peak_values):
     predicted_ratios = []
     for shifts in peak_values_no_intensities:
         predicted_ratios.append(find_f(all_deltas=all_deltas, shifts=shifts))
-    return peak_values_no_intensities, predicted_ratios
+    return all_deltas, find_peaks, peak_values_no_intensities, predicted_ratios
 
 
 @app.cell
@@ -1280,7 +1271,7 @@ def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
 
         for idx, experiment in enumerate(experiments):
             # Read the FID data
-            data = read_bruker(data_dir, experiment, experiment_number)
+            data, _ = read_bruker(data_dir, experiment, experiment_number)
 
             # Calculate the number of rows and columns for subplots
             n = len(experiments)
@@ -1333,7 +1324,7 @@ def _(mo, singlefidfig):
 
 @app.cell
 def _(data_dir, experiment_number, experiments, plt, read_bruker):
-    fiddata = read_bruker(
+    fiddata, _ = read_bruker(
         data_dir=data_dir,
         experiment=experiments[0],
         experiment_number=experiment_number,
@@ -1364,7 +1355,10 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 )  # Convert msg to string and add a newline
 
     def bruker_fft(data_dir, experiment, experiment_number):
-        """Convert time domain data to frequency domain"""
+        """
+        Convert time domain data to frequency domain
+        https://github.com/jjhelmus/nmrglue/blob/master/examples/bruker_processed_1d/bruker_processed_1d.py
+        """
         import nmrglue as ng
 
         phc = extract_phc(
@@ -1373,7 +1367,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
             experiment=experiment,
         )
 
-        data = read_bruker(data_dir, experiment, experiment_number)
+        data, dic = read_bruker(data_dir, experiment, experiment_number)
         # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
 
         # Process the spectrum
@@ -1390,7 +1384,11 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         data = ng.proc_base.di(data)                  # Discard the imaginaries
         data = ng.proc_base.rev(data)                 # Reverse the data=
 
-        return data
+        udic = ng.bruker.guess_udic(dic, data)
+        uc = ng.fileiobase.uc_from_udic(udic)
+        ppm_scale = uc.ppm_scale()
+
+        return ppm_scale, data
 
     def read_bruker(data_dir, experiment, experiment_number):
         import nmrglue as ng
@@ -1401,7 +1399,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         # Remove the digital filter
         data = ng.bruker.remove_digital_filter(dic, data)
 
-        return data
+        return data, dic
 
     import math
 
@@ -1415,7 +1413,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         cols = round(math.ceil(n / rows))
 
         for idx, experiment in enumerate(experiments):
-            data = bruker_fft(
+            ppmscale, data = bruker_fft(
                 data_dir=data_dir,
                 experiment=experiment,
                 experiment_number=experiment_number,
@@ -1430,11 +1428,13 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
-            ax.plot(data[19000:22000])  # Adjust the range as needed
+            ax.plot(
+                ppmscale[19000:22000], data[19000:22000]
+            )  # Adjust the range as needed
             # ax.plot(data)
             ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
             ax.set_xlabel(
-                'Data Points', fontsize=12
+                'Chemical Shift / PPM', fontsize=12
             )  # Replace with actual x-axis label if needed
             ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
             ax.grid(True)  # Add grid lines for better readability
@@ -1468,17 +1468,17 @@ def _(bruker_fft, data_dir, experiment_number, experiments, mo, plt):
     def _():
         # plt.figure(figsize=(15, 5))
 
-        data = bruker_fft(
+        ppmscale, data = bruker_fft(
             data_dir=data_dir,
             experiment=experiments[16],
             experiment_number=experiment_number,
         )
 
         # plt.plot(data[19000:22000])
-        plt.plot(data)
+        plt.plot(ppmscale, data)
         plt.title(f'NMR Experiment', fontsize=14)
         plt.xlabel(
-            'Data Points', fontsize=12
+            'Chemical Shift / PPM', fontsize=12
         )  # Replace with actual x-axis label if needed
         plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
         plt.grid(True)  # Add grid lines for better readability
@@ -1688,80 +1688,76 @@ def _(
             'Sample number', last=False
         )   # Move sample number to front
 
-        mexperiment['citric acid stock / L'] = round(
-            (
-                mexperiment['post citric acid stock weight / g']
-                - mexperiment['eppendorf base weight / g']
-            )
-            / 1000,
-            6,
-        )
-        mexperiment['salt stock / L'] = round(
-            (
-                mexperiment['post salt stock weight / g']
-                - mexperiment['post citric acid stock weight / g']
-            )
-            / 1000,
-            6,
-        )
-        mexperiment['tris buffer / L'] = round(
-            (
-                mexperiment['post tris buffer weight / g']
-                - mexperiment['post salt stock weight / g']
-            )
-            / 1000,
-            6,
-        )
-        mexperiment['mq / L'] = round(
-            (
-                mexperiment['post milliq weight / g']
-                - mexperiment['post tris buffer weight / g']
-            )
-            / 1000,
-            6,
-        )
+        mexperiment['citric acid stock / L'] = (
+            mexperiment['post citric acid stock weight / g']
+            - mexperiment['eppendorf base weight / g']
+        ) / 1000
 
-        mexperiment['total vol / L'] = round(
-            (
-                mexperiment['citric acid stock / L']
-                + mexperiment['salt stock / L']
-                + mexperiment['tris buffer / L']
-                + mexperiment['mq / L']
-            ),
-            5,
+        mexperiment['salt stock / L'] = (
+            mexperiment['post salt stock weight / g']
+            - mexperiment['post citric acid stock weight / g']
+        ) / 1000
+
+        mexperiment['tris buffer / L'] = (
+            mexperiment['post tris buffer weight / g']
+            - mexperiment['post salt stock weight / g']
+        ) / 1000
+
+        mexperiment['mq / L'] = (
+            mexperiment['post milliq weight / g']
+            - mexperiment['post tris buffer weight / g']
+        ) / 1000
+
+        mexperiment['total vol / L'] = (
+            mexperiment['citric acid stock / L']
+            + mexperiment['salt stock / L']
+            + mexperiment['tris buffer / L']
+            + mexperiment['mq / L']
         )
 
         # print(mexperiment['total vol / L'])
 
         # c1v1 = c2v2
         # c2=c1v1/v2
-        mexperiment['citric acid molarity / M'] = round(
-            stocks['acid']['molarity']
-            * mexperiment['citric acid stock / L']
-            / mexperiment['total vol / L'],
-            6,
+        mexperiment['citric acid moles'] = (
+            stocks['acid']['molarity'] * mexperiment['citric acid stock / L']
         )
-        mexperiment['tris buffer molarity / M'] = round(
+
+        mexperiment['citric acid molarity / M'] = (
+            mexperiment['citric acid moles'] / mexperiment['total vol / L']
+        )
+
+        mexperiment['tris buffer molarity / M'] = (
             tris_buffer_stock['tris molarity']
             * mexperiment['tris buffer / L']
-            / mexperiment['total vol / L'],
-            4,
+            / mexperiment['total vol / L']
         )
 
         if mexperiment['Sample number'] in range(25, 37):
-            salt_molarity = magnesium_chloride_stock['molarity / M']
+            salt_molarity = (
+                magnesium_chloride_stock['molarity / M']
+                * mexperiment['salt stock / L']
+                / mexperiment['total vol / L']
+            )
         else:
-            salt_molarity = calcium_chloride_stock['molarity / M']
+            salt_molarity = (
+                calcium_chloride_stock['molarity / M']
+                * mexperiment['salt stock / L']
+                / mexperiment['total vol / L']
+            )
 
-        mexperiment['salt stock molarity / M'] = round(
-            salt_molarity
-            * mexperiment['salt stock / L']
-            / mexperiment['total vol / L'],
-            5,
-        )
+        salt_moles = salt_molarity * mexperiment['total vol / L']
+
+        mexperiment['salt stock molarity / M'] = salt_molarity
+        mexperiment['salt moles'] = salt_moles
+
+    metal_real_experiments_rounded = [
+        {key: round(x, 5) for key, x in mexperiment.items()}
+        for mexperiment in metal_real_experiments
+    ]
 
     metal_output = mo.ui.table(
-        data=metal_real_experiments,
+        data=metal_real_experiments_rounded,
         label='Experiment Data',
     )
     return metal_output, metal_real_experiments
@@ -1789,11 +1785,6 @@ def _(
 
     chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
     chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
-    chelation_experiments[16] = chelation_experiments[15]
-    chelation_experiments[21] = chelation_experiments[20]
-
-    # del chelation_experiments[21]
-    # del chelation_experiments[16]
 
     def _():
         chelation_sr_values, chelation_peak_values = [], []
@@ -1824,6 +1815,12 @@ def _(
     )
 
 
+@app.cell(hide_code=True)
+def _(chelationfig, mo):
+    mo.md(rf"""{mo.as_html(chelationfig)}""")
+    return
+
+
 @app.cell
 def _(
     bruker_fft,
@@ -1835,7 +1832,7 @@ def _(
 ):
     def _():
         # Create a new figure
-        ngfig = plt.figure(figsize=(12, 10))
+        ngfig = plt.figure(figsize=(20, 15))
 
         # Calculate the number of rows and columns for subplots
         n = len(chelation_experiments)
@@ -1843,21 +1840,25 @@ def _(
         cols = round(math.ceil(n / rows))
 
         for idx, experiment in enumerate(chelation_experiments):
-            data = bruker_fft(
+            ppmscale, data = bruker_fft(
                 data_dir=data_dir,
                 experiment=experiment,
                 experiment_number=experiment_number,
             )
 
-            if (
-                idx == 0
-            ):   # The first one doesn't flip properly for some reason
-                data *= -1
-
             ax = ngfig.add_subplot(rows, cols, idx + 1)
-            ax.plot(data[19000:22000])  # Adjust the range as needed
+            ax.plot(
+                ppmscale[20500:21300], data[20500:21300]
+            )  # Adjust the range as needed
             # ax.plot(data)
-            ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
+            if idx in range(0, 12):
+                ax.set_title(
+                    f'Magnesium Chelation Experiment {idx + 1}', fontsize=14
+                )
+            else:
+                ax.set_title(
+                    f'Calcium Chelation Experiment {idx - 11}', fontsize=14
+                )
             ax.set_xlabel(
                 'Data Points', fontsize=12
             )  # Replace with actual x-axis label if needed
@@ -1867,7 +1868,7 @@ def _(
 
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.suptitle(
-            'NMR Experiments Overview', fontsize=16, y=1.02
+            'Chelation Experiments Overview', fontsize=16, y=1.02
         )  # Main title for the figure
         plt.savefig('figs/NMR.svg')
         return plt.gca()
@@ -1894,17 +1895,17 @@ def _(
             data_dir, experiment_dir_chelation, experiment_count
         )
 
-        data = bruker_fft(
+        ppmscale, data = bruker_fft(
             data_dir=data_dir,
             experiment=chelation_experiments[0],
             experiment_number=experiment_number,
         )
 
         # plt.plot(data[19000:22000])
-        plt.plot(data)
+        plt.plot(ppmscale, data)
         plt.title(f'NMR Experiment', fontsize=14)
         plt.xlabel(
-            'Data Points', fontsize=12
+            'Chemical Shift / PPM', fontsize=12
         )  # Replace with actual x-axis label if needed
         plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
         plt.grid(True)  # Add grid lines for better readability
@@ -1923,9 +1924,25 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
-def _(chelationfig, mo):
-    mo.md(rf"""{mo.as_html(chelationfig)}""")
+@app.cell
+def _(chelation_extra_fig, chelation_fig, mo):
+    mo.md(
+        rf"""
+    ## Chelation Experiment Results
+
+    ### Initial Relationships
+
+    {mo.as_html(chelation_fig)}
+
+    Magnesium appears sigmoidal, calcium appears exponential and reverse exponential.
+
+    ### Extra Relationships
+
+    {mo.as_html(chelation_extra_fig)}
+
+    Magnesium is sigmoidal to j coupling, and calcium is
+    """
+    )
     return
 
 
@@ -1948,7 +1965,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
 
         return magnesium_peaks, calcium_peaks
 
-    magneisum_peaks, calcium_peaks = _()
+    magnesium_peaks, calcium_peaks = _()
     magnesium_percentages = [
         exp['salt stock molarity / M']
         for exp in metal_real_experiments
@@ -1961,12 +1978,12 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         if exp.get('Sample number') > 36
     ]
 
-    plt.figure(figsize=(15, 15))
+    plt.figure(figsize=(10, 15))
 
     plt.subplot(2, 1, 1)
     plt.plot(
         magnesium_percentages,
-        magneisum_peaks,
+        magnesium_peaks,
         marker='o',
         linestyle='-',
         linewidth=2,
@@ -1974,7 +1991,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
 
     plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
     plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('Speciation Ratio', fontsize=12)
+    plt.ylabel('Chemical Shift / ppm', fontsize=12)
     # plt.legend(['Proton A split 1', 'Proton A split 2', 'Proton B split 1', 'Proton B split 2'])
 
     plt.subplot(2, 1, 2)
@@ -1997,6 +2014,314 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     plt.tight_layout()
 
     plt.savefig('figs/chelation.svg')
+
+    chelation_fig = plt.gca()
+    return (
+        calcium_peaks,
+        calcium_percentages,
+        chelation_fig,
+        magnesium_peaks,
+        magnesium_percentages,
+    )
+
+
+@app.cell
+def _(calcium_peaks, magnesium_peaks):
+    magnesium_peak_shifts = [
+        ((pea[0] + pea[1]) / 2) - ((pea[2] + pea[3]) / 2)
+        for pea in magnesium_peaks
+    ]
+
+    magnesium_j_coupling = [
+        [pea[0] - pea[1], pea[2] - pea[3]] for pea in magnesium_peaks
+    ]
+
+    calcium_j_coupling = [
+        [pea[0] - pea[1], pea[2] - pea[3]] for pea in calcium_peaks
+    ]
+    calcium_peak_shifts = [
+        ((pea[0] + pea[1]) / 2) - ((pea[2] + pea[3]) / 2)
+        for pea in calcium_peaks
+    ]
+    return (
+        calcium_j_coupling,
+        calcium_peak_shifts,
+        magnesium_j_coupling,
+        magnesium_peak_shifts,
+    )
+
+
+@app.cell
+def _(
+    calcium_j_coupling,
+    calcium_peak_shifts,
+    calcium_percentages,
+    magnesium_j_coupling,
+    magnesium_peak_shifts,
+    magnesium_percentages,
+    plt,
+):
+    plt.figure(figsize=(15, 15))
+    plt.subplot(2, 2, 1)
+    plt.plot(
+        magnesium_percentages,
+        magnesium_j_coupling,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Magnesium Molarity vs magnesium_j_coupling ', fontsize=14)
+    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.ylabel('magnesium_j_coupling', fontsize=12)
+
+    plt.subplot(2, 2, 2)
+    plt.plot(
+        magnesium_percentages,
+        magnesium_peak_shifts,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Magnesium Molarity vs magnesium_peak_shifts ', fontsize=14)
+    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.ylabel('magnesium_peak_shifts', fontsize=12)
+
+    plt.subplot(2, 2, 3)
+    plt.plot(
+        calcium_percentages,
+        calcium_j_coupling,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Calcium Molarity vs calcium_j_coupling Shift ', fontsize=14)
+    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.ylabel('calcium_j_coupling', fontsize=12)
+
+    plt.subplot(2, 2, 4)
+    plt.plot(
+        calcium_percentages,
+        calcium_peak_shifts,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Calcium Molarity vs calcium_peak_shifts ', fontsize=14)
+    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.ylabel('calcium_peak_shifts', fontsize=12)
+
+    # plt.gca().invert_xaxis()
+    plt.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    plt.savefig('figs/chelation-extra.svg')
+
+    chelation_extra_fig = plt.gca()
+
+    print(
+        [
+            f'x: {x}, y: {y}'
+            for x, y in zip(calcium_percentages, calcium_j_coupling)
+        ]
+    )
+    return (chelation_extra_fig,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## Properly Fitting the Chelation Graphs
+
+    ### Magnesium
+
+    Magnesium displays a sigmoidal relationship for the first proton only.
+
+    $\delta_{obs, peak}=$
+
+    ### Calcium
+
+    Calcium displays an exponential relationship for proton A, and what appears to be the exact reverse exponential relationship for proton B.
+
+    The model used by the previous paper (remind myself to put the link back here) for calcium is:
+
+    $\delta_{cit}=f_{10}\delta_{L}+f_{11}\delta_{ML}$
+
+    $\delta_L$ is the value of the uncomplexed citric acid, which can be calculated from pH using the previous model.
+
+    $f_{10}$ is the chemical shift value of the 1:1 ML complex, defined as $f_{10}=\frac{1}{1+K_{11}[M]}$, where [M] is the free metal ion concentration, and $K_{11}$ is the formation constant of the complex (estimated at 3.011e3 by the source). $f_{11}$ is the binding fraction, but that is mostly irrelevant, since further manipulation of the expression yields:
+
+    $\delta_{cit}=\delta_{L}+[\frac{(\delta_{ML}-\delta_{L})K_{11}[M]}{1+K_{11}[M]}]$
+
+    $x=y+\frac{(z-y)ab}{1+ab}$
+
+    $z=\frac{abx+x-y}{ab}$ (solved using [wolfram alpha](https://www.wolframalpha.com/input?i=solve+for+z%3A+x%3Dy%2B%5Cfrac%7B%28z-y%29ab%7D%7B1%2Bab%7D))
+
+    $\delta_{ML}=\frac{K_{11}[M]\delta_{cit}+\delta_{cit}-\delta_{L}}{K_{11}[M]}$
+    """
+    )
+    return
+
+
+@app.cell
+def _(math, metal_real_experiments):
+    kf = 3.011e3   # Formation constant of calcium citrate, k11
+    # TODO: Find a better way to calculate this
+
+    # kf = [ML]/([M_free][L_free])
+    # M_free = [M_tot] - [ML]
+    # L_free = [L_tot] - [ML]
+    # kf = [ML]/(([M_tot] - [ML])([L_tot] - [ML]))
+    # We know M_tot and L_tot and kf, so rearrange to solve for ML, and then we can use that to find M_free
+    # ML = (kf(M_tot + L_tot) + 1 ± sqrt((kf(M_tot + L_tot) + 1)^2 − 4 kf^2 M_tot L_tot)) / (2 kf).
+
+    def _():
+        for mexperiment in metal_real_experiments:
+            M_tot = mexperiment['salt stock molarity / M']
+            L_tot = mexperiment['citric acid molarity / M']
+
+            a = kf
+            b = -(kf * (M_tot + L_tot) + 1)
+            c = kf * M_tot * L_tot
+
+            disc = b * b - 4 * a * c
+            if disc < 0:
+                raise ValueError(f'Negative discriminant: {disc}')
+
+            # choose the physically meaningful root (use minus before sqrt)
+            ML = (-b - math.sqrt(disc)) / (2 * a)
+
+            # enforce bounds (optional)
+            ML = max(0.0, min(ML, min(M_tot, L_tot)))
+
+            M_free = M_tot - ML
+
+            mexperiment['M_free'] = M_free
+
+    _()
+
+    print([x['M_free'] for x in metal_real_experiments])
+    return (kf,)
+
+
+@app.cell
+def _(
+    all_deltas,
+    calcium_peaks,
+    citricacid,
+    find_peaks,
+    kf,
+    magnesium_peaks,
+    math,
+    metal_real_experiments,
+    np,
+):
+    """Fit calcium"""
+
+    def _():
+        assumed_ratios = citricacid.alpha([7.2])
+        assumed_shifts = find_peaks(
+            all_deltas=all_deltas, ratios=assumed_ratios
+        )
+
+        peak_shifts = (
+            magnesium_peaks + calcium_peaks
+        )   # The magnesium_peaks will get discarded
+        transposed_peaks = [list(x) for x in zip(*peak_shifts)]
+
+        deltas = []
+        for peaks, assumedpeak in zip(transposed_peaks, assumed_shifts):
+            delta = []
+            for (idx, mexperiment), peak in zip(
+                enumerate(metal_real_experiments), peaks
+            ):
+                if (
+                    idx <= 11
+                ):   # These are magnesium so they can be ignored for this
+                    continue
+
+                a = kf   # Formation constant
+                b = mexperiment['M_free']   # Free metal
+                x = peak   # Observed Chemical Shift
+                y = assumedpeak   # Chemical shift from free acid
+                z = (a * b * x + x - y) / (a * b)
+
+                ML = z
+
+                delta.append(ML)
+
+            delta = [
+                x for x in delta if math.isfinite(x)
+            ]   # Remove infinites from 0 M experiments
+
+            deltas.append(np.mean(delta))
+
+        return deltas
+
+    calcium_deltas = _()
+
+    print(calcium_deltas)
+
+    return (calcium_deltas,)
+
+
+@app.cell
+def _(
+    all_deltas,
+    calcium_deltas,
+    calcium_percentages,
+    citricacid,
+    find_peaks,
+    kf,
+    metal_real_experiments,
+    plt,
+):
+    # x=y+(z-y)ab/(1+ab)
+
+    def _():
+        assumed_ratios = citricacid.alpha([7.2])
+        assumed_shifts = find_peaks(
+            all_deltas=all_deltas, ratios=assumed_ratios
+        )
+
+        print(assumed_shifts)
+        print(assumed_ratios)
+
+        all_peaks = []
+        for assumedpeak, delta in zip(assumed_shifts, calcium_deltas):
+            peaks = []
+            for idx, mexperiment in enumerate(metal_real_experiments):
+                if (
+                    idx <= 11
+                ):   # These are magnesium so they can be ignored for this
+                    continue
+                a = kf   # Formation constant
+                b = mexperiment['M_free']   # Free metal
+                y = assumedpeak   # Chemical shift from free acid
+                z = delta   # Chemical shift from chelation
+
+                x = (y + ((z - y) * a * b)) / (1 + a * b)
+
+                peaks.append(x)
+            all_peaks.append(peaks)
+
+        print(len(all_peaks))
+
+        all_peaks = [list(x) for x in zip(*all_peaks)]
+
+        return all_peaks
+
+    calculated_calcium_peaks = _()
+
+    print(calculated_calcium_peaks)
+
+    plt.plot(calcium_percentages, calculated_calcium_peaks)
     return
 
 
