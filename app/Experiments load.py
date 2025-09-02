@@ -2147,23 +2147,11 @@ def _(mo):
 
     ### Calcium
 
-    Calcium displays an exponential relationship for proton A, and what appears to be the exact reverse exponential relationship for proton B.
+    $\delta_{cit}=f_{0}\delta_{L}+f_{1}\delta_{ML}$
 
-    The model used by the previous paper (remind myself to put the link back here) for calcium is:
+    $\delta_L$ = chemical shift from the free citric acid (from before), $\delta_{ML}$ = chemical shift from the metal complex
 
-    $\delta_{cit}=f_{10}\delta_{L}+f_{11}\delta_{ML}$
-
-    $\delta_L$ is the value of the uncomplexed citric acid, which can be calculated from pH using the previous model.
-
-    $f_{10}$ is the chemical shift value of the 1:1 ML complex, defined as $f_{10}=\frac{1}{1+K_{11}[M]}$, where [M] is the free metal ion concentration, and $K_{11}$ is the formation constant of the complex (estimated at 3.011e3 by the source). $f_{11}$ is the binding fraction, but that is mostly irrelevant, since further manipulation of the expression yields:
-
-    $\delta_{cit}=\delta_{L}+[\frac{(\delta_{ML}-\delta_{L})K_{11}[M]}{1+K_{11}[M]}]$
-
-    $x=y+\frac{(z-y)ab}{1+ab}$
-
-    $z=\frac{abx+x-y}{ab}$ (solved using [wolfram alpha](https://www.wolframalpha.com/input?i=solve+for+z%3A+x%3Dy%2B%5Cfrac%7B%28z-y%29ab%7D%7B1%2Bab%7D))
-
-    $\delta_{ML}=\frac{K_{11}[M]\delta_{cit}+\delta_{cit}-\delta_{L}}{K_{11}[M]}$
+    We know the $f_0, f_1, \delta_{L}$. We don't know the $\delta_{ML}$. Then, once we have the constant $\delta_{ML}$ for each peak, we can find the $f_0,f_1$, which should give ratio of complex to free citric acid. This model assumes there is only a single complex.
     """
     )
     return
@@ -2171,43 +2159,55 @@ def _(mo):
 
 @app.cell
 def _(math, metal_real_experiments):
-    kf = 3.011e3   # Formation constant of calcium citrate, k11
-    # TODO: Find a better way to calculate this
 
     # kf = [ML]/([M_free][L_free])
     # M_free = [M_tot] - [ML]
     # L_free = [L_tot] - [ML]
     # kf = [ML]/(([M_tot] - [ML])([L_tot] - [ML]))
-    # We know M_tot and L_tot and kf, so rearrange to solve for ML, and then we can use that to find M_free
-    # ML = (kf(M_tot + L_tot) + 1 ± sqrt((kf(M_tot + L_tot) + 1)^2 − 4 kf^2 M_tot L_tot)) / (2 kf).
+    # a = b/((c-b)(d-b))
+    # b = (-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a) and a!=0 and sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1)!=a (c + d) + 1 (https://www.wolframalpha.com/input?i=solve+for+b%3A+a+%3D+b%2F%28%28c-b%29%28d-b%29%29)
+
+    def solve_for_b(a, c, d, tol=1e-12):
+        if abs(a) < tol:
+            b = 0.0
+            return b if abs((c - b) * (d - b)) > tol else None
+
+        A = a
+        B = -(a * (c + d) + 1)
+        C = a * c * d
+        disc = B * B - 4 * A * C
+        if disc < -tol:
+            return None
+        disc = max(disc, 0.0)
+        r1 = (-B + math.sqrt(disc)) / (2 * A)
+        r2 = (-B - math.sqrt(disc)) / (2 * A)
+
+        for b in (r1, r2):
+            if (
+                b >= -tol
+                and b <= min(c, d) + tol
+                and abs((c - b) * (d - b)) > tol
+            ):
+                return max(b, 0.0)  # clamp tiny negatives to 0
+        return None
+
+    kf = 3.011e3   # Formation constant of calcium citrate, k11, from source
+    # TODO: Find a better way to calculate this
 
     def _():
-        for mexperiment in metal_real_experiments:
-            M_tot = mexperiment['salt stock molarity / M']
-            L_tot = mexperiment['citric acid molarity / M']
-
+        for idx, mexperiment in enumerate(metal_real_experiments):
+            if idx < 12:
+                continue
+            c = mexperiment['salt stock molarity / M']
+            d = mexperiment['citric acid molarity / M']
             a = kf
-            b = -(kf * (M_tot + L_tot) + 1)
-            c = kf * M_tot * L_tot
 
-            disc = b * b - 4 * a * c
-            if disc < 0:
-                raise ValueError(f'Negative discriminant: {disc}')
+            b = solve_for_b(a, c, d)
 
-            # choose the physically meaningful root (use minus before sqrt)
-            ML = (-b - math.sqrt(disc)) / (2 * a)
-
-            # enforce bounds (optional)
-            ML = max(0.0, min(ML, min(M_tot, L_tot)))
-
-            M_free = M_tot - ML
-
-            mexperiment['M_free'] = M_free
+            mexperiment['metal ligand complex molarity / M'] = b
 
     _()
-
-    print([x['M_free'] for x in metal_real_experiments])
-    return (kf,)
+    return
 
 
 @app.cell
@@ -2216,24 +2216,26 @@ def _(
     calcium_peaks,
     citricacid,
     find_peaks,
-    kf,
     magnesium_peaks,
-    math,
     metal_real_experiments,
     np,
 ):
-    """Fit calcium"""
+    # We know f0 and f1 and L, but not ML
+    # Hopefully, it's a constant
+    # shift=f0*L+f1*ML
+    # shift-f0*L=f1*ML
+    # (shift-f0*l)/f1=ML
+    # a = (b-cd)/e
 
     def _():
+        all_peaks = magnesium_peaks + calcium_peaks
+        transposed_peaks = [list(x) for x in zip(*all_peaks)]
+
         assumed_ratios = citricacid.alpha([7.2])
+
         assumed_shifts = find_peaks(
             all_deltas=all_deltas, ratios=assumed_ratios
         )
-
-        peak_shifts = (
-            magnesium_peaks + calcium_peaks
-        )   # The magnesium_peaks will get discarded
-        transposed_peaks = [list(x) for x in zip(*peak_shifts)]
 
         deltas = []
         for peaks, assumedpeak in zip(transposed_peaks, assumed_shifts):
@@ -2241,24 +2243,31 @@ def _(
             for (idx, mexperiment), peak in zip(
                 enumerate(metal_real_experiments), peaks
             ):
-                if (
-                    idx <= 11
-                ):   # These are magnesium so they can be ignored for this
+                if idx < 12:
                     continue
 
-                a = kf   # Formation constant
-                b = mexperiment['M_free']   # Free metal
-                x = peak   # Observed Chemical Shift
-                y = assumedpeak   # Chemical shift from free acid
-                z = (a * b * x + x - y) / (a * b)
+                b = peak   # observed shift
+                d = assumedpeak   # shift based on speciation
 
-                ML = z
+                if (
+                    mexperiment['metal ligand complex molarity / M']
+                    is not None
+                ):
+                    complex = mexperiment['metal ligand complex molarity / M']
+                    total = mexperiment['citric acid molarity / M']
+                    free_citrate = total - complex
 
-                delta.append(ML)
+                    c = free_citrate / total
+                    # ratio of ligand to metal ligand
+                    e = complex / total
+                    # ratio of metal ligand to ligand
+                else:
+                    c = 0
+                    e = 1
 
-            delta = [
-                x for x in delta if math.isfinite(x)
-            ]   # Remove infinites from 0 M experiments
+                a = (b - c * d) / e   # shift of ML
+
+                delta.append(a)
 
             deltas.append(np.mean(delta))
 
@@ -2275,53 +2284,93 @@ def _(
 def _(
     all_deltas,
     calcium_deltas,
-    calcium_percentages,
+    calcium_peaks,
     citricacid,
     find_peaks,
-    kf,
+    magnesium_peaks,
     metal_real_experiments,
-    plt,
+    np,
 ):
-    # x=y+(z-y)ab/(1+ab)
+    # Try and reverse calculate
+    # Now, we know l, and the ML constant, and shift, but we don't know f0 and f1, only that they have to add up to 1.0
+    # (shift-f0*l)/f1=ML
+    # f0 + f1 = 1.0
+    # f0 = 1 - f1
+    # (shift-(1 - f1)*l)/f1=ML
+    # a = (b-(1-cd)/c
+    # a = (b-d(-c+1))/c
+    # a = (b+cd-d)/c
+    # ac = b+cd-d
+    # ac-cd = b-d
+    # c(a-d) = b-d
+    # c = (b-d)/(a-d)
 
     def _():
         assumed_ratios = citricacid.alpha([7.2])
+
         assumed_shifts = find_peaks(
             all_deltas=all_deltas, ratios=assumed_ratios
         )
 
-        print(assumed_shifts)
-        print(assumed_ratios)
+        all_peaks = magnesium_peaks + calcium_peaks
+        transposed_peaks = [list(x) for x in zip(*all_peaks)]
 
-        all_peaks = []
-        for assumedpeak, delta in zip(assumed_shifts, calcium_deltas):
-            peaks = []
-            for idx, mexperiment in enumerate(metal_real_experiments):
-                if (
-                    idx <= 11
-                ):   # These are magnesium so they can be ignored for this
-                    continue
-                a = kf   # Formation constant
-                b = mexperiment['M_free']   # Free metal
-                y = assumedpeak   # Chemical shift from free acid
-                z = delta   # Chemical shift from chelation
+        experiments_e, experiments_c, real_e, real_c = [], [], [], []
+        for (idx, mexperiment), peaks in zip(
+            enumerate(metal_real_experiments), all_peaks
+        ):
+            if idx < 12:
+                continue
 
-                x = (y + ((z - y) * a * b)) / (1 + a * b)
+            et, ct = [], []
+            for peak, assumed_peak, delta in zip(
+                peaks, assumed_shifts, calcium_deltas
+            ):
+                a = delta   # Shift of ml
+                b = peak   # observed shift
+                d = assumed_peak   # shift based on speciation
 
-                peaks.append(x)
-            all_peaks.append(peaks)
+                b_clamped = min(
+                    max(b, min(a, d)), max(a, d)
+                )   # force output to be between 0 and 1
 
-        print(len(all_peaks))
+                c = (b_clamped - d) / (
+                    a - d
+                )   # ratio of metal ligand to ligand
+                e = 1 - c   # ratio of ligand to metal ligandb_clamped
 
-        all_peaks = [list(x) for x in zip(*all_peaks)]
+                et.append(e)
+                ct.append(c)
 
-        return all_peaks
+            experiments_e.append(np.mean(et))
+            experiments_c.append(np.mean(ct))
 
-    calculated_calcium_peaks = _()
+            if mexperiment['metal ligand complex molarity / M'] is not None:
+                complex = mexperiment['metal ligand complex molarity / M']
+                total = mexperiment['citric acid molarity / M']
+                free_citrate = total - complex
 
-    print(calculated_calcium_peaks)
+                real_c.append(free_citrate / total)
+                # ratio of ligand to metal ligand
+                real_e.append(complex / total)
+                # ratio of metal ligand to ligand
+            else:
+                real_c.append(0)
+                real_e.append(1)
 
-    plt.plot(calcium_percentages, calculated_calcium_peaks)
+        print(
+            f''.join(
+                f"""Estimated ligand: {float(round(x[0], 3))},
+    Estimated complex: {float(round(x[1], 3))}\n\n
+    Real ligand: {float(round(x[2], 3))},
+    Real complex: {float(round(x[3], 3))}\n\n
+    """
+                for x in zip(experiments_e, experiments_c, real_e, real_c)
+            )
+        )
+
+    _()
+
     return
 
 
