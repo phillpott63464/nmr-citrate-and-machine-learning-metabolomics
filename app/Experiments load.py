@@ -1,13 +1,12 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.2"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -2159,7 +2158,7 @@ def _(mo):
 
 @app.cell
 def _(math, metal_real_experiments):
-
+    # This assumes calcium citrate only forms a 1:1 complex. This is an incorrect assumption. But it makes the maths much easier, and the source this experiment is based on makes the same assumption.
     # kf = [ML]/([M_free][L_free])
     # M_free = [M_tot] - [ML]
     # L_free = [L_tot] - [ML]
@@ -2202,12 +2201,19 @@ def _(math, metal_real_experiments):
             d = mexperiment['citric acid molarity / M']
             a = kf
 
-            b = solve_for_b(a, c, d)
+            if c == 0:
+                b = 0.0
+            else:
+                b = solve_for_b(a, c, d)
+            
 
             mexperiment['metal ligand complex molarity / M'] = b
 
     _()
-    return
+
+
+    continueaaa = True
+    return (continueaaa,)
 
 
 @app.cell
@@ -2215,6 +2221,7 @@ def _(
     all_deltas,
     calcium_peaks,
     citricacid,
+    continueaaa,
     find_peaks,
     magnesium_peaks,
     metal_real_experiments,
@@ -2226,6 +2233,9 @@ def _(
     # shift-f0*L=f1*ML
     # (shift-f0*l)/f1=ML
     # a = (b-cd)/e
+
+    if continueaaa:
+        pass
 
     def _():
         all_peaks = magnesium_peaks + calcium_peaks
@@ -2239,7 +2249,7 @@ def _(
 
         deltas = []
         for peaks, assumedpeak in zip(transposed_peaks, assumed_shifts):
-            delta = []
+            variables = []
             for (idx, mexperiment), peak in zip(
                 enumerate(metal_real_experiments), peaks
             ):
@@ -2265,18 +2275,24 @@ def _(
                     c = 0
                     e = 1
 
-                a = (b - c * d) / e   # shift of ML
+                variables.append([b, c, d, e])
+            
+            b = np.array([v[0] for v in variables])
+            c = np.array([v[1] for v in variables])
+            d = np.array([v[2] for v in variables])
+            e = np.array([v[3] for v in variables])
 
-                delta.append(a)
+            rhs = b - c*d
 
-            deltas.append(np.mean(delta))
+            a, *_ = np.linalg.lstsq(e.reshape(-1,1), rhs, rcond=None)
+
+            deltas.append(a[0])
 
         return deltas
 
     calcium_deltas = _()
 
     print(calcium_deltas)
-
     return (calcium_deltas,)
 
 
@@ -2290,6 +2306,7 @@ def _(
     magnesium_peaks,
     metal_real_experiments,
     np,
+    plt,
 ):
     # Try and reverse calculate
     # Now, we know l, and the ML constant, and shift, but we don't know f0 and f1, only that they have to add up to 1.0
@@ -2306,6 +2323,7 @@ def _(
     # c = (b-d)/(a-d)
 
     def _():
+        from scipy.optimize import lsq_linear
         assumed_ratios = citricacid.alpha([7.2])
 
         assumed_shifts = find_peaks(
@@ -2316,63 +2334,66 @@ def _(
         transposed_peaks = [list(x) for x in zip(*all_peaks)]
 
         experiments_e, experiments_c, real_e, real_c = [], [], [], []
+    
         for (idx, mexperiment), peaks in zip(
             enumerate(metal_real_experiments), all_peaks
         ):
             if idx < 12:
                 continue
 
-            et, ct = [], []
-            for peak, assumed_peak, delta in zip(
-                peaks, assumed_shifts, calcium_deltas
-            ):
-                a = delta   # Shift of ml
-                b = peak   # observed shift
-                d = assumed_peak   # shift based on speciation
+            a = np.array(calcium_deltas) # Deltas array
+            b = np.array(peaks)
+            d = np.array(assumed_shifts)
 
-                b_clamped = min(
-                    max(b, min(a, d)), max(a, d)
-                )   # force output to be between 0 and 1
+            A = (a - d)[:, None]
+            y = (b - d)
+            res = lsq_linear(A, y, bounds=(0.0, 1.0))
 
-                c = (b_clamped - d) / (
-                    a - d
-                )   # ratio of metal ligand to ligand
-                e = 1 - c   # ratio of ligand to metal ligandb_clamped
+            c = res.x[0] # ratio of metal ligand to ligand
+            e = 1.0 - c # ratio of ligand to metal ligand
 
-                et.append(e)
-                ct.append(c)
-
-            experiments_e.append(np.mean(et))
-            experiments_c.append(np.mean(ct))
-
+            experiments_c.append(c)
+            experiments_e.append(e)
+        
             if mexperiment['metal ligand complex molarity / M'] is not None:
                 complex = mexperiment['metal ligand complex molarity / M']
                 total = mexperiment['citric acid molarity / M']
                 free_citrate = total - complex
 
-                real_c.append(free_citrate / total)
-                # ratio of ligand to metal ligand
-                real_e.append(complex / total)
-                # ratio of metal ligand to ligand
+                real_e.append(free_citrate / total) # ratio of ligand to metal ligand
+                real_c.append(complex / total) # ratio of metal ligand to ligand
             else:
-                real_c.append(0)
-                real_e.append(1)
+                real_e.append(1) # ratio of ligand to metal ligand
+                real_c.append(0) # ratio of metal ligand to ligand
 
-        print(
-            f''.join(
-                f"""Estimated ligand: {float(round(x[0], 3))},
-    Estimated complex: {float(round(x[1], 3))}\n\n
-    Real ligand: {float(round(x[2], 3))},
-    Real complex: {float(round(x[3], 3))}\n\n
-    """
-                for x in zip(experiments_e, experiments_c, real_e, real_c)
-            )
-        )
+        return experiments_e, experiments_c, real_e, real_c
+    
 
-    _()
 
+    experiments_e, experiments_c, real_e, real_c = _()
+
+
+    errors = sum([
+        (x[0] - x[2])**2+(x[1]-x[3])**2
+        for x in zip(experiments_e, experiments_c, real_e, real_c)
+    ])
+
+    print(errors)
+
+    plt.plot(real_e, experiments_e)
+    plt.plot(real_c, experiments_c)
+    plt.plot(np.linspace(0, 1, 10), np.linspace(0, 1, 10))
+
+    plt.title('Predicted ML Binding Compared to Calculated ML Binding')
+    plt.xlabel('Ratio of Calculated Substance')
+    plt.ylabel('Ratio of Predicted Substance')
+    plt.legend(['Ligand', 'Metal Ligand Complex', f'Perfect Relationship\n(MSE: {round(errors,3)})'])
+    plt.grid(True)
+    plt.tight_layout()
+
+    plt.show()
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
