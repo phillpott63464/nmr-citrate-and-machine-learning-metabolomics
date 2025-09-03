@@ -1,0 +1,23 @@
+##TITLE= Audit trail, TopSpin 3.5 pl 6
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= mphelan
+$$ /opt/marie/data/met_test/nmr/Morgan_1D_230216_7/213/audita.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2023-02-16 14:06:05.666 +0000>,<mphelan>,<CZC5261D3M>,<go4>,<TopSpin 3.5.6>,
+      <created by zg
+	started at 2023-02-16 14:01:46.152 +0000,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       D4 EB 22 AC D7 7B CB AF 2B E1 C9 85 93 BC 9B 8F
+       data hash MD5: 8K * 40
+       80 68 94 4F 73 46 41 E4 11 76 79 AD 7C 59 5B 25>)
+(   2,<2023-02-16 14:06:05.686 +0000>,<mphelan>,<CZC5261D3M>,<audit>,<TopSpin 3.5.6>,
+      <user comment:
+       ICON-NMR User ID: met_test
+       data hash MD5: 8K * 40
+       80 68 94 4F 73 46 41 E4 11 76 79 AD 7C 59 5B 25>)
+##END=
+
+$$ hash MD5
+$$ 64 D3 F1 12 78 8C 4A AF 5B B4 B2 EC BF DC 78 DD

@@ -21,3 +21,4 @@ jax[rocm]
 h5py
 seaborn
 pytest
+openpyxl
