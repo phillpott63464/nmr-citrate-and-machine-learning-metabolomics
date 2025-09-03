@@ -45,7 +45,7 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 10                  # Number of hyperparameter optimization trialss
+    trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = None             # Number of random metabolite combinations to generate
     notebook_name = 'final_single_metabolite'  # Cache directory identifier
 
@@ -2032,13 +2032,7 @@ def _(nn, torch):
             concentration_rmse = torch.tensor(0.0, device=predictions.device)
 
         # Balanced weighting: equal importance to both tasks
-        # total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
-
-        # Unbalanced weighting: prioritize concentration regression slightly more
-        # total_loss = 0.3 * classification_loss + 0.7 * concentration_loss
-
-        # Just double checking
-        total_loss = 0.5*concentration_mae + 0.5*concentration_rmse
+        total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
 
         return total_loss, classification_loss, concentration_mae, concentration_rmse
 
@@ -2529,11 +2523,6 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     elif MODEL_TYPE == 'mlp':
         # Handle sliding window MLP parameters
         model_params_md = f"""
-    **Sliding Window MLP Architecture:**
-    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
-    - **Window Size:** 256 (fixed)
-    - **Actual Stride:** {int(256 * study.best_trial.params.get('stride_ratio', 0.5))}
-
     **Model Architecture:**
 
     Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output
