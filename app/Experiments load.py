@@ -1923,7 +1923,7 @@ def _(
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(chelation_extra_fig, chelation_fig, mo):
     mo.md(
         rf"""
@@ -1977,7 +1977,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         if exp.get('Sample number') > 36
     ]
 
-    plt.figure(figsize=(10, 15))
+    plt.figure(figsize=(10, 10))
 
     plt.subplot(2, 1, 1)
     plt.plot(
@@ -2060,7 +2060,7 @@ def _(
     magnesium_percentages,
     plt,
 ):
-    plt.figure(figsize=(15, 15))
+    plt.figure(figsize=(10, 10))
     plt.subplot(2, 2, 1)
     plt.plot(
         magnesium_percentages,
@@ -2138,14 +2138,6 @@ def _(mo):
         r"""
     ## Properly Fitting the Chelation Graphs
 
-    ### Magnesium
-
-    Magnesium displays a sigmoidal relationship for the first proton only.
-
-    $\delta_{obs, peak}=$
-
-    ### Calcium
-
     $\delta_{cit}=f_{0}\delta_{L}+f_{1}\delta_{ML}$
 
     $\delta_L$ = chemical shift from the free citric acid (from before), $\delta_{ML}$ = chemical shift from the metal complex
@@ -2158,7 +2150,7 @@ def _(mo):
 
 @app.cell
 def _(math, metal_real_experiments):
-    # This assumes calcium citrate only forms a 1:1 complex. This is an incorrect assumption. But it makes the maths much easier, and the source this experiment is based on makes the same assumption.
+    # This assumes metals citrate only form a 1:1 complex.
     # kf = [ML]/([M_free][L_free])
     # M_free = [M_tot] - [ML]
     # L_free = [L_tot] - [ML]
@@ -2167,39 +2159,35 @@ def _(math, metal_real_experiments):
     # b = (-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a) and a!=0 and sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1)!=a (c + d) + 1 (https://www.wolframalpha.com/input?i=solve+for+b%3A+a+%3D+b%2F%28%28c-b%29%28d-b%29%29)
 
     def solve_for_b(a, c, d, tol=1e-12):
+        # special-case a ≈ 0: linear limit from the quadratic reduces to b = 0 (physically)
         if abs(a) < tol:
-            b = 0.0
-            return b if abs((c - b) * (d - b)) > tol else None
+            return 0.0 if abs((c - 0.0) * (d - 0.0)) > tol else 0.0
 
-        A = a
-        B = -(a * (c + d) + 1)
-        C = a * c * d
-        disc = B * B - 4 * A * C
+        disc = a*a*(c - d)**2 + 2*a*(c + d) + 1.0
         if disc < -tol:
-            return None
+            return 0.0
         disc = max(disc, 0.0)
-        r1 = (-B + math.sqrt(disc)) / (2 * A)
-        r2 = (-B - math.sqrt(disc)) / (2 * A)
+        numerator = a*(c + d) + 1.0 - math.sqrt(disc)   # minus branch (physical)
+        b = numerator / (2.0 * a)
 
-        for b in (r1, r2):
-            if (
-                b >= -tol
-                and b <= min(c, d) + tol
-                and abs((c - b) * (d - b)) > tol
-            ):
-                return max(b, 0.0)  # clamp tiny negatives to 0
-        return None
+        # apply physical acceptance tests
+        if b < -tol or b > min(c, d) + tol:
+            return 0.0
+        if abs((c - b) * (d - b)) <= tol:
+            return 0.0
+        return max(b, 0.0)
 
-    kf = 3.011e3   # Formation constant of calcium citrate, k11, from source
-    # TODO: Find a better way to calculate this
-
+    k1 = 3.011e3   # Formation constant of calcium citrate, k11, from source
+    k2 = 2.19e3 # Formation constant of magnesium citrate, from https://www.sciencedirect.com/science/article/abs/pii/0003269774903911, incorrect temperature (37C) but I can't find anything at the correct temperature or the values I need to correct
     def _():
         for idx, mexperiment in enumerate(metal_real_experiments):
             if idx < 12:
-                continue
+                a = k2
+            else:
+                a = k1
+            
             c = mexperiment['salt stock molarity / M']
             d = mexperiment['citric acid molarity / M']
-            a = kf
 
             if c == 0:
                 b = 0.0
@@ -2253,9 +2241,6 @@ def _(
             for (idx, mexperiment), peak in zip(
                 enumerate(metal_real_experiments), peaks
             ):
-                if idx < 12:
-                    continue
-
                 b = peak   # observed shift
                 d = assumedpeak   # shift based on speciation
 
@@ -2276,24 +2261,29 @@ def _(
                     e = 1
 
                 variables.append([b, c, d, e])
-            
-            b = np.array([v[0] for v in variables])
-            c = np.array([v[1] for v in variables])
-            d = np.array([v[2] for v in variables])
-            e = np.array([v[3] for v in variables])
 
-            rhs = b - c*d
+            variables = [variables[:12], variables[12:]]
+            for vars in variables:
+                b = np.array([v[0] for v in vars])
+                c = np.array([v[1] for v in vars])
+                d = np.array([v[2] for v in vars])
+                e = np.array([v[3] for v in vars])
+    
+                rhs = b - c*d
+    
+                a, *_ = np.linalg.lstsq(e.reshape(-1,1), rhs, rcond=None)
+    
+                deltas.append(a[0])
 
-            a, *_ = np.linalg.lstsq(e.reshape(-1,1), rhs, rcond=None)
+        calcium_deltas = [deltas[1], deltas[3], deltas[5], deltas[7]]
+        magnesium_deltas = [deltas[0], deltas[2], deltas[4], deltas[6]]
 
-            deltas.append(a[0])
+        return calcium_deltas, magnesium_deltas
 
-        return deltas
-
-    calcium_deltas = _()
+    calcium_deltas, magnesium_deltas = _()
 
     print(calcium_deltas)
-    return (calcium_deltas,)
+    return calcium_deltas, magnesium_deltas
 
 
 @app.cell
@@ -2303,6 +2293,7 @@ def _(
     calcium_peaks,
     citricacid,
     find_peaks,
+    magnesium_deltas,
     magnesium_peaks,
     metal_real_experiments,
     np,
@@ -2331,17 +2322,29 @@ def _(
         )
 
         all_peaks = magnesium_peaks + calcium_peaks
-        transposed_peaks = [list(x) for x in zip(*all_peaks)]
 
-        experiments_e, experiments_c, real_e, real_c = [], [], [], []
+        innerdict = {
+            'e': [],
+            'c': [],
+            'real_e': [],
+            'real_c': [],
+        }
+
+        dict = {
+            'magnesium': {k: v.copy() for k, v in innerdict.items()},
+            'calcium': {k: v.copy() for k, v in innerdict.items()},
+        }
     
         for (idx, mexperiment), peaks in zip(
             enumerate(metal_real_experiments), all_peaks
         ):
             if idx < 12:
-                continue
-
-            a = np.array(calcium_deltas) # Deltas array
+                a = np.array(magnesium_deltas)
+                key = 'magnesium'
+            else:
+                a = np.array(calcium_deltas) # Deltas array
+                key = 'calcium'
+            
             b = np.array(peaks)
             d = np.array(assumed_shifts)
 
@@ -2352,46 +2355,62 @@ def _(
             c = res.x[0] # ratio of metal ligand to ligand
             e = 1.0 - c # ratio of ligand to metal ligand
 
-            experiments_c.append(c)
-            experiments_e.append(e)
-        
             if mexperiment['metal ligand complex molarity / M'] is not None:
                 complex = mexperiment['metal ligand complex molarity / M']
                 total = mexperiment['citric acid molarity / M']
                 free_citrate = total - complex
 
-                real_e.append(free_citrate / total) # ratio of ligand to metal ligand
-                real_c.append(complex / total) # ratio of metal ligand to ligand
+                real_e = free_citrate / total # ratio of ligand to metal ligand
+                real_c = complex / total # ratio of metal ligand to ligand
             else:
-                real_e.append(1) # ratio of ligand to metal ligand
-                real_c.append(0) # ratio of metal ligand to ligand
-
-        return experiments_e, experiments_c, real_e, real_c
+                real_e = 1 # ratio of ligand to metal ligand
+                real_c = 0 # ratio of metal ligand to ligand
+        
+            dict[key]['e'].append(e)
+            dict[key]['c'].append(c)
+            dict[key]['real_e'].append(real_e)
+            dict[key]['real_c'].append(real_c)
+        
+        return dict
     
+    chelation_predictions = _()
 
+    def mse(pred, true):
+        pred = np.asarray(pred, dtype=float)
+        true = np.asarray(true, dtype=float)
+        if pred.shape != true.shape:
+            raise ValueError("Shapes must match")
+        return float(np.sum((true - pred) ** 2))
 
-    experiments_e, experiments_c, real_e, real_c = _()
+    errors = {}
+    for ion, vals in chelation_predictions.items():
+        errors[ion] = {
+            'mse_e': mse(vals['e'], vals['real_e']),
+            'mse_c': mse(vals['c'], vals['real_c']),
+        }
 
-
-    errors = sum([
-        (x[0] - x[2])**2+(x[1]-x[3])**2
-        for x in zip(experiments_e, experiments_c, real_e, real_c)
-    ])
-
-    print(errors)
-
-    plt.plot(real_e, experiments_e)
-    plt.plot(real_c, experiments_c)
-    plt.plot(np.linspace(0, 1, 10), np.linspace(0, 1, 10))
-
-    plt.title('Predicted ML Binding Compared to Calculated ML Binding')
-    plt.xlabel('Ratio of Calculated Substance')
-    plt.ylabel('Ratio of Predicted Substance')
-    plt.legend(['Ligand', 'Metal Ligand Complex', f'Perfect Relationship\n(MSE: {round(errors,3)})'])
-    plt.grid(True)
+    fig, axes = plt.subplots(1, 2, figsize=(12,5), sharex=True, sharey=True)
+    for ax, ion in zip(axes, chelation_predictions):
+        vals = chelation_predictions[ion]
+        ax.plot(vals['real_e'], vals['e'], marker='o')
+        ax.plot(vals['real_c'], vals['c'], marker='s')
+        identity = np.linspace(0, 1, 100)
+        ax.plot(identity, identity, '--', color='gray')
+        ax.set_title(f'{ion.capitalize()}')
+        ax.set_xlabel('Calculated')
+        ax.set_ylabel('Predicted')
+        mse_e = mse(vals['e'], vals['real_e'])
+        mse_c = mse(vals['c'], vals['real_c'])
+        ax.legend([
+            f'e MSE: {round(mse_e,4) if mse_e is not None else "N/A"}',
+            f'c MSE: {round(mse_c,4) if mse_c is not None else "N/A"}',
+            'Perfect'
+        ])
+        ax.grid(True)
     plt.tight_layout()
-
     plt.show()
+
+
     return
 
 
