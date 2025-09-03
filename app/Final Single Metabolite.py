@@ -9,12 +9,16 @@ def _():
     """Initial imports and hardware detection"""
     import marimo as mo # type: ignore
     import torch # type: ignore
+    return mo, torch
 
+
+@app.cell
+def _(torch):
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
-    return cuda_built, gpu_count, hip_version, mo, torch
+    return cuda_built, gpu_count, hip_version
 
 
 @app.cell(hide_code=True)
@@ -50,7 +54,7 @@ def _():
     notebook_name = 'final_single_metabolite'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = 2**10             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
@@ -1436,7 +1440,8 @@ def _(
         spectrum_intensities = sample_spectrum['intensities']
         reference_intensities = sample_reference[1]
 
-        sample_data = np.concatenate([spectrum_intensities, reference_intensities])
+        # sample_data = np.concatenate([spectrum_intensities, reference_intensities])
+        sample_data = spectrum_intensities
         data_length = len(sample_data)
 
         # Create HDF5 file for streaming
@@ -1507,7 +1512,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1531,7 +1537,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1554,7 +1561,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
