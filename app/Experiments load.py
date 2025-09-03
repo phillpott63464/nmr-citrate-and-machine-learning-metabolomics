@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.15.2"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -2185,7 +2185,7 @@ def _(math, metal_real_experiments):
                 a = k2
             else:
                 a = k1
-            
+
             c = mexperiment['salt stock molarity / M']
             d = mexperiment['citric acid molarity / M']
 
@@ -2193,7 +2193,7 @@ def _(math, metal_real_experiments):
                 b = 0.0
             else:
                 b = solve_for_b(a, c, d)
-            
+
 
             mexperiment['metal ligand complex molarity / M'] = b
 
@@ -2202,6 +2202,50 @@ def _(math, metal_real_experiments):
 
     continueaaa = True
     return (continueaaa,)
+
+
+@app.cell
+def _(continueaaa, metal_real_experiments, plt):
+    if continueaaa:
+        pass
+    # Extracting the data
+    salt_stock_molarity = [x['salt stock molarity / M'] for x in metal_real_experiments]
+    metal_ligand_complex_molarity = [x['metal ligand complex molarity / M'] for x in metal_real_experiments]
+
+    # Combining the data into a list of tuples
+    combined_data = list(zip(salt_stock_molarity, metal_ligand_complex_molarity))
+
+    calcium_combined = combined_data[12:]
+    magnesium_combined = combined_data[:12]
+
+    # Sorting the combined data by salt stock molarity
+    sorted_calcium = sorted(calcium_combined, key=lambda x: x[0])
+    sorted_magnesium = sorted(magnesium_combined, key=lambda x: x[0])
+
+    # Unzipping the sorted data back into two lists
+    sorted_calcium_molarity, sorted_calcium_complex_molarity = zip(*sorted_calcium)
+    sorted_magnesium_molarity, sorted_magnesium_complex_molarity = zip(*sorted_magnesium)
+
+    # Plotting the sorted data
+    plt.figure(figsize=(15, 8))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(sorted_calcium_molarity, sorted_calcium_complex_molarity)
+    plt.xlabel('Salt Stock Molarity (M)')
+    plt.ylabel('Metal Ligand Complex Molarity (M)')
+    plt.title('Plot of Calcium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
+    plt.xlabel('Salt Stock Molarity (M)')
+    plt.ylabel('Metal Ligand Complex Molarity (M)')
+    plt.title('Plot of Magnesium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+
+    plt.tight_layout()
+
+    plt.show()
+
+    return
 
 
 @app.cell
@@ -2268,11 +2312,11 @@ def _(
                 c = np.array([v[1] for v in vars])
                 d = np.array([v[2] for v in vars])
                 e = np.array([v[3] for v in vars])
-    
+
                 rhs = b - c*d
-    
+
                 a, *_ = np.linalg.lstsq(e.reshape(-1,1), rhs, rcond=None)
-    
+
                 deltas.append(a[0])
 
         calcium_deltas = [deltas[1], deltas[3], deltas[5], deltas[7]]
@@ -2334,7 +2378,7 @@ def _(
             'magnesium': {k: v.copy() for k, v in innerdict.items()},
             'calcium': {k: v.copy() for k, v in innerdict.items()},
         }
-    
+
         for (idx, mexperiment), peaks in zip(
             enumerate(metal_real_experiments), all_peaks
         ):
@@ -2344,7 +2388,7 @@ def _(
             else:
                 a = np.array(calcium_deltas) # Deltas array
                 key = 'calcium'
-            
+
             b = np.array(peaks)
             d = np.array(assumed_shifts)
 
@@ -2365,14 +2409,14 @@ def _(
             else:
                 real_e = 1 # ratio of ligand to metal ligand
                 real_c = 0 # ratio of metal ligand to ligand
-        
+
             dict[key]['e'].append(e)
             dict[key]['c'].append(c)
             dict[key]['real_e'].append(real_e)
             dict[key]['real_c'].append(real_c)
-        
+
         return dict
-    
+
     chelation_predictions = _()
 
     def mse(pred, true):
