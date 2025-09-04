@@ -2758,11 +2758,60 @@ def _(all_experiments, integrated_predictions, np):
 
 
 @app.cell
-def _(all_experiments, np, plt):
+def _(all_experiments, citricacid, integrated_deltas, np):
+    """
+    Generate additional synthetic data from previous models
+    ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
+    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% MSE model)
+    """
+
+    import torch
+    train_peaks = [x['peaks'] for x in all_experiments]
+    train_vals = [list(x.values())[:-1] for x in all_experiments]
+    test_peaks = torch.tensor(train_peaks, dtype=torch.float32)
+    test_vals = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
+
+    for _ in range(1000):
+        pH = np.random.default_rng().uniform(3, 7)
+        random_speciation_fracs = citricacid.alpha(pH)
+
+        rng = np.random.default_rng()
+        random_complex_fracs = rng.dirichlet([1, 1, 1])
+
+        temp_peaks = []
+        for deltas in integrated_deltas:
+            dl = random_complex_fracs[2] * sum(deltas[i] * random_speciation_fracs[i] for i in range(4))
+            dmg = deltas[4] * random_complex_fracs[0]
+            dca = deltas[5] * random_complex_fracs[1]
+        
+            ds = dl + dmg + dca
+
+            temp_peaks.append(dl)
+
+        train_peaks.append(temp_peaks)
+
+        train_vals.append([*random_speciation_fracs, *random_complex_fracs])
+
+    print(len(train_peaks))
+    print(len(train_vals))
+
+    return test_peaks, test_vals, torch, train_peaks, train_vals
+
+
+@app.cell
+def _(
+    all_experiments,
+    np,
+    plt,
+    test_peaks,
+    test_vals,
+    torch,
+    train_peaks,
+    train_vals,
+):
     ### Try a neural network?
 
     import torch.nn as nn
-    import torch
     import torch.optim as optim
     import torch.nn.functional as F
 
@@ -2788,18 +2837,18 @@ def _(all_experiments, np, plt):
 
     model = ConstrainedModel()
 
-    X = torch.tensor([x['peaks'] for x in all_experiments], dtype=torch.float32)  # (samples, 4)
-    y = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32)  # (samples, 7)
+    X = torch.tensor(train_peaks, dtype=torch.float32)  # (samples, 4)
+    y = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     epochs = 2000  # you can adjust
     best_loss = np.inf
-    improvement = 1e-10
     full_count = 0
     count = 0
     while True:
+    # for epoch in range(epochs):
         model.train()  # ensure model is in training mode
 
         optimizer.zero_grad()      # reset gradients
@@ -2825,7 +2874,9 @@ def _(all_experiments, np, plt):
         slicer = slice(None) # All
         # slicer = slice(0, 23)
     
-        predictions = model(X)
+        predictions = model(test_peaks)
+        loss = criterion(predictions, test_vals)  # compute loss
+        print(f'Test loss: {loss.item()}')
         plt.figure(figsize=(15, 5))
         plt.subplot(1, 2, 1)
         plt.plot(predictions[slicer])
