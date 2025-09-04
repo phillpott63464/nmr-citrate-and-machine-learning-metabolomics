@@ -2482,11 +2482,15 @@ def _(mo):
 def _(
     chelation_peak_values_no_intensities,
     citricacid,
+    continueaaa,
     fracs,
     metal_real_experiments,
     peak_values_no_intensities,
 ):
     """Concatenate all experiments into an array with only the required values"""
+
+    if continueaaa:
+        pass
 
     def _():
         na_experiments = [{
@@ -2690,21 +2694,20 @@ def _(all_experiments, integrated_deltas, least_squares, np):
     print("Integrated predictions shape:", len(integrated_predictions))
     if integrated_predictions:
         print("Sample prediction:", integrated_predictions[0])
-
     return (integrated_predictions,)
 
 
 @app.cell
-def _(integrated_predictions, plt):
+def _(all_experiments, integrated_predictions, plt):
     def _():
         fs = integrated_predictions[24:]
 
         for i in range(len(fs)):
             fs[i] = fs[i]
-            print(fs[i])
             # fs[i] = fs[i][4:-2]
 
         plt.plot(fs)
+        plt.legend([*all_experiments[0].keys()])
 
         plt.show()
 
@@ -2728,9 +2731,115 @@ def _(all_experiments, plt):
             values.append(vals)
 
         plt.plot(values[24:])
+        plt.legend([*all_experiments[0].keys()])
         plt.show()
 
     _()
+    return
+
+
+@app.cell
+def _(all_experiments, integrated_predictions, np):
+    def _():
+        errors = []
+        for experiment, prediction in zip(all_experiments, integrated_predictions):
+            vals = [*experiment.values()]
+            vals.pop()
+
+            error = 0
+            for val, f in zip(vals, prediction):
+                error += (val-f)**2
+            errors.append(error)
+
+        print(np.mean(errors))
+
+    _()
+    return
+
+
+@app.cell
+def _(all_experiments, np, plt):
+    ### Try a neural network?
+
+    import torch.nn as nn
+    import torch
+    import torch.optim as optim
+    import torch.nn.functional as F
+
+    class ConstrainedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(4, 20),
+                nn.GELU(),
+                nn.Linear(20, 80),
+                nn.GELU(),
+                nn.Linear(80, 20),
+                nn.GELU(),
+                nn.Linear(20, 7),
+            )
+
+        def forward(self, x):
+            x = self.net(x)
+            first4 = F.softmax(x[:, :4], dim=1)   # first 4 constrained
+            last3 = F.softmax(x[:, 4:], dim=1)    # last 3 constrained
+            return torch.cat([first4, last3], dim=1)
+
+
+    model = ConstrainedModel()
+
+    X = torch.tensor([x['peaks'] for x in all_experiments], dtype=torch.float32)  # (samples, 4)
+    y = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32)  # (samples, 7)
+
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    epochs = 2000  # you can adjust
+    best_loss = np.inf
+    improvement = 1e-10
+    full_count = 0
+    count = 0
+    while True:
+        model.train()  # ensure model is in training mode
+
+        optimizer.zero_grad()      # reset gradients
+        outputs = model(X)         # forward pass
+        loss = criterion(outputs, y)  # compute loss
+        loss.backward()            # backpropagate
+        optimizer.step()           # update weights
+
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            count = 0
+    
+        count += 1
+        full_count += 1
+
+        if count > 100:
+            break
+
+    print(f'{full_count} epochs with {best_loss} loss')
+
+    model.eval()
+    with torch.no_grad():
+        slicer = slice(None) # All
+        # slicer = slice(0, 23)
+    
+        predictions = model(X)
+        plt.figure(figsize=(15, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(predictions[slicer])
+        plt.legend([*all_experiments[0].keys()])
+        plt.title('Predictions')
+    
+
+        plt.subplot(1, 2, 2)
+        plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
+        plt.legend([*all_experiments[0].keys()])
+        plt.title('real')
+    
+        plt.show()
+
     return
 
 
