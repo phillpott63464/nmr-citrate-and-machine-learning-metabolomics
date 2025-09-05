@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.2"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -10,15 +10,12 @@ def _():
     from phfork import AcidAq, IonAq, System
     import phfork
     import numpy as np
-
     return mo, np, phfork
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""# Experimental Method for Citric Acid Speciation Chemical Shift"""
-    )
+    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
     return
 
 
@@ -130,7 +127,6 @@ def _(phfork):
             )
 
         return ratios
-
     return (simulate_ph_graph,)
 
 
@@ -155,7 +151,6 @@ def _(simulate_ph_graph):
             error += (known['ph'] - closest_entry['pH']) ** 2
 
         return error
-
     return (evaluate_pka_error,)
 
 
@@ -273,7 +268,6 @@ def _(A_CONST, np):
             delta_pka = log_gamma_new - log_gamma_old
             corrected.append(pka + delta_pka)
         return corrected
-
     return correct_pkas, ionic_strength_from_conc
 
 
@@ -787,5 +781,88 @@ def _(metal_eppendorfs_csv, metal_experiments, metal_stock_output_csv):
     return
 
 
-if __name__ == '__main__':
+@app.cell
+def _(better_sample_vol, citric_sample_vol, pd, tris_vol):
+
+    def _():
+        new_metal_experiments = []
+        new_metal_eppendorfs_csv = (
+            []
+        )   # Blank csv to print and write eppendorf weights into
+    
+        # Intialise experiments
+        for i in range(0, 24):
+            citrate_ratio = 0.5 # For now, range 0-1
+            magnesium_volume = 150 * 1e-6 # For now, range 0-150ul
+            calcium_volume = 150 * 1e-6 # For now, range 0-150ul
+        
+            new_metal_experiments.append(
+                {
+                    'citric acid stock / µL': citric_sample_vol * citrate_ratio,
+                    'sodium citrate stock / µL': citric_sample_vol * (1.0 - citrate_ratio),
+                    'tris buffer stock / µL': round(tris_vol, 6),
+                    'magnesium salt stock / µL': magnesium_volume,
+                    'calcium salt stock / µL': calcium_volume,
+                }
+            )
+
+            new_metal_eppendorfs_csv.append(
+                {
+                    'eppendorf base weight / g': None,
+                    'post citric acid stock weight / g': None,
+                    'post sodium citrate stock weight / g': None,
+                    'post magnesium salt stock weight / g': None,
+                    'post calcium salt stock weight / g': None,
+                    'post tris buffer weight / g': None,
+                    'post milliq weight / g': None,
+                }
+            )
+    
+        # Make up to better_sample_vol with milliq
+        for x in new_metal_experiments:
+            temp = 0
+            for y in x.items():
+                temp += y[1]
+            x['milliq µL'] = round(better_sample_vol - temp, 6)
+    
+        # Round everything to µL
+        for x in new_metal_experiments:
+            for key, value in x.items():
+                x[key] = round(value * 1000 * 1000)
+    
+        # Double check volumes
+        for x in new_metal_experiments:
+            temp = 0
+            for y in x.items():
+                temp += y[1]
+            if temp != better_sample_vol * 1000 * 1000:
+                print('Issue')
+    
+        new_metal_experiments = pd.DataFrame(new_metal_experiments)
+        new_metal_eppendorfs_csv = pd.DataFrame(new_metal_eppendorfs_csv)
+    
+        # Put milliq at the end for simplicity's sake
+        columns = [
+            col for col in new_metal_experiments.columns if col != 'milliq µL'
+        ] + ['milliq µL']
+        new_metal_experiments = new_metal_experiments[columns]
+    
+        new_metal_experiments.index = range(
+            49, 49 + len(new_metal_experiments)
+        )   # Start index after the number of experiments actually done
+        new_metal_eppendorfs_csv.index = range(49, 49 + len(new_metal_eppendorfs_csv))
+
+        new_metal_experiments.to_csv('new_metal_experiments.csv', index=True)
+
+        new_metal_eppendorfs_csv.to_csv(
+            'experimental/new_metal_eppendorfs_blank.csv', index=True
+        )
+
+        return new_metal_experiments, new_metal_eppendorfs_csv
+
+    new_metal_experiments, new_metal_eppendorfs_csv = _()
+    return
+
+
+if __name__ == "__main__":
     app.run()
