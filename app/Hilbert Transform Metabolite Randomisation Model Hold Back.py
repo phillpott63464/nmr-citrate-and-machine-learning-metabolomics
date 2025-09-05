@@ -50,7 +50,7 @@ def _():
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = 2**9            # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
@@ -1692,123 +1692,66 @@ def _(torch):
 
 
 @app.cell
-def _(nn, remove_padding, torch):
+def _(nn, torch):
     """Multi-Layer Perceptron for metabolite detection and quantification"""
 
     class MLPRegressor(nn.Module):
-        def __init__(self, input_size=2048, trial=None):
-            super().__init__()
-            self.input_size = input_size
-            self.window_size = 256
+        """
+        MLP that properly handles complex NMR FID data
+        """
 
-            stride_ratio = trial.suggest_float('stride_ratio', 0.25, 0.75)
-            self.stride = int(self.window_size * stride_ratio)
-            self.stride = max(1, self.stride)
+        def __init__(self, input_size, trial=None, div_size=None):
+            super(MLPRegressor, self).__init__()
 
-            # Local feature extractor for each window
-            # *4 because we handle real+imag for both spectrum and reference
-            self.local_feature_extractor = nn.Sequential(
-                nn.Linear(self.window_size * 4, 512),  # *4 for real+imag of spectrum+reference
+            # Determine layer size reduction factor
+            if trial is not None:
+                self.div_size = trial.suggest_float('div_size', 2, 10, step=1)
+            elif div_size is not None:
+                self.div_size = div_size
+            else:
+                self.div_size = 4
+
+            # For complex input, we need to handle real and imaginary parts
+            # This doubles the effective input size
+            effective_input_size = input_size * 2  # real + imaginary components
+
+            # Calculate progressive layer sizes
+            a = effective_input_size
+            b = int(a / self.div_size)
+            c = int(b / self.div_size)
+            d = int(c / self.div_size)
+            e = int(d / self.div_size)
+
+            self.layer_sizes = [a, b, c, d, e, 2]
+
+            # Define network architecture
+            self.model = nn.Sequential(
+                nn.Linear(a, b),
                 nn.ReLU(),
-                nn.Linear(512, 128)
-            )
-
-            # Calculate number of windows correctly
-            num_windows = (input_size // 2 - self.window_size) // self.stride + 1
-
-            if num_windows <= 0:
-                num_windows = 1
-
-            self.global_aggregator = nn.Sequential(
-                nn.Linear(num_windows * 128, 256),
+                nn.Linear(b, c),
                 nn.ReLU(),
-                nn.Linear(256, 2)  # [presence, concentration]
+                nn.Linear(c, d),
+                nn.ReLU(),
+                nn.Linear(d, e),
+                nn.ReLU(),
+                nn.Linear(e, 2),  # Output: [presence_logit, concentration]
             )
 
         def forward(self, x):
-            batch_size = x.size(0)
-
-            # **NEW: Remove padding before processing**
-            x = remove_padding(x)
-
-            # Update input_size based on actual data length after padding removal
-            actual_input_size = x.size(1)
-
-            # **FIX: Handle complex input by separating real and imaginary parts**
+            # Properly handle complex input by concatenating real and imaginary parts
             if x.dtype.is_complex:
-                x_real = x.real.float()
-                x_imag = x.imag.float()
-                # Concatenate real and imaginary parts
+                # Concatenate real and imaginary parts to preserve all information
+                x_real = x.real
+                x_imag = x.imag
                 x = torch.cat([x_real, x_imag], dim=-1)
-            else:
-                x = x.float()
-                # If input is real, create zero imaginary part
-                x = torch.cat([x, torch.zeros_like(x)], dim=-1)
 
-            # Now x has shape [batch, actual_input_size * 2] (real + imag)
-            # Split spectrum and reference (each has real + imag components)
-            quarter_size = actual_input_size // 2
-            spectrum_real = x[:, :quarter_size]
-            spectrum_imag = x[:, quarter_size:quarter_size*2]
-            reference_real = x[:, quarter_size*2:quarter_size*3] 
-            reference_imag = x[:, quarter_size*3:]
+            return self.model(x)
 
-            window_features = []
-
-            spectrum_length = spectrum_real.size(1)
-
-            # Adjust window size if it's larger than actual data
-            effective_window_size = min(self.window_size, spectrum_length)
-
-            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
-                # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+effective_window_size]
-                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
-                ref_real_window = reference_real[:, i:i+effective_window_size]
-                ref_imag_window = reference_imag[:, i:i+effective_window_size]
-
-                # Pad window to expected size if needed
-                if effective_window_size < self.window_size:
-                    pad_size = self.window_size - effective_window_size
-                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-
-                # Concatenate all components
-                window_input = torch.cat([
-                    spec_real_window, spec_imag_window,
-                    ref_real_window, ref_imag_window
-                ], dim=-1)
-
-                features = self.local_feature_extractor(window_input)
-                window_features.append(features)
-
-            if len(window_features) == 0:
-                # Fallback for edge cases
-                window_input = torch.cat([
-                    spectrum_real[:, :effective_window_size],
-                    spectrum_imag[:, :effective_window_size],
-                    reference_real[:, :effective_window_size],
-                    reference_imag[:, :effective_window_size]
-                ], dim=-1)
-
-                # Pad if needed
-                if effective_window_size < self.window_size:
-                    pad_size = self.window_size - effective_window_size
-                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
-                    window_input = torch.cat([window_input, padding], dim=1)
-
-                features = self.local_feature_extractor(window_input)
-                window_features.append(features)
-
-            global_features = torch.cat(window_features, dim=-1)
-            return self.global_aggregator(global_features)
     return (MLPRegressor,)
 
 
 @app.cell
-def _(math, nn, remove_padding, torch):
+def _(math, nn, torch):
     """Advanced Sliding Window Transformer architecture for NMR spectral analysis"""
 
     class PositionalEncoding(nn.Module):
@@ -1836,13 +1779,11 @@ def _(math, nn, remove_padding, torch):
 
     class TransformerRegressor(nn.Module):
         """
-        Sliding Window Transformer specifically designed for complex NMR FID data
+        Transformer specifically designed for complex NMR FID data
         """
 
         def __init__(self, input_size, trial=None, **kwargs):
             super(TransformerRegressor, self).__init__()
-
-            self.input_size = input_size
 
             # Hyperparameter configuration
             if trial is not None:
@@ -1850,49 +1791,45 @@ def _(math, nn, remove_padding, torch):
                 self.nhead = int(trial.suggest_categorical('nhead', [8, 16]))
                 self.num_layers = int(trial.suggest_int('num_layers', 3, 6))
                 self.dim_feedforward = int(trial.suggest_categorical('dim_feedforward', [512, 1024, 2048]))
-
-                # Sliding window parameters
-                self.window_size = int(trial.suggest_categorical('window_size', [128, 256, 512]))
-                stride_ratio = trial.suggest_float('stride_ratio', 0.25, 0.75)
-                self.stride = int(self.window_size * stride_ratio)
-                self.stride = max(1, self.stride)
+                self.target_seq_len = int(trial.suggest_categorical('target_seq_len', [64, 128, 256]))
             else:
                 self.d_model = kwargs.get('d_model', 256)
                 self.nhead = kwargs.get('nhead', 8)
                 self.num_layers = kwargs.get('num_layers', 4)
                 self.dim_feedforward = kwargs.get('dim_feedforward', 1024)
-                self.stride = kwargs.get('stride', 128)
-                self.window_size = kwargs.get('window_size', 256)
-
+                self.target_seq_len = kwargs.get('target_seq_len', 128)
 
             # Ensure attention head compatibility
             while self.d_model % self.nhead != 0:
                 self.nhead = max(1, self.nhead - 1)
 
-            # Local window transformer for processing individual windows
-            # *4 because we handle real+imag for both spectrum and reference
-            self.window_projection = nn.Linear(self.window_size * 4, self.d_model)
+            # Separate projections for real and imaginary parts
+            # This preserves phase relationships in the complex data
+            self.spectrum_real_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.spectrum_imag_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.reference_real_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
+            self.reference_imag_projection = nn.Linear(input_size // 2, self.d_model * self.target_seq_len // 2)
 
-            # Local transformer for each window
-            local_encoder_layer = nn.TransformerEncoderLayer(
-                d_model=self.d_model,
-                nhead=self.nhead,
-                dim_feedforward=self.dim_feedforward // 2,  # Smaller for local processing
+            # Complex-aware positional encoding
+            self.spectrum_pos_encoding = PositionalEncoding(self.d_model, 0.0, self.target_seq_len)
+
+            # Phase-aware attention mechanism
+            self.magnitude_attention = nn.MultiheadAttention(
+                embed_dim=self.d_model,
+                num_heads=self.nhead,
                 dropout=0.0,
-                activation='gelu',
-                batch_first=True,
-            )
-            self.local_transformer = nn.TransformerEncoder(
-                local_encoder_layer, num_layers=max(1, self.num_layers // 2)
+                batch_first=True
             )
 
-            # Calculate number of windows
-            num_windows = (input_size // 2 - self.window_size) // self.stride + 1
-            if num_windows <= 0:
-                num_windows = 1
+            self.phase_attention = nn.MultiheadAttention(
+                embed_dim=self.d_model,
+                num_heads=self.nhead,
+                dropout=0.0,
+                batch_first=True
+            )
 
-            # Global transformer for inter-window relationships
-            global_encoder_layer = nn.TransformerEncoderLayer(
+            # Transformer encoder
+            encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.d_model,
                 nhead=self.nhead,
                 dim_feedforward=self.dim_feedforward,
@@ -1900,12 +1837,9 @@ def _(math, nn, remove_padding, torch):
                 activation='gelu',
                 batch_first=True,
             )
-            self.global_transformer = nn.TransformerEncoder(
-                global_encoder_layer, num_layers=max(1, self.num_layers - self.num_layers // 2)
+            self.transformer_encoder = nn.TransformerEncoder(
+                encoder_layer, num_layers=self.num_layers
             )
-
-            # Positional encoding for global context
-            self.pos_encoding = PositionalEncoding(self.d_model, 0.0, num_windows)
 
             # Task-specific heads
             self.presence_head = nn.Sequential(
@@ -1925,97 +1859,73 @@ def _(math, nn, remove_padding, torch):
         def forward(self, x):
             batch_size = x.size(0)
 
-            # **NEW: Remove padding before processing**
-            x = remove_padding(x)
-
-            # Update input_size based on actual data length after padding removal
-            actual_input_size = x.size(1)
-
-            # Handle complex input by separating real and imaginary parts
+            # Handle complex input properly
             if x.dtype.is_complex:
-                x_real = x.real.float()
-                x_imag = x.imag.float()
-                # Concatenate real and imaginary parts
-                x = torch.cat([x_real, x_imag], dim=-1)
+                # Split into real and imaginary components
+                x_real = x.real
+                x_imag = x.imag
             else:
-                x = x.float()
-                # If input is real, create zero imaginary part
-                x = torch.cat([x, torch.zeros_like(x)], dim=-1)
+                # If real input, create zero imaginary part
+                x_real = x
+                x_imag = torch.zeros_like(x)
 
-            # Now x has shape [batch, actual_input_size * 2] (real + imag)
-            # Split spectrum and reference (each has real + imag components)
-            quarter_size = actual_input_size // 2
-            spectrum_real = x[:, :quarter_size]
-            spectrum_imag = x[:, quarter_size:quarter_size*2]
-            reference_real = x[:, quarter_size*2:quarter_size*3] 
-            reference_imag = x[:, quarter_size*3:]
+            # Split concatenated input into spectrum and reference
+            mid_point = x_real.size(1) // 2
+            spectrum_real = x_real[:, :mid_point]
+            spectrum_imag = x_imag[:, :mid_point]
+            reference_real = x_real[:, mid_point:]
+            reference_imag = x_imag[:, mid_point:]
 
-            window_features = []
-            spectrum_length = spectrum_real.size(1)
+            # Project real and imaginary parts separately
+            spectrum_real_proj = self.spectrum_real_projection(spectrum_real)
+            spectrum_imag_proj = self.spectrum_imag_projection(spectrum_imag)
+            reference_real_proj = self.reference_real_projection(reference_real)
+            reference_imag_proj = self.reference_imag_projection(reference_imag)
 
-            # Adjust window size if it's larger than actual data
-            effective_window_size = min(self.window_size, spectrum_length)
+            # Combine real and imaginary projections
+            spectrum_combined = torch.cat([spectrum_real_proj, spectrum_imag_proj], dim=-1)
+            reference_combined = torch.cat([reference_real_proj, reference_imag_proj], dim=-1)
 
-            # Process each sliding window
-            for i in range(0, spectrum_length - effective_window_size + 1, self.stride):
-                # Extract windows for all components
-                spec_real_window = spectrum_real[:, i:i+effective_window_size]
-                spec_imag_window = spectrum_imag[:, i:i+effective_window_size]
-                ref_real_window = reference_real[:, i:i+effective_window_size]
-                ref_imag_window = reference_imag[:, i:i+effective_window_size]
+            # Reshape to sequence format
+            spectrum_patches = spectrum_combined.view(batch_size, self.target_seq_len, self.d_model)
+            reference_patches = reference_combined.view(batch_size, self.target_seq_len, self.d_model)
 
-                # Pad window to expected size if needed
-                if effective_window_size < self.window_size:
-                    pad_size = self.window_size - effective_window_size
-                    spec_real_window = torch.cat([spec_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    spec_imag_window = torch.cat([spec_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    ref_real_window = torch.cat([ref_real_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
-                    ref_imag_window = torch.cat([ref_imag_window, torch.zeros(batch_size, pad_size, device=x.device)], dim=1)
+            # Add positional encoding
+            spectrum_patches = self.spectrum_pos_encoding(spectrum_patches)
+            reference_patches = self.spectrum_pos_encoding(reference_patches)
 
-                # Concatenate all components for this window
-                window_input = torch.cat([
-                    spec_real_window, spec_imag_window,
-                    ref_real_window, ref_imag_window
-                ], dim=-1)
+            # Magnitude and phase-aware attention
+            magnitude_attended, _ = self.magnitude_attention(
+                spectrum_patches, reference_patches, reference_patches
+            )
 
-                # Project window to transformer dimension
-                window_embed = self.window_projection(window_input)#.unsqueeze(1)  # [batch, 1, d_model]
+            # Calculate phase information
+            spectrum_phase = torch.atan2(spectrum_imag_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1), 
+                                       spectrum_real_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1))
+            reference_phase = torch.atan2(reference_imag_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1),
+                                        reference_real_proj.unsqueeze(1).expand(-1, self.target_seq_len, -1))
 
-                # Local transformer processing
-                local_features = self.local_transformer(window_embed)  # [batch, 1, d_model]
-                window_features.append(local_features.squeeze(1))  # [batch, d_model]
+            # Phase-aware features (simplified for now)
+            phase_features = torch.cat([spectrum_phase, reference_phase], dim=-1)
+            if phase_features.size(-1) < self.d_model:
+                # Pad phase features to match d_model
+                padding = self.d_model - phase_features.size(-1)
+                phase_features = torch.cat([phase_features, torch.zeros(batch_size, self.target_seq_len, padding, device=phase_features.device)], dim=-1)
+            else:
+                phase_features = phase_features[:, :, :self.d_model]
 
-            # Handle edge case where no windows were created
-            if len(window_features) == 0:
-                # Fallback: use first window_size points
-                window_input = torch.cat([
-                    spectrum_real[:, :effective_window_size],
-                    spectrum_imag[:, :effective_window_size],
-                    reference_real[:, :effective_window_size],
-                    reference_imag[:, :effective_window_size]
-                ], dim=-1)
+            phase_attended, _ = self.phase_attention(
+                phase_features, phase_features, phase_features
+            )
 
-                # Pad if needed
-                if effective_window_size < self.window_size:
-                    pad_size = self.window_size - effective_window_size
-                    padding = torch.zeros(batch_size, pad_size * 4, device=x.device)
-                    window_input = torch.cat([window_input, padding], dim=1)
+            # Combine magnitude and phase information
+            combined_features = magnitude_attended + phase_attended
 
-                window_embed = self.window_projection(window_input).unsqueeze(1)
-                local_features = self.local_transformer(window_embed)
-                window_features.append(local_features.squeeze(1))
+            # Self-attention processing
+            encoded = self.transformer_encoder(combined_features)
 
-            # Stack all window features into sequence
-            window_sequence = torch.stack(window_features, dim=1)  # [batch, num_windows, d_model]
-
-            # Add positional encoding for global context
-            window_sequence = self.pos_encoding(window_sequence)
-
-            # Global transformer for inter-window relationships
-            global_features = self.global_transformer(window_sequence)  # [batch, num_windows, d_model]
-
-            # Global average pooling across windows
-            pooled_features = torch.mean(global_features, dim=1)  # [batch, d_model]
+            # Global average pooling
+            pooled_features = torch.mean(encoded, dim=1)
 
             # Task-specific predictions
             presence_logits = self.presence_head(pooled_features)
@@ -2607,7 +2517,6 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - **Number of Attention Heads:** {study.best_trial.params.get('nhead', 'N/A')}
     - **Number of Encoder Layers:** {study.best_trial.params.get('num_layers', 'N/A')}
     - **Feedforward Dimension:** {study.best_trial.params.get('dim_feedforward', 'N/A')}
-    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
 
     **Model Architecture:**
 
@@ -2616,11 +2525,6 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     elif MODEL_TYPE == 'mlp':
         # Handle sliding window MLP parameters
         model_params_md = f"""
-    **Sliding Window MLP Architecture:**
-    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
-    - **Window Size:** 256 (fixed)
-    - **Actual Stride:** {int(256 * study.best_trial.params.get('stride_ratio', 0.5))}
-
     **Model Architecture:**
 
     Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output

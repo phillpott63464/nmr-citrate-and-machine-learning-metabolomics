@@ -9,12 +9,16 @@ def _():
     """Initial imports and hardware detection"""
     import marimo as mo # type: ignore
     import torch # type: ignore
+    return mo, torch
 
+
+@app.cell
+def _(torch):
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
-    return cuda_built, gpu_count, hip_version, mo, torch
+    return cuda_built, gpu_count, hip_version
 
 
 @app.cell(hide_code=True)
@@ -45,12 +49,12 @@ def _():
 
     # Experiment parameters
     count = 100                    # Number of samples per metabolite combination
-    trials = 10                  # Number of hyperparameter optimization trialss
+    trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = None             # Number of random metabolite combinations to generate
     notebook_name = 'final_single_metabolite'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = 2**10             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
@@ -1436,7 +1440,8 @@ def _(
         spectrum_intensities = sample_spectrum['intensities']
         reference_intensities = sample_reference[1]
 
-        sample_data = np.concatenate([spectrum_intensities, reference_intensities])
+        # sample_data = np.concatenate([spectrum_intensities, reference_intensities])
+        sample_data = spectrum_intensities
         data_length = len(sample_data)
 
         # Create HDF5 file for streaming
@@ -1507,7 +1512,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1531,7 +1537,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1554,7 +1561,8 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
+                        temp_data = spectrum_intensities
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -2032,13 +2040,7 @@ def _(nn, torch):
             concentration_rmse = torch.tensor(0.0, device=predictions.device)
 
         # Balanced weighting: equal importance to both tasks
-        # total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
-
-        # Unbalanced weighting: prioritize concentration regression slightly more
-        # total_loss = 0.3 * classification_loss + 0.7 * concentration_loss
-
-        # Just double checking
-        total_loss = 0.5*concentration_mae + 0.5*concentration_rmse
+        total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
 
         return total_loss, classification_loss, concentration_mae, concentration_rmse
 
@@ -2529,11 +2531,6 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     elif MODEL_TYPE == 'mlp':
         # Handle sliding window MLP parameters
         model_params_md = f"""
-    **Sliding Window MLP Architecture:**
-    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
-    - **Window Size:** 256 (fixed)
-    - **Actual Stride:** {int(256 * study.best_trial.params.get('stride_ratio', 0.5))}
-
     **Model Architecture:**
 
     Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output

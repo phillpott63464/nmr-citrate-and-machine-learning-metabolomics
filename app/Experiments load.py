@@ -2020,6 +2020,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         calcium_peaks,
         calcium_percentages,
         chelation_fig,
+        chelation_peak_values_no_intensities,
         magnesium_peaks,
         magnesium_percentages,
     )
@@ -2205,6 +2206,49 @@ def _(math, metal_real_experiments):
 
     continueaaa = True
     return (continueaaa,)
+
+
+@app.cell
+def _(continueaaa, metal_real_experiments, plt):
+    if continueaaa:
+        pass
+    # Extracting the data
+    salt_stock_molarity = [x['salt stock molarity / M'] for x in metal_real_experiments]
+    metal_ligand_complex_molarity = [x['metal ligand complex molarity / M'] for x in metal_real_experiments]
+
+    # Combining the data into a list of tuples
+    combined_data = list(zip(salt_stock_molarity, metal_ligand_complex_molarity))
+
+    calcium_combined = combined_data[12:]
+    magnesium_combined = combined_data[:12]
+
+    # Sorting the combined data by salt stock molarity
+    sorted_calcium = sorted(calcium_combined, key=lambda x: x[0])
+    sorted_magnesium = sorted(magnesium_combined, key=lambda x: x[0])
+
+    # Unzipping the sorted data back into two lists
+    sorted_calcium_molarity, sorted_calcium_complex_molarity = zip(*sorted_calcium)
+    sorted_magnesium_molarity, sorted_magnesium_complex_molarity = zip(*sorted_magnesium)
+
+    # Plotting the sorted data
+    plt.figure(figsize=(15, 8))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(sorted_calcium_molarity, sorted_calcium_complex_molarity)
+    plt.xlabel('Salt Stock Molarity (M)')
+    plt.ylabel('Metal Ligand Complex Molarity (M)')
+    plt.title('Plot of Calcium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
+    plt.xlabel('Salt Stock Molarity (M)')
+    plt.ylabel('Metal Ligand Complex Molarity (M)')
+    plt.title('Plot of Magnesium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+
+    plt.tight_layout()
+
+    plt.show()
+    return
 
 
 @app.cell
@@ -2407,6 +2451,443 @@ def _(
         ax.grid(True)
     plt.tight_layout()
     plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## Fitting All Data Together
+
+    The issue with these current models is that they are all considered separate from one another. The speciation model will attempt to explain away metal ligand shifts in terms of speciation, which will in turn mess with the results of the chelation model. Therefore, an integrated model would work better.
+
+    $\delta_{obs, peak}=f_{AH3}\delta_{AH3}+f_{AH2-}\delta_{AH2-}+f_{AH-2}\delta_{aAH-2}+f_{A-3}\delta_{A-3}+f_{MgL}\delta_{MgL}+f_{CaL}\delta_{CaL}$
+
+    $\delta_{obs, peak}=f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3}+f_{4}\delta_{4}+f_{5}\delta_{5}$
+
+    Or maybe:
+
+    $\delta_{obs, peak}=f_{L}(f_{AH3}\delta_{AH3}+f_{AH2-}\delta_{AH2-}+f_{AH-2}\delta_{aAH-2}+f_{A-3}\delta_{A-3})+f_{MgL}\delta_{MgL}+f_{CaL}\delta_{CaL}$
+
+    $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    """
+    )
+    return
+
+
+@app.cell
+def _(
+    chelation_peak_values_no_intensities,
+    citricacid,
+    continueaaa,
+    fracs,
+    metal_real_experiments,
+    peak_values_no_intensities,
+):
+    """Concatenate all experiments into an array with only the required values"""
+
+    if continueaaa:
+        pass
+
+    def _():
+        na_experiments = [{
+            'f0': a,
+            'f1': b,
+            'f2': c,
+            'f3': d,
+            'f4': 0.0,
+            'f5': 0.0,
+            'f6': 1.0,
+        }
+        for a, b, c, d in fracs
+        ]
+
+        for idx, experiment in enumerate(na_experiments):
+            experiment['peaks'] = peak_values_no_intensities[idx]
+
+        assumed_fracs = citricacid.alpha([7.2])
+
+        mgca_experiments = []
+        for idx, mexperiment in enumerate(metal_real_experiments):
+            complex = mexperiment['metal ligand complex molarity / M']
+            total = mexperiment['citric acid molarity / M']
+            free_citrate = total - complex
+
+            c = free_citrate / total
+            # ratio of ligand to metal ligand
+            e = complex / total
+            # ratio of metal ligand to ligand
+
+            if idx < 12:
+                f4 = e
+                f5 = 0.0
+            else:
+                f4 = 0.0
+                f5 = e
+
+            mgca_experiments.append({
+                'f0': assumed_fracs[0],
+                'f1': assumed_fracs[1],
+                'f2': assumed_fracs[2],
+                'f3': assumed_fracs[3],
+                'f4': f4,
+                'f5': f5,
+                'f6': c,
+            })
+
+        for idx, experiment in enumerate(mgca_experiments):
+            experiment['peaks'] = chelation_peak_values_no_intensities[idx]
+
+        all_experiments = na_experiments + mgca_experiments
+
+        return all_experiments
+
+    all_experiments = _()
+    return (all_experiments,)
+
+
+@app.cell
+def _(all_experiments, np):
+    """
+    Calculate integrated model deltas using nonlinear least squares
+    $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    """
+    from scipy.optimize import least_squares
+
+    def _():
+        # Each peak is calculated separately, so we have to extract the peaks
+        all_peaks = [x['peaks'] for x in all_experiments]
+        transposed_peaks = [list(x) for x in zip(*all_peaks)]
+
+        # Extract f values for all experiments
+        fs_matrix = []
+        for experiment in all_experiments:
+            fs_matrix.append([
+                experiment['f0'], experiment['f1'], experiment['f2'], 
+                experiment['f3'], experiment['f4'], experiment['f5'], experiment['f6']
+            ])
+        fs_matrix = np.array(fs_matrix)
+
+        deltas = []
+
+        for peak_idx, peaks in enumerate(transposed_peaks):
+            peaks = np.array(peaks)
+
+            def residuals(deltas_peak):
+                """
+                deltas_peak: [δ0, δ1, δ2, δ3, δ4, δ5] for this peak
+                """
+                predicted_shifts = []
+
+                for exp_idx in range(len(all_experiments)):
+                    f0, f1, f2, f3, f4, f5, f6 = fs_matrix[exp_idx]
+
+                    # Model: δ_shift = f6(f0*δ0 + f1*δ1 + f2*δ2 + f3*δ3) + f4*δ4 + f5*δ5
+                    speciation_term = f0 * deltas_peak[0] + f1 * deltas_peak[1] + f2 * deltas_peak[2] + f3 * deltas_peak[3]
+                    chelation_term = f4 * deltas_peak[4] + f5 * deltas_peak[5]
+
+                    predicted_shift = f6 * speciation_term + chelation_term
+                    predicted_shifts.append(predicted_shift)
+
+                predicted_shifts = np.array(predicted_shifts)
+                return predicted_shifts - peaks
+
+            # Initial guess for deltas - use average peak position
+            x0 = np.full(6, np.mean(peaks))
+
+            # Solve nonlinear least squares
+            result = least_squares(residuals, x0, method='trf')
+
+            if not result.success:
+                print(f"Warning: optimization failed for peak {peak_idx}: {result.message}")
+
+            deltas.append(result.x)
+
+        return np.array(deltas)
+
+    integrated_deltas = _()
+    print("Integrated deltas shape:", integrated_deltas.shape)
+    print("Integrated deltas:")
+    print(integrated_deltas)
+    return integrated_deltas, least_squares
+
+
+@app.cell
+def _(all_experiments, integrated_deltas, least_squares, np):
+    """
+    Calculate f values from integrated deltas and chemical shifts
+    $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    """
+
+    def find_f_integrated(all_deltas, shifts, penalty_factor=1e3):
+        """
+        all_deltas: shape (4,6)  (4 peaks x 6 deltas)
+        shifts: shape (4,) - observed chemical shifts for 4 peaks
+        Returns: optimized f values (f0..f6)
+        """
+
+        def residuals(f):
+            f0_to_3 = f[:4]  # Speciation fractions
+            f4_to_5 = f[4:6]  # Metal complex fractions
+            f6 = f[6]        # Free ligand fraction
+
+            # Model: δ_shift = f6(f0*δ0 + f1*δ1 + f2*δ2 + f3*δ3) + f4*δ4 + f5*δ5
+            speciation_contributions = all_deltas[:, :4] @ f0_to_3  # Shape: (4,)
+            chelation_contributions = all_deltas[:, 4:6] @ f4_to_5  # Shape: (4,)
+
+            predicted_shifts = f6 * speciation_contributions + chelation_contributions
+
+            # Main residuals
+            main_residuals = predicted_shifts - shifts
+
+            # Constraint penalties
+            # Constraint 1: f0 + f1 + f2 + f3 should sum to 1 (speciation fractions)
+            speciation_constraint = penalty_factor * (np.sum(f0_to_3) - 1.0)**2
+
+            # Constraint 2: f4 + f5 + f6 should sum to 1 (total ligand fractions)
+            total_ligand_constraint = penalty_factor * (np.sum(f[4:7]) - 1.0)**2
+
+            # Return residuals with penalty terms
+            return np.concatenate([main_residuals, [speciation_constraint, total_ligand_constraint]])
+
+        # Bounds: all f_i between 0 and 1
+        bounds_lower = np.zeros(7)
+        bounds_upper = np.ones(7)
+
+        # Better initial guess based on expected behavior
+        x0 = np.array([0.25, 0.25, 0.25, 0.25, 0.1, 0.1, 0.8])  # More realistic starting point
+
+        # Run least squares optimization
+        res = least_squares(
+            residuals,
+            x0,
+            bounds=(bounds_lower, bounds_upper),
+            method='trf'
+        )
+
+        if not res.success:
+            print("Warning: optimization did not converge:", res.message)
+
+        return res.x
+
+    def _():
+        all_peaks = [x['peaks'] for x in all_experiments]
+
+        fs = []
+        for peaks in all_peaks:
+            # Convert peaks to numpy array and ensure correct shape
+            peaks_array = np.array(peaks)
+            if len(peaks_array) != 4:
+                print(f"Warning: Expected 4 peaks, got {len(peaks_array)}")
+                continue
+
+            f_values = find_f_integrated(integrated_deltas, peaks_array)
+            fs.append(f_values)
+
+        return fs
+
+    integrated_predictions = _()
+
+    print("Integrated predictions shape:", len(integrated_predictions))
+    if integrated_predictions:
+        print("Sample prediction:", integrated_predictions[0])
+    return (integrated_predictions,)
+
+
+@app.cell
+def _(all_experiments, integrated_predictions, plt):
+    def _():
+        fs = integrated_predictions[24:]
+
+        for i in range(len(fs)):
+            fs[i] = fs[i]
+            # fs[i] = fs[i][4:-2]
+
+        plt.plot(fs)
+        plt.legend([*all_experiments[0].keys()])
+
+        plt.show()
+
+    #     return plt.gca()
+
+    # tempfig = _()
+
+    # plt.show()
+
+    _()
+    return
+
+
+@app.cell
+def _(all_experiments, plt):
+    def _():
+        values = []
+        for experiment in all_experiments:
+            vals = [*experiment.values()]
+            vals = vals[:-1]
+            values.append(vals)
+
+        plt.plot(values[24:])
+        plt.legend([*all_experiments[0].keys()])
+        plt.show()
+
+    _()
+    return
+
+
+@app.cell
+def _(all_experiments, integrated_predictions, np):
+    def _():
+        errors = []
+        for experiment, prediction in zip(all_experiments, integrated_predictions):
+            vals = [*experiment.values()]
+            vals.pop()
+
+            error = 0
+            for val, f in zip(vals, prediction):
+                error += (val-f)**2
+            errors.append(error)
+
+        print(np.mean(errors))
+
+    _()
+    return
+
+
+@app.cell
+def _(all_experiments, citricacid, integrated_deltas, np):
+    """
+    Generate additional synthetic data from previous models
+    ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
+    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% MSE model)
+    """
+
+    import torch
+    train_peaks = [x['peaks'] for x in all_experiments]
+    train_vals = [list(x.values())[:-1] for x in all_experiments]
+    test_peaks = torch.tensor(train_peaks, dtype=torch.float32)
+    test_vals = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
+
+    for _ in range(1000):
+        pH = np.random.default_rng().uniform(3, 7)
+        random_speciation_fracs = citricacid.alpha(pH)
+
+        rng = np.random.default_rng()
+        random_complex_fracs = rng.dirichlet([1, 1, 1])
+
+        temp_peaks = []
+        for deltas in integrated_deltas:
+            dl = random_complex_fracs[2] * sum(deltas[i] * random_speciation_fracs[i] for i in range(4))
+            dmg = deltas[4] * random_complex_fracs[0]
+            dca = deltas[5] * random_complex_fracs[1]
+        
+            ds = dl + dmg + dca
+
+            temp_peaks.append(dl)
+
+        train_peaks.append(temp_peaks)
+
+        train_vals.append([*random_speciation_fracs, *random_complex_fracs])
+
+    print(len(train_peaks))
+    print(len(train_vals))
+
+    return test_peaks, test_vals, torch, train_peaks, train_vals
+
+
+@app.cell
+def _(
+    all_experiments,
+    np,
+    plt,
+    test_peaks,
+    test_vals,
+    torch,
+    train_peaks,
+    train_vals,
+):
+    ### Try a neural network?
+
+    import torch.nn as nn
+    import torch.optim as optim
+    import torch.nn.functional as F
+
+    class ConstrainedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(4, 20),
+                nn.GELU(),
+                nn.Linear(20, 80),
+                nn.GELU(),
+                nn.Linear(80, 20),
+                nn.GELU(),
+                nn.Linear(20, 7),
+            )
+
+        def forward(self, x):
+            x = self.net(x)
+            first4 = F.softmax(x[:, :4], dim=1)   # first 4 constrained
+            last3 = F.softmax(x[:, 4:], dim=1)    # last 3 constrained
+            return torch.cat([first4, last3], dim=1)
+
+
+    model = ConstrainedModel()
+
+    X = torch.tensor(train_peaks, dtype=torch.float32)  # (samples, 4)
+    y = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
+
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    epochs = 2000  # you can adjust
+    best_loss = np.inf
+    full_count = 0
+    count = 0
+    while True:
+    # for epoch in range(epochs):
+        model.train()  # ensure model is in training mode
+
+        optimizer.zero_grad()      # reset gradients
+        outputs = model(X)         # forward pass
+        loss = criterion(outputs, y)  # compute loss
+        loss.backward()            # backpropagate
+        optimizer.step()           # update weights
+
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            count = 0
+    
+        count += 1
+        full_count += 1
+
+        if count > 100:
+            break
+
+    print(f'{full_count} epochs with {best_loss} loss')
+
+    model.eval()
+    with torch.no_grad():
+        slicer = slice(None) # All
+        # slicer = slice(0, 23)
+    
+        predictions = model(test_peaks)
+        loss = criterion(predictions, test_vals)  # compute loss
+        print(f'Test loss: {loss.item()}')
+        plt.figure(figsize=(15, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(predictions[slicer])
+        plt.legend([*all_experiments[0].keys()])
+        plt.title('Predictions')
+    
+
+        plt.subplot(1, 2, 2)
+        plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
+        plt.legend([*all_experiments[0].keys()])
+        plt.title('real')
+    
+        plt.show()
 
     return
 
