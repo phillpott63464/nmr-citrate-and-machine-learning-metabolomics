@@ -1,13 +1,12 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.2"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -2614,6 +2613,26 @@ def _(all_experiments, np):
 
 
 @app.cell
+def _(all_deltas, calcium_deltas, magnesium_deltas, np):
+    """Alternatively, create the integrated deltas from the previous three models"""
+
+    def _():
+        out = []
+        for deltas, mg, ca in zip(all_deltas, magnesium_deltas, calcium_deltas):
+            test = [*deltas]
+            test.append(mg)
+            test.append(ca)
+            out.append(test)
+
+        return np.array(out)
+
+    alternative_integrated_deltas = _()
+
+    print(alternative_integrated_deltas)
+    return
+
+
+@app.cell
 def _(all_experiments, integrated_deltas, least_squares, np):
     """
     Calculate f values from integrated deltas and chemical shifts
@@ -2765,18 +2784,28 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     import torch
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    train_peaks = [x['peaks'] for x in all_experiments]
-    train_vals = [list(x.values())[:-1] for x in all_experiments]
     test_peaks = torch.tensor([x['peaks'] for x in all_experiments], dtype=torch.float32).to(device)
     test_vals = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32).to(device)
 
-    for _ in range(1000):
+
+    train_peaks = []
+    train_vals = []
+
+    # Comment out to remove real samples from training
+    # train_peaks = [x['peaks'] for x in all_experiments]
+    # train_vals = [list(x.values())[:-1] for x in all_experiments]
+
+    # Comment out to remove synthetic samples
+    for i in range(10000):
         pH = np.random.default_rng().uniform(3, 7)
         random_speciation_fracs = citricacid.alpha(pH)
 
         rng = np.random.default_rng()
-        random_complex_fracs = rng.dirichlet([1, 1, 1])
+
+        if i < 1000:
+            random_complex_fracs = [0.0, 0.0, 1.0]
+        else:
+            random_complex_fracs = rng.dirichlet([1, 1, 1])
 
         temp_peaks = []
         for deltas in integrated_deltas:
@@ -2800,22 +2829,26 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
 
 @app.cell
+def _():
+    import torch.nn as nn
+    import torch.optim as optim
+    import torch.nn.functional as F
+    return F, nn, optim
+
+
+@app.cell
 def _(
-    all_experiments,
+    F,
+    TinyTransformer,
     device,
+    nn,
     np,
-    plt,
-    test_peaks,
-    test_vals,
+    optim,
     torch,
     train_peaks,
     train_vals,
 ):
     ### Try a neural network?
-
-    import torch.nn as nn
-    import torch.optim as optim
-    import torch.nn.functional as F
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -2841,12 +2874,12 @@ def _(
             last3 = F.softmax(x[:, 4:], dim=1)    # last 3 constrained
             return torch.cat([first4, last3], dim=1)
 
-    model = ConstrainedModel().to(device)
+    model = TinyTransformer(4).to(device)
 
     X = torch.tensor(train_peaks, dtype=torch.float32).to(device)  # (samples, 4)
     y = torch.tensor(train_vals, dtype=torch.float32).to(device)  # (samples, 7)
 
-    criterion = nn.HuberLoss()
+    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     best_loss = np.inf
@@ -2865,6 +2898,7 @@ def _(
 
         if loss.item() < best_loss - loss_diff:
             best_loss = loss.item()
+
             count = 0
 
         count += 1
@@ -2874,30 +2908,40 @@ def _(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-
-    model.eval()
-    with torch.no_grad():
-        slicer = slice(None) # All
-        # slicer = slice(0, 23)
-
-        predictions = model(test_peaks)
-        loss = criterion(predictions, test_vals)  # compute loss
-        predictions = predictions.cpu()
-        print(f'Test loss: {loss.item()}')
-    
-        plt.figure(figsize=(15, 5))
-        plt.subplot(1, 2, 1)
-        plt.plot(predictions[slicer])
-        plt.legend([*all_experiments[0].keys()])
-        plt.title('Predictions')
+    return criterion, model
 
 
-        plt.subplot(1, 2, 2)
-        plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
-        plt.legend([*all_experiments[0].keys()])
-        plt.title('real')
+@app.cell
+def _(all_experiments, criterion, model, plt, test_peaks, test_vals, torch):
+    def _():
+        model.eval()
+        with torch.no_grad():
+            slicer = slice(None) # All
+            # slicer = slice(0, 24)
+            # slicer = slice(24, 48)
 
-        plt.show()
+            predictions = model(test_peaks)
+            loss = criterion(predictions, test_vals)  # compute loss
+            predictions = predictions.cpu()
+            print(f'Test loss: {loss.item()}')
+
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 2, 1)
+            plt.plot(predictions[slicer])
+            plt.legend([*all_experiments[0].keys()])
+            plt.title('Predictions')
+
+
+            plt.subplot(1, 2, 2)
+            plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
+            plt.legend([*all_experiments[0].keys()])
+            plt.title('real')
+
+            plt.show()
+
+            return predictions
+
+    predictions = _()
     return (predictions,)
 
 
@@ -2920,5 +2964,321 @@ def _(all_experiments, np, predictions):
     return
 
 
-if __name__ == '__main__':
+@app.cell
+def _(all_experiments, metal_real_experiments, plt, predictions):
+    def _():
+        mg = [0] * 24
+        ca = [0] * 24
+        for experiment in metal_real_experiments:
+            if experiment['Sample number'] > 36:
+                ca.append(experiment['salt stock molarity / M'])
+                mg.append(0)
+            else:
+                mg.append(experiment['salt stock molarity / M'])
+                ca.append(0)
+        print(len(mg))
+        print(len(ca))
+
+        residuals = []
+        for experiment, prediction in zip(all_experiments, predictions):
+            vals = [*experiment.values()]
+            vals.pop()
+
+            r = []
+            for val, f in zip (vals, prediction):
+                r.append(abs(val-f))
+            residuals.append(r)
+
+        plt.plot(mg, residuals)
+        plt.legend([*all_experiments[0].keys()])
+        plt.show()
+
+    _()
+    return
+
+
+@app.cell
+def _(
+    bruker_fft,
+    chelation_experiments,
+    data_dir,
+    experiment_number,
+    experiments,
+    np,
+):
+    def _():
+        all_experiments_fft = []
+
+        for idx, experiment in enumerate(experiments):
+            all_experiments_fft.append(bruker_fft(
+                data_dir=data_dir,
+                experiment=experiment,
+                experiment_number=experiment_number,
+            ))
+
+        for idx, experiment in enumerate(chelation_experiments):
+            all_experiments_fft.append(bruker_fft(
+                data_dir=data_dir,
+                experiment=experiment,
+                experiment_number=experiment_number,
+            ))
+
+        all_experiments_fft = np.array(all_experiments_fft)
+
+        sliced_experiments = []
+        for spectrum in all_experiments_fft:
+            lower_bound, upper_bound = 2.4, 2.8
+
+            x = spectrum[0]
+
+            mask = (x >= lower_bound) & (x <= upper_bound)
+            sliced_experiments.append(spectrum[:, mask])
+
+        length = max([len(x[0]) for x in sliced_experiments])
+
+        for i, spectrum in enumerate(sliced_experiments):
+            diff = len(spectrum[0]) - length
+            if diff > 0: # Too long
+                spectrum = spectrum[:, :-diff]
+            if diff < 0: #Too short
+                # Pad (2, x) to (2, x + diff)
+                spectrum = np.pad(spectrum, ((0, 0), (0, -diff)), mode='constant', constant_values=0)
+            sliced_experiments[i] = spectrum
+
+        lengths = set([len(x[0]) for x in sliced_experiments])
+
+        if len(lengths) > 1:
+            raise ValueError('Lengths is greater than 1')
+
+        return sliced_experiments
+
+    all_experiments_fft = _()
+    return (all_experiments_fft,)
+
+
+@app.cell
+def _(F, math, nn, torch):
+    class TinyTransformer(nn.Module):
+        def __init__(self, length, seq_len=4, token_dim=None, d_model=64, d_ff=128):
+            """
+            length: original input vector length
+            seq_len: number of sequence tokens to split input into
+            token_dim: token dimension; if None, computed as ceil(length/seq_len)
+            d_model: internal model dimension (projection size)
+            d_ff: feed-forward hidden size
+            """
+            super().__init__()
+
+            # determine token_dim so that seq_len * token_dim >= length
+            if token_dim is None:
+                token_dim = math.ceil(length / seq_len)
+            self.seq_len = seq_len
+            self.token_dim = token_dim
+            self.length = length
+
+            # linear projection from token_dim -> d_model
+            self.token_proj = nn.Linear(token_dim, d_model)
+
+            # positional embeddings (learned)
+            self.pos_emb = nn.Parameter(torch.randn(seq_len, d_model) * 0.01)
+
+            # single-head self-attention (scaled dot-product)
+            self.qkv_proj = nn.Linear(d_model, d_model * 3, bias=False)  # produce q,k,v
+            self.out_proj = nn.Linear(d_model, d_model)
+
+            # small feed-forward
+            self.ff = nn.Sequential(
+                nn.Linear(d_model, d_ff),
+                nn.ReLU(),
+                nn.Linear(d_ff, d_model),
+            )
+
+            # layer norms
+            self.ln1 = nn.LayerNorm(d_model)
+            self.ln2 = nn.LayerNorm(d_model)
+
+            # classification head: pool and map to 7 logits
+            self.pool_proj = nn.Linear(d_model, d_model)
+            self.classifier = nn.Linear(d_model, 7)
+
+        def _prepare_tokens(self, x):
+            # x: (batch, length)
+            B = x.shape[0]
+            L = self.length
+            T = self.seq_len
+            D = self.token_dim
+
+            # ensure x has size length; if input length differs, pad or truncate
+            if x.shape[1] < L:
+                pad = x.new_zeros((B, L - x.shape[1]))
+                x = torch.cat([x, pad], dim=1)
+            elif x.shape[1] > L:
+                x = x[:, :L]
+
+            # reshape into tokens: (batch, seq_len, token_dim)
+            x = x.reshape(B, T, D)
+            return x
+
+        def _self_attention(self, x):
+            # x: (B, T, d_model)
+            B, T, DM = x.shape
+            qkv = self.qkv_proj(x)  # (B, T, 3*d_model)
+            q, k, v = qkv.chunk(3, dim=-1)
+            scale = 1.0 / math.sqrt(DM)
+            attn_logits = torch.matmul(q, k.transpose(-2, -1)) * scale  # (B, T, T)
+            attn_weights = F.softmax(attn_logits, dim=-1)
+            out = torch.matmul(attn_weights, v)  # (B, T, d_model)
+            out = self.out_proj(out)
+            return out
+
+        def forward(self, x):
+            # x: (batch, length)
+            # 1) prepare tokens
+            tokens = self._prepare_tokens(x)                  # (B, seq_len, token_dim)
+            tokens = self.token_proj(tokens)                  # (B, seq_len, d_model)
+            tokens = tokens + self.pos_emb.unsqueeze(0)       # add pos emb
+
+            # 2) transformer block (one layer)
+            y = self.ln1(tokens + self._self_attention(tokens))
+            y = self.ln2(y + self.ff(y))
+
+            # 3) simple pooling (mean over seq) and classification
+            pooled = y.mean(dim=1)            # (B, d_model)
+            pooled = F.relu(self.pool_proj(pooled))
+            logits = self.classifier(pooled)  # (B, 7)
+
+            # 4) split into constrained softmax groups like original
+            first4 = F.softmax(logits[:, :4], dim=1)
+            last3 = F.softmax(logits[:, 4:], dim=1)
+            return torch.cat([first4, last3], dim=1)
+
+    return (TinyTransformer,)
+
+
+@app.cell
+def _(F, TinyTransformer, all_experiments_fft, device, nn, np, torch):
+    class FullModel(nn.Module):
+        def __init__(self, length):
+            super().__init__()
+            a = length // 2
+            b = a // 2
+            c = b // 2
+            d = c //2
+
+            self.net = nn.Sequential(
+                nn.Linear(length, a),
+                nn.ReLU(),
+                nn.Linear(a, b),
+                nn.ReLU(),
+                nn.Linear(b, c),
+                nn.ReLU(),
+                nn.Linear(c, d),
+                nn.ReLU(),
+                nn.Linear(d, 7)
+            )
+
+        def forward(self, x):
+            x = self.net(x)
+            first4 = F.softmax(x[:, :4], dim=1)   # first 4 constrained
+            last3 = F.softmax(x[:, 4:], dim=1)    # last 3 constrained
+            return torch.cat([first4, last3], dim=1)
+
+    temp = [np.concatenate(x) for x in all_experiments_fft]
+
+    all_spectra = torch.tensor(temp, dtype=torch.float32).to(device)
+
+    SpectraModel = TinyTransformer(max([len(x) for x in temp])).to(device)
+    return SpectraModel, all_spectra
+
+
+@app.cell
+def _(
+    SpectraModel,
+    all_experiments,
+    all_spectra,
+    criterion,
+    device,
+    np,
+    optim,
+    torch,
+):
+    def _():
+        count = 0
+        full_count = 0
+        best_loss = np.inf
+        optimizer = optim.Adam(SpectraModel.parameters(), lr=1e-3)
+
+        temp_vals = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32).to(device)
+    
+        while True:
+        # for epoch in range(epochs):
+            SpectraModel.train()  # ensure model is in training mode
+
+            optimizer.zero_grad()      # reset gradients
+            outputs = SpectraModel(all_spectra)         # forward pass
+            loss = criterion(outputs, temp_vals)  # compute loss
+            loss.backward()            # backpropagate
+            optimizer.step()           # update weights
+
+            if loss.item() < best_loss: # - loss_diff:
+                best_loss = loss.item()
+
+                count = 0
+
+            count += 1
+            full_count += 1
+
+            if count > 1000:
+                break
+
+        print(best_loss)
+        print(full_count)
+
+    _()
+    return
+
+
+@app.cell
+def _(
+    SpectraModel,
+    all_experiments,
+    all_spectra,
+    criterion,
+    plt,
+    test_vals,
+    torch,
+):
+    def _():
+        SpectraModel.eval()
+        with torch.no_grad():
+            slicer = slice(None) # All
+            # slicer = slice(0, 24)
+            slicer = slice(24, 48)
+
+            predictions = SpectraModel(all_spectra)
+            loss = criterion(predictions, test_vals)  # compute loss
+            predictions = predictions.cpu()
+            print(f'Test loss: {loss.item()}')
+
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 2, 1)
+            plt.plot(predictions[slicer])
+            plt.legend([*all_experiments[0].keys()])
+            plt.title('Predictions')
+
+
+            plt.subplot(1, 2, 2)
+            plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
+            plt.legend([*all_experiments[0].keys()])
+            plt.title('real')
+
+            plt.show()
+
+            return predictions
+
+    spectrapredictions = _()
+    return
+
+
+if __name__ == "__main__":
     app.run()
