@@ -2762,14 +2762,16 @@ def _(all_experiments, citricacid, integrated_deltas, np):
     """
     Generate additional synthetic data from previous models
     ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
-    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% MSE model)
+    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% MSE model. Probably good for noise though.)
     """
 
     import torch
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     train_peaks = [x['peaks'] for x in all_experiments]
     train_vals = [list(x.values())[:-1] for x in all_experiments]
-    test_peaks = torch.tensor(train_peaks, dtype=torch.float32)
-    test_vals = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
+    test_peaks = torch.tensor([x['peaks'] for x in all_experiments], dtype=torch.float32).to(device)
+    test_vals = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32).to(device)
 
     for _ in range(1000):
         pH = np.random.default_rng().uniform(3, 7)
@@ -2783,10 +2785,12 @@ def _(all_experiments, citricacid, integrated_deltas, np):
             dl = random_complex_fracs[2] * sum(deltas[i] * random_speciation_fracs[i] for i in range(4))
             dmg = deltas[4] * random_complex_fracs[0]
             dca = deltas[5] * random_complex_fracs[1]
-        
+
             ds = dl + dmg + dca
 
-            temp_peaks.append(dl)
+            temp_peaks.append(ds)
+
+        temp_peaks = [x + np.random.normal(0, 0.01) for x in temp_peaks]
 
         train_peaks.append(temp_peaks)
 
@@ -2794,13 +2798,13 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-
-    return test_peaks, test_vals, torch, train_peaks, train_vals
+    return device, test_peaks, test_vals, torch, train_peaks, train_vals
 
 
 @app.cell
 def _(
     all_experiments,
+    device,
     np,
     plt,
     test_peaks,
@@ -2819,13 +2823,18 @@ def _(
         def __init__(self):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(4, 20),
+                nn.Linear(4, 128),
+                nn.LayerNorm(128),
                 nn.GELU(),
-                nn.Linear(20, 80),
+                nn.Dropout(0.15),
+                nn.Linear(128, 128),
+                nn.LayerNorm(128),
                 nn.GELU(),
-                nn.Linear(80, 20),
+                nn.Dropout(0.15),
+                nn.Linear(128, 64),
+                nn.LayerNorm(64),
                 nn.GELU(),
-                nn.Linear(20, 7),
+                nn.Linear(64, 7),
             )
 
         def forward(self, x):
@@ -2834,17 +2843,16 @@ def _(
             last3 = F.softmax(x[:, 4:], dim=1)    # last 3 constrained
             return torch.cat([first4, last3], dim=1)
 
+    model = ConstrainedModel().to(device)
 
-    model = ConstrainedModel()
+    X = torch.tensor(train_peaks, dtype=torch.float32).to(device)  # (samples, 4)
+    y = torch.tensor(train_vals, dtype=torch.float32).to(device)  # (samples, 7)
 
-    X = torch.tensor(train_peaks, dtype=torch.float32)  # (samples, 4)
-    y = torch.tensor(train_vals, dtype=torch.float32)  # (samples, 7)
+    criterion = nn.HuberLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    epochs = 2000  # you can adjust
     best_loss = np.inf
+    loss_diff = 0.000001
     full_count = 0
     count = 0
     while True:
@@ -2857,14 +2865,14 @@ def _(
         loss.backward()            # backpropagate
         optimizer.step()           # update weights
 
-        if loss.item() < best_loss:
+        if loss.item() < best_loss - loss_diff:
             best_loss = loss.item()
             count = 0
-    
+
         count += 1
         full_count += 1
 
-        if count > 100:
+        if count > 1000:
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
@@ -2873,24 +2881,44 @@ def _(
     with torch.no_grad():
         slicer = slice(None) # All
         # slicer = slice(0, 23)
-    
+
         predictions = model(test_peaks)
         loss = criterion(predictions, test_vals)  # compute loss
+        predictions = predictions.cpu()
         print(f'Test loss: {loss.item()}')
+    
         plt.figure(figsize=(15, 5))
         plt.subplot(1, 2, 1)
         plt.plot(predictions[slicer])
         plt.legend([*all_experiments[0].keys()])
         plt.title('Predictions')
-    
+
 
         plt.subplot(1, 2, 2)
         plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
         plt.legend([*all_experiments[0].keys()])
         plt.title('real')
-    
-        plt.show()
 
+        plt.show()
+    return (predictions,)
+
+
+@app.cell
+def _(all_experiments, np, predictions):
+    def _():
+        errors = []
+        for experiment, prediction in zip(all_experiments, predictions):
+            vals = [*experiment.values()]
+            vals.pop()
+
+            error = 0
+            for val, f in zip(vals, prediction):
+                error += (val-f)**2
+            errors.append(error)
+
+        print(np.mean(errors))
+
+    _()
     return
 
 
