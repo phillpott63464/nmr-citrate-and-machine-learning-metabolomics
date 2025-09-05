@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.15.2"
-app = marimo.App(width="medium")
+__generated_with = '0.15.2'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -2162,13 +2163,16 @@ def _(math, metal_real_experiments):
     def solve_for_b(a, c, d, tol=1e-12):
         # special-case a ≈ 0: linear limit from the quadratic reduces to b = 0 (physically)
         if abs(a) < tol:
-            return 0.0 if abs((c - 0.0) * (d - 0.0)) > tol else 0.0
+            return 0.0
 
-        disc = a*a*(c - d)**2 + 2*a*(c + d) + 1.0
+        disc = a * a * (c - d) ** 2 + 2 * a * (c + d) + 1.0
         if disc < -tol:
             return 0.0
+
         disc = max(disc, 0.0)
-        numerator = a*(c + d) + 1.0 - math.sqrt(disc)   # minus branch (physical)
+        numerator = (
+            a * (c + d) + 1.0 - math.sqrt(disc)
+        )   # minus branch (physical)
         b = numerator / (2.0 * a)
 
         # apply physical acceptance tests
@@ -2179,7 +2183,8 @@ def _(math, metal_real_experiments):
         return max(b, 0.0)
 
     k1 = 3.011e3   # Formation constant of calcium citrate, k11, from source
-    k2 = 2.19e3 # Formation constant of magnesium citrate, from https://www.sciencedirect.com/science/article/abs/pii/0003269774903911, incorrect temperature (37C) but I can't find anything at the correct temperature or the values I need to correct
+    k2 = 2.19e3   # Formation constant of magnesium citrate, from https://www.sciencedirect.com/science/article/abs/pii/0003269774903911, incorrect temperature (37C) but I can't find anything at the correct temperature or the values I need to correct
+
     def _():
         for idx, mexperiment in enumerate(metal_real_experiments):
             if idx < 12:
@@ -2195,11 +2200,9 @@ def _(math, metal_real_experiments):
             else:
                 b = solve_for_b(a, c, d)
 
-
             mexperiment['metal ligand complex molarity / M'] = b
 
     _()
-
 
     continueaaa = True
     return (continueaaa,)
@@ -2269,15 +2272,13 @@ def _(
     if continueaaa:
         pass
 
+    assumed_ratios = citricacid.alpha([7.2])
+
+    assumed_shifts = find_peaks(all_deltas=all_deltas, ratios=assumed_ratios)
+
     def _():
         all_peaks = magnesium_peaks + calcium_peaks
         transposed_peaks = [list(x) for x in zip(*all_peaks)]
-
-        assumed_ratios = citricacid.alpha([7.2])
-
-        assumed_shifts = find_peaks(
-            all_deltas=all_deltas, ratios=assumed_ratios
-        )
 
         deltas = []
         for peaks, assumedpeak in zip(transposed_peaks, assumed_shifts):
@@ -2313,9 +2314,9 @@ def _(
                 d = np.array([v[2] for v in vars])
                 e = np.array([v[3] for v in vars])
 
-                rhs = b - c*d
+                rhs = b - c * d
 
-                a, *_ = np.linalg.lstsq(e.reshape(-1,1), rhs, rcond=None)
+                a, *_ = np.linalg.lstsq(e.reshape(-1, 1), rhs, rcond=None)
 
                 deltas.append(a[0])
 
@@ -2327,16 +2328,14 @@ def _(
     calcium_deltas, magnesium_deltas = _()
 
     print(calcium_deltas)
-    return calcium_deltas, magnesium_deltas
+    return assumed_shifts, calcium_deltas, magnesium_deltas
 
 
 @app.cell
 def _(
-    all_deltas,
+    assumed_shifts,
     calcium_deltas,
     calcium_peaks,
-    citricacid,
-    find_peaks,
     magnesium_deltas,
     magnesium_peaks,
     metal_real_experiments,
@@ -2359,11 +2358,6 @@ def _(
 
     def _():
         from scipy.optimize import lsq_linear
-        assumed_ratios = citricacid.alpha([7.2])
-
-        assumed_shifts = find_peaks(
-            all_deltas=all_deltas, ratios=assumed_ratios
-        )
 
         all_peaks = magnesium_peaks + calcium_peaks
 
@@ -2386,29 +2380,31 @@ def _(
                 a = np.array(magnesium_deltas)
                 key = 'magnesium'
             else:
-                a = np.array(calcium_deltas) # Deltas array
+                a = np.array(calcium_deltas)   # Deltas array
                 key = 'calcium'
 
             b = np.array(peaks)
             d = np.array(assumed_shifts)
 
             A = (a - d)[:, None]
-            y = (b - d)
+            y = b - d
             res = lsq_linear(A, y, bounds=(0.0, 1.0))
 
-            c = res.x[0] # ratio of metal ligand to ligand
-            e = 1.0 - c # ratio of ligand to metal ligand
+            c = res.x[0]   # ratio of metal ligand to ligand
+            e = 1.0 - c   # ratio of ligand to metal ligand
 
             if mexperiment['metal ligand complex molarity / M'] is not None:
                 complex = mexperiment['metal ligand complex molarity / M']
                 total = mexperiment['citric acid molarity / M']
                 free_citrate = total - complex
 
-                real_e = free_citrate / total # ratio of ligand to metal ligand
-                real_c = complex / total # ratio of metal ligand to ligand
+                real_e = (
+                    free_citrate / total
+                )   # ratio of ligand to metal ligand
+                real_c = complex / total   # ratio of metal ligand to ligand
             else:
-                real_e = 1 # ratio of ligand to metal ligand
-                real_c = 0 # ratio of metal ligand to ligand
+                real_e = 1   # ratio of ligand to metal ligand
+                real_c = 0   # ratio of metal ligand to ligand
 
             dict[key]['e'].append(e)
             dict[key]['c'].append(c)
@@ -2423,7 +2419,7 @@ def _(
         pred = np.asarray(pred, dtype=float)
         true = np.asarray(true, dtype=float)
         if pred.shape != true.shape:
-            raise ValueError("Shapes must match")
+            raise ValueError('Shapes must match')
         return float(np.sum((true - pred) ** 2))
 
     errors = {}
@@ -2433,7 +2429,7 @@ def _(
             'mse_c': mse(vals['c'], vals['real_c']),
         }
 
-    fig, axes = plt.subplots(1, 2, figsize=(12,5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
     for ax, ion in zip(axes, chelation_predictions):
         vals = chelation_predictions[ion]
         ax.plot(vals['real_e'], vals['e'], marker='o')
@@ -2445,11 +2441,13 @@ def _(
         ax.set_ylabel('Predicted')
         mse_e = mse(vals['e'], vals['real_e'])
         mse_c = mse(vals['c'], vals['real_c'])
-        ax.legend([
-            f'e MSE: {round(mse_e,4) if mse_e is not None else "N/A"}',
-            f'c MSE: {round(mse_c,4) if mse_c is not None else "N/A"}',
-            'Perfect'
-        ])
+        ax.legend(
+            [
+                f'e MSE: {round(mse_e,4) if mse_e is not None else "N/A"}',
+                f'c MSE: {round(mse_c,4) if mse_c is not None else "N/A"}',
+                'Perfect',
+            ]
+        )
         ax.grid(True)
     plt.tight_layout()
     plt.show()
@@ -2922,5 +2920,5 @@ def _(all_experiments, np, predictions):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
