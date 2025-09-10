@@ -82,7 +82,7 @@ def _():
     }
 
     import pandas as pd
-    multiplets = pd.read_csv('morgan/Casmdb_Data/multiplets.csv')
+    multiplets = pd.read_csv('morgancode/Casmdb_Data/multiplets.csv')
 
     def _():
         for key, item in substanceDict.items():
@@ -170,8 +170,8 @@ def _(hashlib):
 @app.cell
 def _():
     """Import data generation dependencies"""
-    from morgan.createTrainingData import createTrainingData
-    import morgan
+    from morgancode.createTrainingData import createTrainingData
+    import morgancode as morgan
     import numpy as np # type: ignore
     from tqdm import tqdm # type: ignore
     import itertools
@@ -1328,7 +1328,6 @@ def _(
     _()
 
     print(sorted(lengths))
-
     return
 
 
