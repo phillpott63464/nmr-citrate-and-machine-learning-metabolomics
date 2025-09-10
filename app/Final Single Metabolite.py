@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.17"
+__generated_with = "0.15.2"
 app = marimo.App(width="medium")
 
 
@@ -9,16 +9,12 @@ def _():
     """Initial imports and hardware detection"""
     import marimo as mo # type: ignore
     import torch # type: ignore
-    return mo, torch
 
-
-@app.cell
-def _(torch):
     # Check hardware capabilities for GPU acceleration
     hip_version = torch.version.hip
     cuda_built = torch.backends.cuda.is_built()
     gpu_count = torch.cuda.device_count()
-    return cuda_built, gpu_count, hip_version
+    return cuda_built, gpu_count, hip_version, mo, torch
 
 
 @app.cell(hide_code=True)
@@ -48,13 +44,13 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100                    # Number of samples per metabolite combination
-    trials = 100                  # Number of hyperparameter optimization trialss
+    count = 1000                    # Number of samples per metabolite combination
+    trials = 1                  # Number of hyperparameter optimization trialss
     combo_number = None             # Number of random metabolite combinations to generate
     notebook_name = 'final_single_metabolite'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = 2**10             # Target resolution for ML model (None = no downsampling)
     reverse = False                # Apply Hilbert transform (time domain analysis)
     ranged = True
@@ -107,7 +103,6 @@ def _():
     print(substanceDict)
 
     print(substanceDict['Citric acid'][0])
-
     return (
         MODEL_TYPE,
         combo_number,
@@ -171,15 +166,14 @@ def _(hashlib):
 
         # Generate a hash of the combined string
         return hashlib.sha256(processed_key.encode()).hexdigest()
-
     return generate_processed_cache_key, generate_raw_cache_key
 
 
 @app.cell
 def _():
     """Import data generation dependencies"""
-    from morgan.createTrainingData import createTrainingData
-    import morgan
+    from morgancode.createTrainingData import createTrainingData
+    # import morgancode as morgan
     import numpy as np # type: ignore
     from tqdm import tqdm # type: ignore
     import itertools
@@ -189,7 +183,6 @@ def _():
     import os
     import h5py # type: ignore
     import hashlib
-
     return (
         createTrainingData,
         h5py,
@@ -354,7 +347,6 @@ def _(createTrainingData, h5py, itertools, np, os, random, raw_data_dir, tqdm):
 
         print(f"Successfully streamed {total_spectra} spectra to {filepath}")
         return filepath
-
     return (create_streaming_dataset,)
 
 
@@ -424,7 +416,6 @@ def _(h5py, np, os):
                 'start_idx': start_idx,
                 'end_idx': end_idx
             }
-
     return get_spectrum_batch, load_streaming_dataset
 
 
@@ -457,7 +448,6 @@ def _(
     print(f'Dataset ready with {dataset_metadata["total_spectra"]} spectra')
     print(f'Held-back metabolites: {held_back_metabolites}')
     print(f'Dataset file: {dataset_filepath}')
-
     return (
         combinations,
         dataset_filepath,
@@ -563,7 +553,6 @@ def _(
     print(f"Created streaming dataset with {len(spectra)} spectra")
 
     print(spectra[:5])
-
     return StreamingNMRDataset, spectra
 
 
@@ -759,7 +748,6 @@ def _():
 
     # Preprocessing configuration
     baseline_distortion = True  # Add realistic experimental artifacts
-
     return baseline_distortion, partial
 
 
@@ -950,7 +938,6 @@ def _(np):
             if 'tsp' in scales and scales['tsp'][0] > 0
         }
         return ratios
-
     return preprocess_peaks, preprocess_ratio
 
 
@@ -1210,7 +1197,6 @@ def _(
 def _():
     """Import machine learning dependencies"""
     from torch.utils.data import Dataset, DataLoader # type: ignore
-
     return DataLoader, Dataset
 
 
@@ -1250,7 +1236,6 @@ def _(Dataset, h5py, torch):
                     dtype=torch.float32
                 )
             return data, labels
-
     return (StreamableNMRDataset,)
 
 
@@ -1297,7 +1282,6 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
             'val_dataset': val_dataset,
             'test_dataset': test_dataset,
         }, data_length
-
     return (load_datasets_from_files,)
 
 
@@ -1348,8 +1332,6 @@ def _(
     _()
 
     print(sorted(lengths))
-
-
     return
 
 
@@ -1440,8 +1422,7 @@ def _(
         spectrum_intensities = sample_spectrum['intensities']
         reference_intensities = sample_reference[1]
 
-        # sample_data = np.concatenate([spectrum_intensities, reference_intensities])
-        sample_data = spectrum_intensities
+        sample_data = np.concatenate([spectrum_intensities, reference_intensities])
         data_length = len(sample_data)
 
         # Create HDF5 file for streaming
@@ -1512,8 +1493,7 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
-                        temp_data = spectrum_intensities
+                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1537,8 +1517,7 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
-                        temp_data = spectrum_intensities
+                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1561,8 +1540,7 @@ def _(
                         reference_intensities = reference_spectra[substance][1]
 
                         # Create data sample
-                        # temp_data = np.concatenate([spectrum_intensities, reference_intensities])
-                        temp_data = spectrum_intensities
+                        temp_data = np.concatenate([spectrum_intensities, reference_intensities])
 
                         # Create label
                         if substance in spectrum['ratios']:
@@ -1594,7 +1572,6 @@ def _(
         held_back_metabolites=held_back_metabolites,
         processed_cache_key=processed_cache_key,
     )
-
     return data_length, training_data
 
 
@@ -1644,7 +1621,6 @@ def _():
     import torch.optim as optim # type: ignore
     import torch.nn as nn # type: ignore
     import math
-
     return copy, math, nn, optim
 
 
@@ -1692,7 +1668,6 @@ def _(torch):
             return tensor[:, :0]
         else:
             return tensor[:0]
-
     return (remove_padding,)
 
 
@@ -1751,7 +1726,6 @@ def _(nn, torch):
                 x = torch.cat([x_real, x_imag], dim=-1)
 
             return self.model(x)
-
     return (MLPRegressor,)
 
 
@@ -1937,7 +1911,6 @@ def _(math, nn, torch):
             concentration_pred = self.concentration_head(pooled_features)
 
             return torch.cat([presence_logits, concentration_pred], dim=1)
-
     return (TransformerRegressor,)
 
 
@@ -1989,7 +1962,6 @@ def _(MLPRegressor, TransformerRegressor, nn, remove_padding, torch):
             )
 
             return torch.stack([classification_pred, concentration_pred], dim=1)
-
     return (HybridEnsembleRegressor,)
 
 
@@ -2043,7 +2015,6 @@ def _(nn, torch):
         total_loss = 0.5 * classification_loss + 0.5 * curriculum_weight * concentration_loss
 
         return total_loss, classification_loss, concentration_mae, concentration_rmse
-
     return (compute_loss,)
 
 
@@ -2434,7 +2405,6 @@ def _(
                     callback,
                 ],
             )
-
     return optuna, study
 
 
@@ -2505,7 +2475,6 @@ def _(optuna, study):
         print(error_summary)
     else:
         print("## Trial Error Analysis\n\n✅ **No failed trials detected** - All optimization trials completed successfully!")
-
     return
 
 
