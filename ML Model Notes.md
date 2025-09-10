@@ -1,4 +1,44 @@
-# Model Results
+# Final Results
+
+# Single Metabolite (Citrate)
+
+Model Type: MLP
+
+Best Trial Performance (Validation Set):
+    Combined Score: 0.0091 (0.5 * Classification Error + 0.5 * (0.5MAE + 0.5RMSE), optimized metric - lower is better)
+    Classification Accuracy: 1.0000 (Presence prediction accuracy - higher is better)
+    Concentration R²: 0.9998 (Coefficient of determination for concentration - higher is better)
+    Concentration MAE: 0.015073 (Mean Absolute Error for concentration - lower is better)
+    Concentration RMSE: 0.021506 (Root Mean Square Error for concentration - lower is better)
+
+Final Test Set Performance:
+    Classification Accuracy: 1.0000
+    Concentration R²: 0.9998
+    Concentration MAE: 0.015582
+    Concentration RMSE: 0.023745
+
+Best Hyperparameters: 
+- Batch Size: 40 
+- Learning Rate: 9.90e-05 
+- Div Size = 6.0
+
+Model Architecture:
+
+Input / 6.0 → hidden layers x3 -> Output
+
+Multi-Task Learning:
+    Task 1: Binary classification for substance presence (BCEWithLogitsLoss)
+    Task 2: Regression for concentration prediction (weighted by presence)
+    Combined Loss: 0.5 × Classification Error + 0.5 × (0.5×MAE + 0.5×RMSE)
+
+Data Split:
+    Training: Spectra without held-back metabolite
+    Validation: 15% of training data (used for hyperparameter optimization)
+    Test: 15% of training data (used for final evaluation, completely unseen in training or hyperparameter optimisation)
+
+Total Trials Completed: 130
+
+# Experimental Results From Models That Don't Exist Anymore
 ## MLPs
 ### Single metabolite (citrate):
 Best Trial Performance (Validation Set):

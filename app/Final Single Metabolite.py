@@ -2502,13 +2502,8 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
         model_params_md = f"""
     **Model Architecture:**
 
-    Input → Sliding Windows → Local Feature Extraction (per window) → Global Aggregation → Output
+    Input / {study.best_trial.params.get('div_size', 'N/A')} → hidden layers x3 -> Output
 
-    **Window Processing:**
-    - Each window processes 256 points
-    - Windows overlap with stride of {int(256 * study.best_trial.params.get('stride_ratio', 0.5))} points
-    - Local features (128D) extracted from each window
-    - Global aggregation combines all window features
     """
     elif MODEL_TYPE == 'ensemble':
         model_params_md = f"""
