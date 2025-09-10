@@ -23,7 +23,7 @@ def _(mo):
 def _():
     import cProfile
     import pstats
-    from morgan.createTrainingData import createTrainingData
+    from morgancode.createTrainingData import createTrainingData
     import jax
 
     # from jax.config import config

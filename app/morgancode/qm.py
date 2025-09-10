@@ -57,7 +57,7 @@ import jax.numpy as jnp
 # import nmrsim.bin  # noqa: E402
 # from nmrsim.math import normalize_peaklist  # noqa: E402
 
-import morgan.bin
+import morgancode.bin as bin
 
 CACHE = True  # saving of partial solutions is allowed
 SPARSE = True  # the sparse library is available
@@ -65,7 +65,7 @@ SPARSE = True  # the sparse library is available
 
 def _bin_path():
     """Return a Path to the nmrsim/bin directory."""
-    init_path_context = resources.path(morgan.bin, '__init__.py')
+    init_path_context = resources.path(bin, '__init__.py')
     with init_path_context as p:
         init_path = p
     bin_path = init_path.parent
