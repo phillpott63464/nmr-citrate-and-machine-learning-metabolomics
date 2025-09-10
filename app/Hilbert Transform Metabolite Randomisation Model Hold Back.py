@@ -46,7 +46,7 @@ def _():
     # Experiment parameters
     count = 1000                   # Number of samples per metabolite combination
     trials = 100                  # Number of hyperparameter optimization trialss
-    combo_number = 30             # Number of random metabolite combinations to generate
+    combo_number = None             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
@@ -67,18 +67,18 @@ def _():
     # NMR metabolite database mapping (substance name -> spectrum ID + chemical shift range)
     substanceDict = {
         'Citric acid': ['SP:3368', [[2.4, 2.8]]],
-        # 'Succinic acid': ['SP:3211',],
-        # 'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
-        # 'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
-        # 'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
-        # 'L-Proline': ['SP:3406', [[1.8, 4.3]]],
-        # 'L-Phenylalanine': ['SP:3507', [[3, 8]]],
-        'L-Serine': ['SP:3732',],
-        'L-Threonine': ['SP:3437',],
-        'L-Tryptophan': ['SP:3455',],
-        'L-Tyrosine': ['SP:3464',],
-        'L-Valine': ['SP:3490',],
-        'Glycine': ['SP:3682',],
+        'Succinic acid': ['SP:3211',],
+        'Maleic acid': ['SP:3110',],
+        'Lactic acid': ['SP:3675',],
+        # 'L-Methionine': ['SP:3509',],
+        # 'L-Proline': ['SP:3406',],
+        # 'L-Phenylalanine': ['SP:3507',],
+        # 'L-Serine': ['SP:3732',],
+        # 'L-Threonine': ['SP:3437',],
+        # 'L-Tryptophan': ['SP:3455',],
+        # 'L-Tyrosine': ['SP:3464',],
+        # 'L-Valine': ['SP:3490',],
+        # 'Glycine': ['SP:3682',],
     }
 
     import pandas as pd

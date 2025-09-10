@@ -68,21 +68,21 @@ def _():
     substanceDict = {
         'Citric acid': ['SP:3368', [[2.4, 2.8]]],
         'Succinic acid': ['SP:3211',],
-        'Maleic acid': ['SP:3110', [[5.8, 6.3]]],
-        'Lactic acid': ['SP:3675', [[1.2, 1.5], [3.9, 4.2]]],
-        # 'L-Methionine': ['SP:3509', [[2.0, 2.4], [2.8, 3.0]]],
-        # 'L-Proline': ['SP:3406', [[1.8, 4.3]]],
-        # 'L-Phenylalanine': ['SP:3507', [[3, 8]]],
-        # 'L-Serine': ['SP:3732', [[3.5, 4.5]]],
-        # 'L-Threonine': ['SP:3437', [[3.5, 4.5]]],
-        # 'L-Tryptophan': ['SP:3455', [[7.0, 8.0]]],
-        # 'L-Tyrosine': ['SP:3464', [[6.5, 7.5]]],
-        # 'L-Valine': ['SP:3490', [[0.9, 1.5]]],
-        # 'Glycine': ['SP:3682', [[3.5, 4.0]]],
+        'Maleic acid': ['SP:3110',],
+        'Lactic acid': ['SP:3675',],
+        # 'L-Methionine': ['SP:3509',],
+        # 'L-Proline': ['SP:3406',],
+        # 'L-Phenylalanine': ['SP:3507',],
+        # 'L-Serine': ['SP:3732',],
+        # 'L-Threonine': ['SP:3437',],
+        # 'L-Tryptophan': ['SP:3455',],
+        # 'L-Tyrosine': ['SP:3464',],
+        # 'L-Valine': ['SP:3490',],
+        # 'Glycine': ['SP:3682',],
     }
 
     import pandas as pd
-    multiplets = pd.read_csv('morgan/Casmdb_Data/multiplets.csv')
+    multiplets = pd.read_csv('morgancode/Casmdb_Data/multiplets.csv')
 
     def _():
         for key, item in substanceDict.items():
@@ -446,7 +446,7 @@ def _(
     combinations = dataset_metadata['combinations']
 
     print(f'Dataset ready with {dataset_metadata["total_spectra"]} spectra')
-    print(f'Held-back metabolites: {held_back_metabolites}')
+    print(f'Held-back metabolites: {held_back_metabolites}, unused for this model')
     print(f'Dataset file: {dataset_filepath}')
     return (
         combinations,
@@ -557,17 +557,12 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(combinations, count, held_back_metabolites, mo, spectra):
+def _(combinations, count, mo, spectra):
     mo.md(
         rf"""
     ## Data Generation Results
 
     **Successfully generated {count} samples for each of {len(combinations)} metabolite combinations**
-
-    **Hold-back Validation Setup:**
-
-    - **Test metabolite:** {held_back_metabolites[0]} (completely excluded from training)
-    - **Validation metabolite:** {held_back_metabolites[1]} (used for hyperparameter tuning)
 
     **Data Structure:**
 
