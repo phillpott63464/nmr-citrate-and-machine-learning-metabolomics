@@ -131,7 +131,7 @@ def _(bruker_fft, data_dir, indices, np):
         x = data[experiment][0]
 
         mask = (x >= lower_bound) & (x <= upper_bound)
-    
+
         data[experiment] = data[experiment][:, mask]
     return data, plt
 
@@ -157,31 +157,83 @@ def _(data, gen_fig, ng, np):
     for set_name in data:
         arr = data[set_name]          # shape (2, 32000)
         y = arr[1]
-        threshold = np.percentile(y, 99)
+        threshold = np.percentile(y, 98.5)
 
         ymask = (y >= threshold)
 
         # peaks[set_name] = data[set_name][:, ymask]
 
         # print(len(peaks[set_name][0]))
-
-        peak_positions = [x[1] for x in ng.analysis.peakpick.pick(data[set_name], threshold)]
+        peak_positions = [x[1] for x in ng.analysis.peakpick.pick(data[set_name], threshold, algorithm='downward')]
         peak_positions = [data[set_name][:, int(i)] for i in peak_positions]
         peak_positions = np.vstack(peak_positions)
         peaks[set_name] = peak_positions
-    
+
         figs[set_name] = gen_fig(data[set_name], peaks[set_name])
 
         # if len(figs) > 0:
         #     die
 
     # Now you can show any figure later using figs[index]
-    return (figs,)
+    return figs, peaks
 
 
 @app.cell
-def _(figs, mo):
-    mo.mpl.interactive(figs[34])
+def _():
+    return
+
+
+@app.cell
+def _(peaks):
+    lower_peaks, upper_peaks = {}, {}
+
+    # for peak_name in peaks:
+    #     if len(peaks[peak_name]) > 4:
+            #(number_peaks, (position, intensities))
+        
+            # There should only be 4 values. 
+            # Those values should be in ascending order of position.
+            # The second intensity needs to be higher than the first intensity.
+            # The third intensity needs to be higher than the fourth intensity. 
+            # The fourth and first intensities should be similar.
+            # The second and third intensities should be similar.
+            # Find the values within the dataset that fit this pattern.
+
+
+    for peak_name in peaks:
+        if len(peaks[peak_name]) < 4:
+            lower_peaks[peak_name] = peaks[peak_name]
+        elif len(peaks[peak_name]) > 4:
+            upper_peaks[peak_name] = peaks[peak_name]
+
+    print(len(peaks))
+    print(len(lower_peaks))
+    print(len(upper_peaks))
+    return
+
+
+@app.cell
+def _(figs, mo, peaks):
+    def _():
+        peaks_len, figs_len = [], []
+        for x, y in zip(peaks, figs):
+            peaks_len.append(peaks[x])
+            figs_len.append(figs[y])
+
+        return peaks_len, figs_len
+
+    peaks_len, figs_len = _()
+
+    real_peaks = [
+        '1, 2, 3, 4',
+        '1, 2, 3, 4',
+        None,
+        '1, 2, 3, 4',
+        '1, 2, 4, 5',
+        '1, 2, 4, 5',
+    ]
+
+    mo.mpl.interactive(figs_len[22])
     return
 
 
