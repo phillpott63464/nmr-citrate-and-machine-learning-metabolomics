@@ -98,11 +98,11 @@ def _(ng, np, os, re):
 
 @app.cell
 def _():
-    data_dir = 'Morgan-Spectra/2023-02-16_Synthetic_Mixtures'   # The directory all data is in
+    data_dir = 'morganspectra/2023-02-16_Synthetic_Mixtures'   # The directory all data is in
 
     import pandas as pd
 
-    file = pd.ExcelFile('Morgan-Spectra/Synthetic_Mixture_Lookup.xlsx')
+    file = pd.ExcelFile('morganspectra/Synthetic_Mixture_Lookup.xlsx')
 
     spectra_sheet = pd.read_excel(file,'Spectra')
 
@@ -131,7 +131,7 @@ def _(bruker_fft, data_dir, indices, np):
         x = data[experiment][0]
 
         mask = (x >= lower_bound) & (x <= upper_bound)
-    
+
         data[experiment] = data[experiment][:, mask]
     return data, plt
 
@@ -169,7 +169,7 @@ def _(data, gen_fig, ng, np):
         peak_positions = [data[set_name][:, int(i)] for i in peak_positions]
         peak_positions = np.vstack(peak_positions)
         peaks[set_name] = peak_positions
-    
+
         figs[set_name] = gen_fig(data[set_name], peaks[set_name])
 
         # if len(figs) > 0:

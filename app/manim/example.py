@@ -1,6 +1,6 @@
 from manim import *
 
-def create_graph_multi(x, y_lists, xlabel=None, ylabel=None, scale_factor=0.8):
+def create_graph(x, y_lists, xlabel=None, ylabel=None, scale_factor=0.8):
     colors = [BLUE, RED, GREEN, ORANGE]  # Pick as many as needed
     axes = Axes(
         x_range=[min(x), max(x), (max(x) - min(x)) / 10],
