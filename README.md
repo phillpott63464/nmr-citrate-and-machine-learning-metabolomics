@@ -61,8 +61,14 @@ Folder containing code from [phfork](https://github.com/mhvwerts/pHfork) (No lic
 
 Folder containing 1H bruker data from the experimental samples.
 
-- 20250811_cit_nacit_titr_x, x=1-24
-- 20250811_cit_ca_mg_cit_titr_x, x=1-24
-  - 20250811_cit_ca_mg_cit_titr_17_rep
-  - 20250811_cit_ca_mg_cit_titr_22_rep
+#### 20250811_cit_nacit_titr_x, x=1-24
 
+#### 20250811_cit_ca_mg_cit_titr_x, x=1-24
+
+#### 20250811_cit_ca_mg_cit_titr_17_rep
+
+Due to errors with bubbles in the sample
+
+#### 20250811_cit_ca_mg_cit_titr_22_rep
+
+Due to errors with bubbles in the sample
