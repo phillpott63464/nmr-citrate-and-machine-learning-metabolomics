@@ -41,7 +41,7 @@ Experimental animated figures using [manim community](https://github.com/manimCo
 
 ### morgancode
 
-Folder containing all the spectra generation code provided by Morgan, as well as modified qm system from [nmrsim](https://github.com/sametz/nmrsim) ([MIT license](licenses/LICENSE-nmrsim))
+Folder containing all the spectra generation code provided by Morgan (TODO: License?), as well as modified qm system from [nmrsim](https://github.com/sametz/nmrsim) ([MIT license](licenses/LICENSE-nmrsim))
 
 ### morganspectra
 
