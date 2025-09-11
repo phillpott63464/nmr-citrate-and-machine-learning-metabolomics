@@ -98,6 +98,10 @@ def _(dumbvar, pstats):
 @app.cell
 def _(createTrainingData, substanceSpectrumIds):
     # Ensure the plot is reasonable
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors
 
     substance = createTrainingData(
         substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5
@@ -105,7 +109,17 @@ def _(createTrainingData, substanceSpectrumIds):
 
     import matplotlib.pyplot as plt
 
-    plt.plot(substance['positions'], substance['intensities'][0])
+    # Apply dark theme
+    setup_dark_theme()
+    colors = get_colors(1)
+    
+    plt.figure(figsize=(10, 6))
+    plt.plot(substance['positions'], substance['intensities'][0], color=colors[0], linewidth=2)
+    plt.title('Training Data Sample', fontsize=14)
+    plt.xlabel('Chemical Shift (ppm)', fontsize=12)
+    plt.ylabel('Intensity', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    save_figure(plt.gcf(), 'test_morgan_sample.png')
     return
 
 

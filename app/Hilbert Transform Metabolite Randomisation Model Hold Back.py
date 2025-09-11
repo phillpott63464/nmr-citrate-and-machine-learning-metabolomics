@@ -592,25 +592,43 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 def _(spectra):
     """Generate sample spectrum visualizations"""
     import matplotlib.pyplot as plt # type: ignore
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors, create_subplot_with_theme
+
+    # Apply dark theme
+    setup_dark_theme()
 
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra
 
     # Create visualization grid showing diverse sample spectra
-    plt.figure(figsize=(graph_count * 4, graph_count * 4))
+    fig, axes = create_subplot_with_theme(graph_count, graph_count, figsize=(graph_count * 4, graph_count * 4))
+    colors = get_colors(graph_count**2)
 
     for graphcounter in range(1, graph_count**2 + 1):
-        plt.subplot(graph_count, graph_count, graphcounter)
-        plt.plot(
+        ax_idx = graphcounter - 1
+        row, col = divmod(ax_idx, graph_count)
+        
+        if graph_count == 1:
+            ax = axes[0]
+        else:
+            ax = axes[row * graph_count + col] if hasattr(axes, '__getitem__') else axes
+            
+        ax.plot(
             # spectra[graphcounter]['positions'],
             spectra[graphcounter]['intensities'],
+            color=colors[ax_idx],
+            linewidth=2
         )
-        plt.title(f'Sample {graphcounter}')
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
+        ax.set_title(f'Sample {graphcounter}', fontsize=12)
+        ax.set_xlabel('Chemical Shift (ppm)', fontsize=10)
+        ax.set_ylabel('Intensity', fontsize=10)
 
     plt.tight_layout()
-    spectrafigures = plt.gca()
+    save_figure(fig, 'hilbert_sample_spectra_grid.png')
+    spectrafigures = fig
     return graph_count, plt, spectrafigures
 
 
@@ -678,30 +696,35 @@ def _(plt, reference_spectra, spectra, substanceDict):
     def _():
         """Visualize reference spectra for each metabolite"""
 
-        plt.figure(figsize=(12, 8))
+        fig, axes = create_subplot_with_theme(1, 1, figsize=(12, 8))
+        colors = get_colors(len(substanceDict))
 
         data = spectra[0]['positions'][20000:250000]
         data2 = spectra[0]['intensities'][20000:250000]
 
         # Plot reference spectrum for each metabolite
-        for substance in substanceDict:
+        for i, substance in enumerate(substanceDict):
             spectrum_id = substanceDict[substance][0]
             data2 = reference_spectra[spectrum_id][0][20000:250000]
-            plt.plot(
+            axes[0].plot(
                 data,
                 data2,
                 label=substance,
-                alpha=0.7
+                alpha=0.8,
+                color=colors[i],
+                linewidth=2
             )
 
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
-        plt.title('Reference Spectra for Individual Metabolites')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
+        axes[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        axes[0].set_ylabel('Intensity', fontsize=12)
+        axes[0].set_title('Reference Spectra for Individual Metabolites', fontsize=14)
+        axes[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        axes[0].grid(True, alpha=0.3)
         plt.tight_layout()
+        
+        save_figure(fig, 'hilbert_reference_spectra.png')
 
-        return plt.gca()
+        return axes[0]
 
 
     referencefigure = _()
