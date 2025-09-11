@@ -12,6 +12,33 @@ def _():
     import numpy as np
     return mo, np, phfork
 
+@app.cell
+def _():
+    import matplotlib.pyplot as plt
+
+    colors = [
+        '#DE8CDE',  # lilac
+        '#ff7f0e',  # safety orange
+        '#2ca02c',  # cooked asparagus green
+        '#d62728',  # brick red
+        '#9467bd',  # muted purple
+        '#8c564b',  # chestnut brown
+    ]
+
+    # Colors
+    fig_bg = "#1B1B1D"    # figure background
+    ax_bg = "#e0e0e0"     # axes background
+
+    plt.rcParams['figure.facecolor'] = fig_bg
+    plt.rcParams['axes.facecolor'] = ax_bg
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.labelcolor'] = colors[0]
+    plt.rcParams['xtick.color'] = colors[0]
+    plt.rcParams['ytick.color'] = colors[0]
+    plt.rcParams['text.color'] = colors[0]
+
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
 
 @app.cell(hide_code=True)
 def _(mo):
@@ -325,8 +352,6 @@ def _(corrected_pka, graph_molarity, mo, search_molarity, speciationfig):
 
 @app.cell
 def _(corrected_pka, graph_molarity, np, phfork):
-    import matplotlib.pyplot as plt
-
     # Sample data for demonstration
     phs = np.linspace(1, 9, 1000)
 
