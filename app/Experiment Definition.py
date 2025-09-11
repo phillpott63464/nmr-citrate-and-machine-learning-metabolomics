@@ -12,22 +12,23 @@ def _():
     import numpy as np
     return mo, np, phfork
 
+
 @app.cell
 def _():
     import matplotlib.pyplot as plt
 
     colors = [
-        '#DE8CDE',  # lilac
-        '#ff7f0e',  # safety orange
-        '#2ca02c',  # cooked asparagus green
-        '#d62728',  # brick red
-        '#9467bd',  # muted purple
-        '#8c564b',  # chestnut brown
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
     ]
+
 
     # Colors
     fig_bg = "#1B1B1D"    # figure background
-    ax_bg = "#e0e0e0"     # axes background
+    ax_bg = fig_bg   # axes background
 
     plt.rcParams['figure.facecolor'] = fig_bg
     plt.rcParams['axes.facecolor'] = ax_bg
@@ -38,6 +39,7 @@ def _():
     plt.rcParams['text.color'] = colors[0]
 
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+    return (plt,)
 
 
 @app.cell(hide_code=True)
@@ -351,7 +353,7 @@ def _(corrected_pka, graph_molarity, mo, search_molarity, speciationfig):
 
 
 @app.cell
-def _(corrected_pka, graph_molarity, np, phfork):
+def _(corrected_pka, graph_molarity, np, phfork, plt):
     # Sample data for demonstration
     phs = np.linspace(1, 9, 1000)
 
@@ -814,13 +816,13 @@ def _(better_sample_vol, citric_sample_vol, pd, tris_vol):
         new_metal_eppendorfs_csv = (
             []
         )   # Blank csv to print and write eppendorf weights into
-    
+
         # Intialise experiments
         for i in range(0, 24):
             citrate_ratio = 0.5 # For now, range 0-1
             magnesium_volume = 150 * 1e-6 # For now, range 0-150ul
             calcium_volume = 150 * 1e-6 # For now, range 0-150ul
-        
+
             new_metal_experiments.append(
                 {
                     'citric acid stock / µL': citric_sample_vol * citrate_ratio,
@@ -842,19 +844,19 @@ def _(better_sample_vol, citric_sample_vol, pd, tris_vol):
                     'post milliq weight / g': None,
                 }
             )
-    
+
         # Make up to better_sample_vol with milliq
         for x in new_metal_experiments:
             temp = 0
             for y in x.items():
                 temp += y[1]
             x['milliq µL'] = round(better_sample_vol - temp, 6)
-    
+
         # Round everything to µL
         for x in new_metal_experiments:
             for key, value in x.items():
                 x[key] = round(value * 1000 * 1000)
-    
+
         # Double check volumes
         for x in new_metal_experiments:
             temp = 0
@@ -862,16 +864,16 @@ def _(better_sample_vol, citric_sample_vol, pd, tris_vol):
                 temp += y[1]
             if temp != better_sample_vol * 1000 * 1000:
                 print('Issue')
-    
+
         new_metal_experiments = pd.DataFrame(new_metal_experiments)
         new_metal_eppendorfs_csv = pd.DataFrame(new_metal_eppendorfs_csv)
-    
+
         # Put milliq at the end for simplicity's sake
         columns = [
             col for col in new_metal_experiments.columns if col != 'milliq µL'
         ] + ['milliq µL']
         new_metal_experiments = new_metal_experiments[columns]
-    
+
         new_metal_experiments.index = range(
             49, 49 + len(new_metal_experiments)
         )   # Start index after the number of experiments actually done

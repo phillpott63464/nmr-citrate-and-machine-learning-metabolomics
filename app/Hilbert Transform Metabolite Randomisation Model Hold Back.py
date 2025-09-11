@@ -17,6 +17,34 @@ def _():
     return cuda_built, gpu_count, hip_version, mo, torch
 
 
+@app.cell
+def _():
+    import matplotlib.pyplot as plt
+
+    colors = [
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
+    ]
+
+
+    # Colors
+    fig_bg = "#1B1B1D"    # figure background
+    ax_bg = fig_bg   # axes background
+
+    plt.rcParams['figure.facecolor'] = fig_bg
+    plt.rcParams['axes.facecolor'] = ax_bg
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.labelcolor'] = colors[0]
+    plt.rcParams['xtick.color'] = colors[0]
+    plt.rcParams['ytick.color'] = colors[0]
+    plt.rcParams['text.color'] = colors[0]
+
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+    return (plt,)
+
 @app.cell(hide_code=True)
 def _(cuda_built, gpu_count, hip_version, mo):
     mo.md(
@@ -44,9 +72,9 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 1000                   # Number of samples per metabolite combination
+    count = 100                   # Number of samples per metabolite combination
     trials = 100                  # Number of hyperparameter optimization trialss
-    combo_number = None             # Number of random metabolite combinations to generate
+    combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
@@ -70,15 +98,15 @@ def _():
         'Succinic acid': ['SP:3211',],
         'Maleic acid': ['SP:3110',],
         'Lactic acid': ['SP:3675',],
-        # 'L-Methionine': ['SP:3509',],
-        # 'L-Proline': ['SP:3406',],
-        # 'L-Phenylalanine': ['SP:3507',],
-        # 'L-Serine': ['SP:3732',],
-        # 'L-Threonine': ['SP:3437',],
-        # 'L-Tryptophan': ['SP:3455',],
-        # 'L-Tyrosine': ['SP:3464',],
-        # 'L-Valine': ['SP:3490',],
-        # 'Glycine': ['SP:3682',],
+        'L-Methionine': ['SP:3509',],
+        'L-Proline': ['SP:3406',],
+        'L-Phenylalanine': ['SP:3507',],
+        'L-Serine': ['SP:3732',],
+        'L-Threonine': ['SP:3437',],
+        'L-Tryptophan': ['SP:3455',],
+        'L-Tyrosine': ['SP:3464',],
+        'L-Valine': ['SP:3490',],
+        'Glycine': ['SP:3682',],
     }
 
     import pandas as pd
@@ -591,7 +619,6 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 @app.cell
 def _(spectra):
     """Generate sample spectrum visualizations"""
-    import matplotlib.pyplot as plt # type: ignore
 
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra

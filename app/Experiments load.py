@@ -11,6 +11,33 @@ def _(os):
     os.makedirs('figs', exist_ok=True)
     return (mo,)
 
+@app.cell
+def _():
+    import matplotlib.pyplot as plt
+
+    colors = [
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
+    ]
+
+
+    # Colors
+    fig_bg = "#1B1B1D"    # figure background
+    ax_bg = fig_bg   # axes background
+
+    plt.rcParams['figure.facecolor'] = fig_bg
+    plt.rcParams['axes.facecolor'] = ax_bg
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.labelcolor'] = colors[0]
+    plt.rcParams['xtick.color'] = colors[0]
+    plt.rcParams['ytick.color'] = colors[0]
+    plt.rcParams['text.color'] = colors[0]
+
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+    return (plt,)
 
 @app.cell(hide_code=True)
 def _(mo):
@@ -360,7 +387,6 @@ def _(
     pkasolver_phs,
     stocks,
 ):
-    import matplotlib.pyplot as plt
 
     # Assuming acid_vol and base_vol are already in liters
     # Ensure you have the correct molarity for both acid and base
@@ -461,14 +487,12 @@ def _(
         for id, point in enumerate(corrected_pka):
             plt.axhline(
                 y=point,
-                color='red',
                 linestyle='--',
                 label=f'pka{id+1} = {point}',
             )
         for id, point in enumerate(pkasolver):
             plt.axhline(
                 y=point,
-                color='blue',
                 linestyle='--',
                 label=f'pkasolver{id+1} = {point}',
             )
@@ -1080,7 +1104,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.plot(
         [x / 0.0006 * 100 for x in base_vol],
         citrate_couplings,
-        color='blue',
         marker='o',
         linestyle='-',
         linewidth=2,
@@ -1096,7 +1119,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.plot(
         phs,
         citrate_couplings,
-        color='green',
         marker='s',
         linestyle='-',
         linewidth=2,
@@ -1203,7 +1225,6 @@ def _(
     plt.plot(
         [x / 0.0006 * 100 for x in base_vol],
         citrate_differences,
-        color='blue',
         marker='o',
         linestyle='-',
         linewidth=2,
@@ -1219,7 +1240,6 @@ def _(
     plt.plot(
         phs,
         citrate_differences,
-        color='green',
         marker='s',
         linestyle='-',
         linewidth=2,
@@ -1294,11 +1314,9 @@ def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
             cols = round(math.ceil(n / rows))
 
             plt.subplot(rows, cols, idx + 1)
-            # plt.plot(data, marker='o', linestyle='-', color=sns.color_palette("husl", n_colors=n)[idx], linewidth=2, markersize=5)
             plt.plot(
                 data,
                 linestyle='-',
-                color=sns.color_palette('husl', n_colors=n)[idx],
                 linewidth=0.5,
                 markersize=5,
             )
@@ -2498,7 +2516,7 @@ def _(
         ax.plot(vals['real_e'], vals['e'], marker='o')
         ax.plot(vals['real_c'], vals['c'], marker='s')
         identity = np.linspace(0, 1, 100)
-        ax.plot(identity, identity, '--', color='gray')
+        ax.plot(identity, identity, '--')
         ax.set_title(f'{ion.capitalize()}\nRMSE: {rmse}')
         ax.set_xlabel('Calculated')
         ax.set_ylabel('Predicted')
