@@ -488,7 +488,7 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
-        rf"""
+        r"""
     ## Experimentally Determined Titration Curve
 
     ![Experimentally determined titration curve for citric acid](https://www.researchgate.net/profile/Stephan-Schwoebel/publication/351108949/figure/fig7/AS:1017157349564433@1619520618739/Experimentally-determined-titration-curve-for-citric-acid.ppm)
@@ -1013,8 +1013,10 @@ def _(peak_values_no_intensities, phs, plt):
 
 
 @app.cell
-def _(avg_ppm, plt, predicted_ratios):
+def _(avg_ppm, fracs, np, plt, predicted_ratios):
     plt.figure(figsize=(8, 5))
+
+    # mse = np.sqrt(np.mean((fracs - predicted_fracs) ** 2))
 
     plt.plot(
         avg_ppm,
@@ -1030,14 +1032,12 @@ def _(avg_ppm, plt, predicted_ratios):
     plt.ylabel('Predicted Speciation Ratio')
     plt.xlabel('Chemical shift (PPM)')
     plt.title(
-        'Chemical shift of Peaks in Citric Acid and Predicted Trisodium Citrate Speciation'
+        f'Chemical shift of Peaks in Citric Acid and Predicted Trisodium Citrate Speciation\nRMSE: {round(np.sqrt(np.mean((fracs - predicted_ratios) ** 2)), 5)}'
     )
 
     plt.tight_layout()
 
     plt.savefig('figs/chemicalshift_predicted_fig.svg')
-
-    plt.savefig('figs/chemical_shift_predicted_fig.svg')
 
     chemicalshift_predicted_fig = plt.gca()
 
@@ -1434,12 +1434,12 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 experiment_number=experiment_number,
             )
 
+            if abs(max(data)) > abs(min(data)):
+                data *= -1
+            
             if (
                 idx == 0
             ):   # The first one doesn't flip properly for some reason
-                data *= -1
-
-            if abs(max(data)) > abs(min(data)):
                 data *= -1
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
@@ -1459,7 +1459,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         plt.suptitle(
             'NMR Experiments Overview', fontsize=16, y=1.02
         )  # Main title for the figure
-        plt.savefig('figs/NMR.svg')
+        plt.savefig('figs/NMRspeciation.svg')
         return plt.gca()  # Return the current axes
 
     nmrgluefig = _()
@@ -2485,31 +2485,33 @@ def _(
     errors = {}
     for ion, vals in chelation_predictions.items():
         errors[ion] = {
-            'mse_e': mse(vals['e'], vals['real_e']),
-            'mse_c': mse(vals['c'], vals['real_c']),
+            'mse': mse(vals['e'], vals['real_e']),
         }
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
     for ax, ion in zip(axes, chelation_predictions):
         vals = chelation_predictions[ion]
+        mse = errors[ion]['mse']
+        rmse = round(np.sqrt(mse), 5)
+        mse = round(mse, 5)
+    
         ax.plot(vals['real_e'], vals['e'], marker='o')
         ax.plot(vals['real_c'], vals['c'], marker='s')
         identity = np.linspace(0, 1, 100)
         ax.plot(identity, identity, '--', color='gray')
-        ax.set_title(f'{ion.capitalize()}')
+        ax.set_title(f'{ion.capitalize()}\nRMSE: {rmse}')
         ax.set_xlabel('Calculated')
         ax.set_ylabel('Predicted')
-        mse_e = mse(vals['e'], vals['real_e'])
-        mse_c = mse(vals['c'], vals['real_c'])
         ax.legend(
             [
-                f'e MSE: {round(mse_e,4) if mse_e is not None else "N/A"}',
-                f'c MSE: {round(mse_c,4) if mse_c is not None else "N/A"}',
+                f'fL',
+                f'fML',
                 'Perfect',
             ]
         )
         ax.grid(True)
     plt.tight_layout()
+    plt.savefig('figs/chelation_predictions.svg')
     plt.show()
     return
 
@@ -2993,7 +2995,7 @@ def _(
         plt.title('Real Values')
 
         plt.suptitle(
-            f'Integrated Model Predictions\nMSE: {np.format_float_positional(mse, 5)}, RMSE: {np.format_float_positional(rmse, 5)}\nAlternative MSE: {np.format_float_positional(amse, 5)}, RMSE: {np.format_float_positional(armse, 5)}'
+            f'Integrated Model Predictions\nIntegrated Deltas RMSE: {np.format_float_positional(rmse, 5)}\nSeparate Deltas RMSE: {np.format_float_positional(armse, 5)}'
         )
 
         plt.tight_layout()
