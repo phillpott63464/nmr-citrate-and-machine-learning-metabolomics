@@ -344,28 +344,28 @@ def _(corrected_pka, graph_molarity, np, phfork):
     fracs = citricacid.alpha(phs)
 
     # Create a figure with a specific size
-    fig, ax = create_subplot_with_theme(1, 1, figsize=(10, 6))
+    fig, axes = create_subplot_with_theme(1, 1, figsize=(10, 6))
     colors = get_colors(4)  # 4 species
 
     # Plot the fractions with the color palette
     for i, species in enumerate(['H3A', 'H2A-', 'HA2-', 'A3-']):
-        ax[0].plot(phs, fracs[:, i], linewidth=2, color=colors[i], label=species)
+        axes[0].plot(phs, fracs[:, i], linewidth=2, color=colors[i], label=species)
 
     # Add a legend with a title
-    ax[0].legend(title='Species', loc='upper right', fontsize=12)
+    axes[0].legend(title='Species', loc='upper right', fontsize=12)
 
     # Set title and labels with larger font sizes
-    ax[0].set_title('Citric Acid Speciation', fontsize=16)
-    ax[0].set_xlabel('pH', fontsize=14)
-    ax[0].set_ylabel('Fraction of Species', fontsize=14)
+    axes[0].set_title('Citric Acid Speciation', fontsize=16)
+    axes[0].set_xlabel('pH', fontsize=14)
+    axes[0].set_ylabel('Fraction of Species', fontsize=14)
 
     # Customize ticks
-    ax[0].tick_params(labelsize=12)
+    axes[0].tick_params(labelsize=12)
 
     # Show the plot
     plt.tight_layout()
     save_figure(fig, 'citric_acid_speciation.png')
-    speciationfig = ax[0]
+    speciationfig = axes[0]
     return fig, speciationfig
 
 

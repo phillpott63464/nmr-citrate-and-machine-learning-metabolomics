@@ -146,17 +146,17 @@ def _(bruker_fft, data_dir, indices, np):
 @app.cell
 def _(plt):
     def gen_fig(data, peaks=None):
-        figure, ax = create_subplot_with_theme(1, 1, figsize=(10, 6))
+        figure, axes = create_subplot_with_theme(1, 1, figsize=(10, 6))
         colors = get_colors(2)
         
-        ax[0].plot(*data, color=colors[0], linewidth=2)
+        axes[0].plot(*data, color=colors[0], linewidth=2)
         
         if peaks is not None:
             scatterx, scattery = peaks[:, 0], peaks[:, 1]
-            ax[0].scatter(scatterx, scattery, color=colors[1], s=50, alpha=0.8)
+            axes[0].scatter(scatterx, scattery, color=colors[1], s=50, alpha=0.8)
         
-        ax[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
-        ax[0].set_ylabel('Intensity', fontsize=12)
+        axes[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        axes[0].set_ylabel('Intensity', fontsize=12)
         
         return figure
     return (gen_fig,)

@@ -110,14 +110,14 @@ def create_subplot_with_theme(nrows=1, ncols=1, figsize=(10, 6)):
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     fig.patch.set_facecolor(COLORS['background'])
     
-    # If single subplot, make axes a list for consistency
+    # Handle different cases for axes
     if nrows == 1 and ncols == 1:
-        axes = [axes]
-    elif nrows == 1 or ncols == 1:
-        axes = axes.flatten()
+        axes_list = [axes]
+    else:
+        axes_list = axes.flatten() if hasattr(axes, 'flatten') else [axes]
     
     # Apply theme to each subplot
-    for ax in (axes if hasattr(axes, '__iter__') else [axes]):
+    for ax in axes_list:
         ax.set_facecolor(COLORS['background'])
         ax.grid(True, alpha=0.3, color=COLORS['grid'])
         ax.tick_params(colors=COLORS['text'])
@@ -129,7 +129,7 @@ def create_subplot_with_theme(nrows=1, ncols=1, figsize=(10, 6)):
         for spine in ax.spines.values():
             spine.set_color(COLORS['text'])
     
-    return fig, axes
+    return fig, axes_list
 
 # Auto-setup when imported (commented out to avoid multiple calls)
 # setup_dark_theme()

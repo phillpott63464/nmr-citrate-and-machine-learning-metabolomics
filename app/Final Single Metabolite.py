@@ -693,13 +693,13 @@ def _(plt, reference_spectra, spectra, substanceDict):
     def _():
         """Visualize reference spectra for each metabolite"""
 
-        fig, ax = create_subplot_with_theme(1, 1, figsize=(12, 8))
+        fig, axes = create_subplot_with_theme(1, 1, figsize=(12, 8))
         colors = get_colors(len(substanceDict))
 
         # Plot reference spectrum for each metabolite
         for i, substance in enumerate(substanceDict):
             spectrum_id = substanceDict[substance][0]
-            ax[0].plot(
+            axes[0].plot(
                 spectra[0]['positions'],
                 reference_spectra[spectrum_id][0],
                 label=substance,
@@ -708,17 +708,17 @@ def _(plt, reference_spectra, spectra, substanceDict):
                 linewidth=2
             )
 
-        ax[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
-        ax[0].set_ylabel('Intensity', fontsize=12)
-        ax[0].set_title('Reference Spectra for Individual Metabolites', fontsize=14)
-        ax[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax[0].grid(True, alpha=0.3)
+        axes[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        axes[0].set_ylabel('Intensity', fontsize=12)
+        axes[0].set_title('Reference Spectra for Individual Metabolites', fontsize=14)
+        axes[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        axes[0].grid(True, alpha=0.3)
         plt.tight_layout()
         
         # Save the figure
         save_figure(fig, 'reference_spectra.png')
 
-        return ax[0]
+        return axes[0]
 
 
     referencefigure = _()

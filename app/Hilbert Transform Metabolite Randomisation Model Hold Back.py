@@ -696,30 +696,35 @@ def _(plt, reference_spectra, spectra, substanceDict):
     def _():
         """Visualize reference spectra for each metabolite"""
 
-        plt.figure(figsize=(12, 8))
+        fig, axes = create_subplot_with_theme(1, 1, figsize=(12, 8))
+        colors = get_colors(len(substanceDict))
 
         data = spectra[0]['positions'][20000:250000]
         data2 = spectra[0]['intensities'][20000:250000]
 
         # Plot reference spectrum for each metabolite
-        for substance in substanceDict:
+        for i, substance in enumerate(substanceDict):
             spectrum_id = substanceDict[substance][0]
             data2 = reference_spectra[spectrum_id][0][20000:250000]
-            plt.plot(
+            axes[0].plot(
                 data,
                 data2,
                 label=substance,
-                alpha=0.7
+                alpha=0.8,
+                color=colors[i],
+                linewidth=2
             )
 
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
-        plt.title('Reference Spectra for Individual Metabolites')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
+        axes[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        axes[0].set_ylabel('Intensity', fontsize=12)
+        axes[0].set_title('Reference Spectra for Individual Metabolites', fontsize=14)
+        axes[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        axes[0].grid(True, alpha=0.3)
         plt.tight_layout()
+        
+        save_figure(fig, 'hilbert_reference_spectra.png')
 
-        return plt.gca()
+        return axes[0]
 
 
     referencefigure = _()
