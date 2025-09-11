@@ -1,13 +1,14 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.2"
+app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+def _(os):
     import marimo as mo
 
+    os.makedirs('figs', exist_ok=True)
     return (mo,)
 
 
@@ -747,6 +748,7 @@ def _(np):
         extract_phc,
         extract_sr,
         get_experiment_directories,
+        os,
         peak_values,
         peaks,
         sr_values,
@@ -2897,7 +2899,6 @@ def _(
         print(f'RMSE of alternative integrated predictions: {armse}')
 
         return (mse, rmse, amse, armse)
-
     return (find_prediction_errors,)
 
 
@@ -3070,7 +3071,6 @@ def _():
     import torch.nn as nn
     import torch.optim as optim
     import torch.nn.functional as F
-
     return F, nn, optim
 
 
@@ -3139,7 +3139,7 @@ app._unparsable_cell(
 
     print(f'{full_count} epochs with {best_loss} loss')
     """,
-    name='_',
+    name="_"
 )
 
 
@@ -3401,7 +3401,6 @@ def _(F, math, nn, torch):
             first4 = F.softmax(logits[:, :4], dim=1)
             last3 = F.softmax(logits[:, 4:], dim=1)
             return torch.cat([first4, last3], dim=1)
-
     return (TinyTransformer,)
 
 
@@ -3532,5 +3531,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
