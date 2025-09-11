@@ -2935,7 +2935,7 @@ def _(
         plt.title(f'Integrated Predictions.')
 
         plt.subplot(3, 3, 4)
-        plt.plot(fs[:24])
+        plt.plot(afs[:24])
         plt.legend([*all_experiments[0].keys()])
         plt.xlabel('No axis')
         plt.ylabel('Ratio')
@@ -2957,7 +2957,7 @@ def _(
         plt.title(f'Integrated Predictions')
 
         plt.subplot(3, 3, 5)
-        plt.plot(fs[24:36])
+        plt.plot(afs[24:36])
         plt.legend([*all_experiments[0].keys()])
         plt.xlabel('No axis')
         plt.ylabel('Ratio')
@@ -2979,7 +2979,7 @@ def _(
         plt.title(f'Integrated Predictions')
 
         plt.subplot(3, 3, 6)
-        plt.plot(fs[36:])
+        plt.plot(afs[36:])
         plt.legend([*all_experiments[0].keys()])
         plt.xlabel('No axis')
         plt.ylabel('Ratio')
