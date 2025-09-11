@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.15.2"
-app = marimo.App(width="medium")
+__generated_with = '0.15.2'
+app = marimo.App(width='medium')
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -371,7 +372,7 @@ def _(
         for ratio in expected_acid_ratios
     ]
     expected_moles_base = [
-        (1 - ratio) * 0.0006 * stocks['acid']['molarity']
+        (1 - ratio) * 0.0006 * stocks['base']['molarity']
         for ratio in expected_acid_ratios
     ]
 
@@ -407,6 +408,8 @@ def _(
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.grid(True)
     plt.tight_layout()
+
+    plt.savefig('figs/phgraph.svg')
 
     phgraph = plt.gca()
     return phgraph, plt
@@ -745,6 +748,7 @@ def _(np):
         extract_sr,
         get_experiment_directories,
         peak_values,
+        peaks,
         sr_values,
     )
 
@@ -825,6 +829,8 @@ def _(base_vol, peak_values, phs, plt):
 
     plt.tight_layout()
 
+    plt.savefig('figs/chemicalshift_ph_fig.svg')
+
     chemicalshift_ph_fig = plt.gca()
     return avg_ppm, chemicalshift_ph_fig
 
@@ -900,6 +906,8 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     )
 
     plt.tight_layout()
+
+    plt.savefig('figs/chemicalshift_fig.svg')
 
     chemicalshift_fig = plt.gca()
     return chemicalshift_fig, citricacid, fracs
@@ -1027,6 +1035,8 @@ def _(avg_ppm, plt, predicted_ratios):
 
     plt.savefig('figs/chemicalshift_predicted_fig.svg')
 
+    plt.savefig('figs/chemical_shift_predicted_fig.svg')
+
     chemicalshift_predicted_fig = plt.gca()
 
     plt.show()
@@ -1118,6 +1128,8 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     print([float(x) for x in citrate_couplings])
 
     # Show the plots
+    plt.savefig('figs/citratecouplingfig.svg')
+
     citratecouplingfig = plt.gca()
     return (citratecouplingfig,)
 
@@ -1235,6 +1247,8 @@ def _(
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
+
+    plt.savefig('figs/citratepeakdifferencesfig')
 
     # Show the plots
     citratepeakdifferencesfig = plt.gca()
@@ -1668,7 +1682,7 @@ def _(
 ):
     from collections import OrderedDict
 
-    metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
+    metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs_again.csv')
     metal_real_experiments = []
 
     for midx in range(len(metal_imported)):
@@ -1933,8 +1947,6 @@ def _(chelation_extra_fig, chelation_fig, mo):
 
     {mo.as_html(chelation_fig)}
 
-    Magnesium appears sigmoidal, calcium appears exponential and reverse exponential.
-
     ### Extra Relationships
 
     {mo.as_html(chelation_extra_fig)}
@@ -1946,7 +1958,10 @@ def _(chelation_extra_fig, chelation_fig, mo):
 
 
 @app.cell
-def _(chelation_peak_values, metal_real_experiments, plt):
+def _(chelation_peak_values, continueaaa, metal_real_experiments, plt):
+    if continueaaa:
+        pass
+
     chelation_peak_values_no_intensities = [
         [float(x[0]) for x in y] for y in chelation_peak_values
     ]   # Chemical shift of each peak in citrate [experiments, 4(ppm)]
@@ -1977,9 +1992,16 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         if exp.get('Sample number') > 36
     ]
 
+    magnesium_complex_molarity = [
+        x['metal ligand complex molarity / M'] for x in metal_real_experiments
+    ][:12]
+    calcium_complex_molarity = [
+        x['metal ligand complex molarity / M'] for x in metal_real_experiments
+    ][12:]
+
     plt.figure(figsize=(10, 10))
 
-    plt.subplot(2, 1, 1)
+    plt.subplot(2, 2, 1)
     plt.plot(
         magnesium_percentages,
         magnesium_peaks,
@@ -1991,9 +2013,8 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
     plt.xlabel('Magnesium Molarity', fontsize=12)
     plt.ylabel('Chemical Shift / ppm', fontsize=12)
-    # plt.legend(['Proton A split 1', 'Proton A split 2', 'Proton B split 1', 'Proton B split 2'])
 
-    plt.subplot(2, 1, 2)
+    plt.subplot(2, 2, 2)
     plt.plot(
         calcium_percentages,
         calcium_peaks,
@@ -2004,7 +2025,31 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     plt.title('Calcium Molarity vs Citrate Chemical Shift', fontsize=14)
     plt.xlabel('Calcium Molarity / M', fontsize=12)
     plt.ylabel('Chemical Shift / ppm', fontsize=12)
-    # plt.legend(['Proton A split 1', 'Proton A split 2', 'Proton B split 1', 'Proton B split 2'])
+
+    plt.subplot(2, 2, 3)
+    plt.plot(
+        magnesium_complex_molarity,
+        magnesium_peaks,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+
+    plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
+    plt.xlabel('Magnesium Complex Molarity', fontsize=12)
+    plt.ylabel('Chemical Shift / ppm', fontsize=12)
+
+    plt.subplot(2, 2, 4)
+    plt.plot(
+        calcium_complex_molarity,
+        calcium_peaks,
+        marker='o',
+        linestyle='-',
+        linewidth=2,
+    )
+    plt.title('Calcium Molarity vs Citrate Chemical Shift', fontsize=14)
+    plt.xlabel('Calcium Complex Molarity / M', fontsize=12)
+    plt.ylabel('Chemical Shift / ppm', fontsize=12)
 
     # plt.gca().invert_xaxis()
     plt.grid(True)
@@ -2212,11 +2257,17 @@ def _(continueaaa, metal_real_experiments, plt):
     if continueaaa:
         pass
     # Extracting the data
-    salt_stock_molarity = [x['salt stock molarity / M'] for x in metal_real_experiments]
-    metal_ligand_complex_molarity = [x['metal ligand complex molarity / M'] for x in metal_real_experiments]
+    salt_stock_molarity = [
+        x['salt stock molarity / M'] for x in metal_real_experiments
+    ]
+    metal_ligand_complex_molarity = [
+        x['metal ligand complex molarity / M'] for x in metal_real_experiments
+    ]
 
     # Combining the data into a list of tuples
-    combined_data = list(zip(salt_stock_molarity, metal_ligand_complex_molarity))
+    combined_data = list(
+        zip(salt_stock_molarity, metal_ligand_complex_molarity)
+    )
 
     calcium_combined = combined_data[12:]
     magnesium_combined = combined_data[:12]
@@ -2226,8 +2277,12 @@ def _(continueaaa, metal_real_experiments, plt):
     sorted_magnesium = sorted(magnesium_combined, key=lambda x: x[0])
 
     # Unzipping the sorted data back into two lists
-    sorted_calcium_molarity, sorted_calcium_complex_molarity = zip(*sorted_calcium)
-    sorted_magnesium_molarity, sorted_magnesium_complex_molarity = zip(*sorted_magnesium)
+    sorted_calcium_molarity, sorted_calcium_complex_molarity = zip(
+        *sorted_calcium
+    )
+    sorted_magnesium_molarity, sorted_magnesium_complex_molarity = zip(
+        *sorted_magnesium
+    )
 
     # Plotting the sorted data
     plt.figure(figsize=(15, 8))
@@ -2236,13 +2291,17 @@ def _(continueaaa, metal_real_experiments, plt):
     plt.plot(sorted_calcium_molarity, sorted_calcium_complex_molarity)
     plt.xlabel('Salt Stock Molarity (M)')
     plt.ylabel('Metal Ligand Complex Molarity (M)')
-    plt.title('Plot of Calcium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+    plt.title(
+        'Plot of Calcium Metal Ligand Complex Molarity vs. Salt Stock Molarity'
+    )
 
     plt.subplot(1, 2, 2)
     plt.plot(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
     plt.xlabel('Salt Stock Molarity (M)')
     plt.ylabel('Metal Ligand Complex Molarity (M)')
-    plt.title('Plot of Magnesium Metal Ligand Complex Molarity vs. Salt Stock Molarity')
+    plt.title(
+        'Plot of Magnesium Metal Ligand Complex Molarity vs. Salt Stock Molarity'
+    )
 
     plt.tight_layout()
 
@@ -2419,7 +2478,7 @@ def _(
         true = np.asarray(true, dtype=float)
         if pred.shape != true.shape:
             raise ValueError('Shapes must match')
-        return float(np.sum((true - pred) ** 2))
+        return float(np.mean((true - pred) ** 2))
 
     errors = {}
     for ion, vals in chelation_predictions.items():
@@ -2461,15 +2520,21 @@ def _(mo):
 
     The issue with these current models is that they are all considered separate from one another. The speciation model will attempt to explain away metal ligand shifts in terms of speciation, which will in turn mess with the results of the chelation model. Therefore, an integrated model would work better.
 
-    $\delta_{obs, peak}=f_{AH3}\delta_{AH3}+f_{AH2-}\delta_{AH2-}+f_{AH-2}\delta_{aAH-2}+f_{A-3}\delta_{A-3}+f_{MgL}\delta_{MgL}+f_{CaL}\delta_{CaL}$
-
-    $\delta_{obs, peak}=f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3}+f_{4}\delta_{4}+f_{5}\delta_{5}$
-
-    Or maybe:
-
     $\delta_{obs, peak}=f_{L}(f_{AH3}\delta_{AH3}+f_{AH2-}\delta_{AH2-}+f_{AH-2}\delta_{aAH-2}+f_{A-3}\delta_{A-3})+f_{MgL}\delta_{MgL}+f_{CaL}\delta_{CaL}$
 
     $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    """
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, predictions_fig):
+    mo.md(
+        rf"""
+    There are two tests here: Integrated Predictions were fitted using deltas from the integrated model into the integrated model, and Alternative Integrated Predictions were fitted using the deltas from the two separate models merged into the integrated model.
+
+    {mo.as_html(predictions_fig)}
     """
     )
     return
@@ -2490,16 +2555,17 @@ def _(
         pass
 
     def _():
-        na_experiments = [{
-            'f0': a,
-            'f1': b,
-            'f2': c,
-            'f3': d,
-            'f4': 0.0,
-            'f5': 0.0,
-            'f6': 1.0,
-        }
-        for a, b, c, d in fracs
+        na_experiments = [
+            {
+                'f0': a,
+                'f1': b,
+                'f2': c,
+                'f3': d,
+                'f4': 0.0,
+                'f5': 0.0,
+                'f6': 1.0,
+            }
+            for a, b, c, d in fracs
         ]
 
         for idx, experiment in enumerate(na_experiments):
@@ -2525,15 +2591,17 @@ def _(
                 f4 = 0.0
                 f5 = e
 
-            mgca_experiments.append({
-                'f0': assumed_fracs[0],
-                'f1': assumed_fracs[1],
-                'f2': assumed_fracs[2],
-                'f3': assumed_fracs[3],
-                'f4': f4,
-                'f5': f5,
-                'f6': c,
-            })
+            mgca_experiments.append(
+                {
+                    'f0': assumed_fracs[0],
+                    'f1': assumed_fracs[1],
+                    'f2': assumed_fracs[2],
+                    'f3': assumed_fracs[3],
+                    'f4': f4,
+                    'f5': f5,
+                    'f6': c,
+                }
+            )
 
         for idx, experiment in enumerate(mgca_experiments):
             experiment['peaks'] = chelation_peak_values_no_intensities[idx]
@@ -2550,7 +2618,7 @@ def _(
 def _(all_experiments, np):
     """
     Calculate integrated model deltas using nonlinear least squares
-    $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
     """
     from scipy.optimize import least_squares
 
@@ -2562,10 +2630,17 @@ def _(all_experiments, np):
         # Extract f values for all experiments
         fs_matrix = []
         for experiment in all_experiments:
-            fs_matrix.append([
-                experiment['f0'], experiment['f1'], experiment['f2'], 
-                experiment['f3'], experiment['f4'], experiment['f5'], experiment['f6']
-            ])
+            fs_matrix.append(
+                [
+                    experiment['f0'],
+                    experiment['f1'],
+                    experiment['f2'],
+                    experiment['f3'],
+                    experiment['f4'],
+                    experiment['f5'],
+                    experiment['f6'],
+                ]
+            )
         fs_matrix = np.array(fs_matrix)
 
         deltas = []
@@ -2575,7 +2650,7 @@ def _(all_experiments, np):
 
             def residuals(deltas_peak):
                 """
-                deltas_peak: [δ0, δ1, δ2, δ3, δ4, δ5] for this peak
+                deltas_peak: [d0, d1, d2, d3, d4, d5] for this peak
                 """
                 predicted_shifts = []
 
@@ -2583,7 +2658,12 @@ def _(all_experiments, np):
                     f0, f1, f2, f3, f4, f5, f6 = fs_matrix[exp_idx]
 
                     # Model: δ_shift = f6(f0*δ0 + f1*δ1 + f2*δ2 + f3*δ3) + f4*δ4 + f5*δ5
-                    speciation_term = f0 * deltas_peak[0] + f1 * deltas_peak[1] + f2 * deltas_peak[2] + f3 * deltas_peak[3]
+                    speciation_term = (
+                        f0 * deltas_peak[0]
+                        + f1 * deltas_peak[1]
+                        + f2 * deltas_peak[2]
+                        + f3 * deltas_peak[3]
+                    )
                     chelation_term = f4 * deltas_peak[4] + f5 * deltas_peak[5]
 
                     predicted_shift = f6 * speciation_term + chelation_term
@@ -2599,15 +2679,17 @@ def _(all_experiments, np):
             result = least_squares(residuals, x0, method='trf')
 
             if not result.success:
-                print(f"Warning: optimization failed for peak {peak_idx}: {result.message}")
+                print(
+                    f'Warning: optimization failed for peak {peak_idx}: {result.message}'
+                )
 
             deltas.append(result.x)
 
         return np.array(deltas)
 
     integrated_deltas = _()
-    print("Integrated deltas shape:", integrated_deltas.shape)
-    print("Integrated deltas:")
+    print('Integrated deltas shape:', integrated_deltas.shape)
+    print('Integrated deltas:')
     print(integrated_deltas)
     return integrated_deltas, least_squares
 
@@ -2618,7 +2700,9 @@ def _(all_deltas, calcium_deltas, magnesium_deltas, np):
 
     def _():
         out = []
-        for deltas, mg, ca in zip(all_deltas, magnesium_deltas, calcium_deltas):
+        for deltas, mg, ca in zip(
+            all_deltas, magnesium_deltas, calcium_deltas
+        ):
             test = [*deltas]
             test.append(mg)
             test.append(ca)
@@ -2629,14 +2713,20 @@ def _(all_deltas, calcium_deltas, magnesium_deltas, np):
     alternative_integrated_deltas = _()
 
     print(alternative_integrated_deltas)
-    return
+    return (alternative_integrated_deltas,)
 
 
 @app.cell
-def _(all_experiments, integrated_deltas, least_squares, np):
+def _(
+    all_experiments,
+    alternative_integrated_deltas,
+    integrated_deltas,
+    least_squares,
+    np,
+):
     """
     Calculate f values from integrated deltas and chemical shifts
-    $\delta_{shift}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$
+    ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
     """
 
     def find_f_integrated(all_deltas, shifts, penalty_factor=1e3):
@@ -2652,94 +2742,98 @@ def _(all_experiments, integrated_deltas, least_squares, np):
             f6 = f[6]        # Free ligand fraction
 
             # Model: δ_shift = f6(f0*δ0 + f1*δ1 + f2*δ2 + f3*δ3) + f4*δ4 + f5*δ5
-            speciation_contributions = all_deltas[:, :4] @ f0_to_3  # Shape: (4,)
-            chelation_contributions = all_deltas[:, 4:6] @ f4_to_5  # Shape: (4,)
+            speciation_contributions = (
+                all_deltas[:, :4] @ f0_to_3
+            )  # Shape: (4,)
+            chelation_contributions = (
+                all_deltas[:, 4:6] @ f4_to_5
+            )  # Shape: (4,)
 
-            predicted_shifts = f6 * speciation_contributions + chelation_contributions
+            predicted_shifts = (
+                f6 * speciation_contributions + chelation_contributions
+            )
 
             # Main residuals
             main_residuals = predicted_shifts - shifts
 
             # Constraint penalties
             # Constraint 1: f0 + f1 + f2 + f3 should sum to 1 (speciation fractions)
-            speciation_constraint = penalty_factor * (np.sum(f0_to_3) - 1.0)**2
+            speciation_constraint = (
+                penalty_factor * (np.sum(f0_to_3) - 1.0) ** 2
+            )
 
             # Constraint 2: f4 + f5 + f6 should sum to 1 (total ligand fractions)
-            total_ligand_constraint = penalty_factor * (np.sum(f[4:7]) - 1.0)**2
+            total_ligand_constraint = (
+                penalty_factor * (np.sum(f[4:7]) - 1.0) ** 2
+            )
 
             # Return residuals with penalty terms
-            return np.concatenate([main_residuals, [speciation_constraint, total_ligand_constraint]])
+            return np.concatenate(
+                [
+                    main_residuals,
+                    [speciation_constraint, total_ligand_constraint],
+                ]
+            )
 
         # Bounds: all f_i between 0 and 1
         bounds_lower = np.zeros(7)
         bounds_upper = np.ones(7)
 
         # Better initial guess based on expected behavior
-        x0 = np.array([0.25, 0.25, 0.25, 0.25, 0.1, 0.1, 0.8])  # More realistic starting point
+        x0 = np.array(
+            [0.25, 0.25, 0.25, 0.25, 0.1, 0.1, 0.8]
+        )  # More realistic starting point
 
         # Run least squares optimization
         res = least_squares(
             residuals,
             x0,
             bounds=(bounds_lower, bounds_upper),
-            method='trf'
+            method='trf',
+            max_nfev=20000,
         )
 
         if not res.success:
-            print("Warning: optimization did not converge:", res.message)
+            print('Warning: optimization did not converge:', res.message)
 
         return res.x
 
     def _():
         all_peaks = [x['peaks'] for x in all_experiments]
 
-        fs = []
+        fs, alternativefs = [], []
         for peaks in all_peaks:
             # Convert peaks to numpy array and ensure correct shape
             peaks_array = np.array(peaks)
             if len(peaks_array) != 4:
-                print(f"Warning: Expected 4 peaks, got {len(peaks_array)}")
+                print(f'Warning: Expected 4 peaks, got {len(peaks_array)}')
                 continue
 
             f_values = find_f_integrated(integrated_deltas, peaks_array)
+            alternative_f_values = find_f_integrated(
+                alternative_integrated_deltas, peaks_array
+            )
             fs.append(f_values)
+            alternativefs.append(alternative_f_values)
 
-        return fs
+        return fs, alternativefs
 
-    integrated_predictions = _()
+    integrated_predictions, alternative_integrated_predictions = _()
 
-    print("Integrated predictions shape:", len(integrated_predictions))
+    print('Integrated predictions shape:', len(integrated_predictions))
+    print(
+        'Alternative integrated predictions shape:',
+        len(alternative_integrated_predictions),
+    )
     if integrated_predictions:
-        print("Sample prediction:", integrated_predictions[0])
-    return (integrated_predictions,)
+        print('Sample prediction:', integrated_predictions[0])
+    if alternative_integrated_predictions:
+        print('Sample prediction:', alternative_integrated_predictions[0])
+    return alternative_integrated_predictions, integrated_predictions
 
 
 @app.cell
 def _(all_experiments, integrated_predictions, plt):
-    def _():
-        fs = integrated_predictions[24:]
-
-        for i in range(len(fs)):
-            fs[i] = fs[i]
-            # fs[i] = fs[i][4:-2]
-
-        plt.plot(fs)
-        plt.legend([*all_experiments[0].keys()])
-
-        plt.show()
-
-    #     return plt.gca()
-
-    # tempfig = _()
-
-    # plt.show()
-
-    _()
-    return
-
-
-@app.cell
-def _(all_experiments, plt):
     def _():
         values = []
         for experiment in all_experiments:
@@ -2747,8 +2841,26 @@ def _(all_experiments, plt):
             vals = vals[:-1]
             values.append(vals)
 
-        plt.plot(values[24:])
-        plt.legend([*all_experiments[0].keys()])
+        values = [list(x) for x in zip(*values)]
+        fs = [list(x) for x in zip(*integrated_predictions)]
+
+        keys = [*all_experiments[0].keys()]
+        keys.pop()
+
+        i = 1
+        y = 1
+        length = len(fs)  # 7
+
+        plt.figure(figsize=(15, 8))
+        for f, val in zip(fs, values):
+            plt.subplot(2, 4, i)
+            # plt.plot(f, val)
+            # plt.plot((0.0, 1.0), (0.0, 1.0))
+
+            plt.plot([(x - y) ** 2 for x, y in zip(f, val)])
+            plt.title(keys[i - 1])
+            i += 1
+
         plt.show()
 
     _()
@@ -2756,22 +2868,141 @@ def _(all_experiments, plt):
 
 
 @app.cell
-def _(all_experiments, integrated_predictions, np):
+def _(
+    all_experiments,
+    alternative_integrated_predictions,
+    integrated_predictions,
+    np,
+):
+    def find_prediction_errors():
+        values = []
+        for experiment in all_experiments:
+            vals = list(experiment.values())
+            vals.pop()  # if intentional
+            values.append(vals)
+
+        mse = np.mean(
+            (np.array(values) - np.array(integrated_predictions)) ** 2
+        )
+        rmse = np.sqrt(mse)
+        print(f'MSE of integrated predictions: {mse}')
+        print(f'RMSE of integrated predictions: {rmse}')
+
+        amse = np.mean(
+            (np.array(values) - np.array(alternative_integrated_predictions))
+            ** 2
+        )
+        armse = np.sqrt(amse)
+        print(f'MSE of alternative integrated predictions: {amse}')
+        print(f'RMSE of alternative integrated predictions: {armse}')
+
+        return (mse, rmse, amse, armse)
+
+    return (find_prediction_errors,)
+
+
+@app.cell
+def _(
+    all_experiments,
+    alternative_integrated_predictions,
+    find_prediction_errors,
+    integrated_predictions,
+    np,
+    peaks,
+    plt,
+):
     def _():
-        errors = []
-        for experiment, prediction in zip(all_experiments, integrated_predictions):
+        mse, rmse, amse, armse = find_prediction_errors()
+        fs = integrated_predictions
+        afs = alternative_integrated_predictions
+
+        values = []
+        for experiment in all_experiments:
             vals = [*experiment.values()]
-            vals.pop()
+            peaks.append(vals[-1])
+            vals = vals[:-1]
+            values.append(vals)
 
-            error = 0
-            for val, f in zip(vals, prediction):
-                error += (val-f)**2
-            errors.append(error)
+        plt.figure(figsize=(15, 15))
 
-        print(np.mean(errors))
+        ## Speciation
+        plt.subplot(3, 3, 1)
+        plt.plot(fs[:24])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Integrated Predictions.')
 
-    _()
-    return
+        plt.subplot(3, 3, 4)
+        plt.plot(fs[:24])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Alternative Integrated Predictions')
+
+        plt.subplot(3, 3, 7)
+        plt.plot(values[:24])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title('Real Values')
+
+        ## Magnesium
+        plt.subplot(3, 3, 2)
+        plt.plot(fs[24:36])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Integrated Predictions')
+
+        plt.subplot(3, 3, 5)
+        plt.plot(fs[24:36])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Alternative Integrated Predictions')
+
+        plt.subplot(3, 3, 8)
+        plt.plot(values[24:36])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title('Real Values')
+
+        ### Calcium
+        plt.subplot(3, 3, 3)
+        plt.plot(fs[36:])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Integrated Predictions')
+
+        plt.subplot(3, 3, 6)
+        plt.plot(fs[36:])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title(f'Alternative Integrated Predictions')
+
+        plt.subplot(3, 3, 9)
+        plt.plot(values[36:])
+        plt.legend([*all_experiments[0].keys()])
+        plt.xlabel('No axis')
+        plt.ylabel('Ratio')
+        plt.title('Real Values')
+
+        plt.suptitle(
+            f'Integrated Model Predictions\nMSE: {np.format_float_positional(mse, 5)}, RMSE: {np.format_float_positional(rmse, 5)}\nAlternative MSE: {np.format_float_positional(amse, 5)}, RMSE: {np.format_float_positional(armse, 5)}'
+        )
+
+        plt.tight_layout()
+
+        plt.savefig('figs/predictions_fig')
+
+        return plt.gca()
+
+    predictions_fig = _()
+    return (predictions_fig,)
 
 
 @app.cell
@@ -2783,10 +3014,14 @@ def _(all_experiments, citricacid, integrated_deltas, np):
     """
 
     import torch
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    test_peaks = torch.tensor([x['peaks'] for x in all_experiments], dtype=torch.float32).to(device)
-    test_vals = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32).to(device)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    test_peaks = torch.tensor(
+        [x['peaks'] for x in all_experiments], dtype=torch.float32
+    ).to(device)
+    test_vals = torch.tensor(
+        [list(x.values())[:-1] for x in all_experiments], dtype=torch.float32
+    ).to(device)
 
     train_peaks = []
     train_vals = []
@@ -2809,7 +3044,9 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
         temp_peaks = []
         for deltas in integrated_deltas:
-            dl = random_complex_fracs[2] * sum(deltas[i] * random_speciation_fracs[i] for i in range(4))
+            dl = random_complex_fracs[2] * sum(
+                deltas[i] * random_speciation_fracs[i] for i in range(4)
+            )
             dmg = deltas[4] * random_complex_fracs[0]
             dca = deltas[5] * random_complex_fracs[1]
 
@@ -2825,7 +3062,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-    return device, test_peaks, test_vals, torch, train_peaks, train_vals
+    return device, test_peaks, test_vals, torch
 
 
 @app.cell
@@ -2833,22 +3070,15 @@ def _():
     import torch.nn as nn
     import torch.optim as optim
     import torch.nn.functional as F
+
     return F, nn, optim
 
 
-@app.cell
-def _(
-    F,
-    TinyTransformer,
-    device,
-    nn,
-    np,
-    optim,
-    torch,
-    train_peaks,
-    train_vals,
-):
+app._unparsable_cell(
+    r"""
     ### Try a neural network?
+
+    incorrect code to block this from running temporarily
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -2908,7 +3138,9 @@ def _(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-    return criterion, model
+    """,
+    name='_',
+)
 
 
 @app.cell
@@ -2916,7 +3148,7 @@ def _(all_experiments, criterion, model, plt, test_peaks, test_vals, torch):
     def _():
         model.eval()
         with torch.no_grad():
-            slicer = slice(None) # All
+            slicer = slice(None)   # All
             # slicer = slice(0, 24)
             # slicer = slice(24, 48)
 
@@ -2930,7 +3162,6 @@ def _(all_experiments, criterion, model, plt, test_peaks, test_vals, torch):
             plt.plot(predictions[slicer])
             plt.legend([*all_experiments[0].keys()])
             plt.title('Predictions')
-
 
             plt.subplot(1, 2, 2)
             plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
@@ -2955,7 +3186,7 @@ def _(all_experiments, np, predictions):
 
             error = 0
             for val, f in zip(vals, prediction):
-                error += (val-f)**2
+                error += (val - f) ** 2
             errors.append(error)
 
         print(np.mean(errors))
@@ -2985,8 +3216,8 @@ def _(all_experiments, metal_real_experiments, plt, predictions):
             vals.pop()
 
             r = []
-            for val, f in zip (vals, prediction):
-                r.append(abs(val-f))
+            for val, f in zip(vals, prediction):
+                r.append(abs(val - f))
             residuals.append(r)
 
         plt.plot(mg, residuals)
@@ -3010,18 +3241,22 @@ def _(
         all_experiments_fft = []
 
         for idx, experiment in enumerate(experiments):
-            all_experiments_fft.append(bruker_fft(
-                data_dir=data_dir,
-                experiment=experiment,
-                experiment_number=experiment_number,
-            ))
+            all_experiments_fft.append(
+                bruker_fft(
+                    data_dir=data_dir,
+                    experiment=experiment,
+                    experiment_number=experiment_number,
+                )
+            )
 
         for idx, experiment in enumerate(chelation_experiments):
-            all_experiments_fft.append(bruker_fft(
-                data_dir=data_dir,
-                experiment=experiment,
-                experiment_number=experiment_number,
-            ))
+            all_experiments_fft.append(
+                bruker_fft(
+                    data_dir=data_dir,
+                    experiment=experiment,
+                    experiment_number=experiment_number,
+                )
+            )
 
         all_experiments_fft = np.array(all_experiments_fft)
 
@@ -3038,11 +3273,16 @@ def _(
 
         for i, spectrum in enumerate(sliced_experiments):
             diff = len(spectrum[0]) - length
-            if diff > 0: # Too long
+            if diff > 0:   # Too long
                 spectrum = spectrum[:, :-diff]
-            if diff < 0: #Too short
+            if diff < 0:   # Too short
                 # Pad (2, x) to (2, x + diff)
-                spectrum = np.pad(spectrum, ((0, 0), (0, -diff)), mode='constant', constant_values=0)
+                spectrum = np.pad(
+                    spectrum,
+                    ((0, 0), (0, -diff)),
+                    mode='constant',
+                    constant_values=0,
+                )
             sliced_experiments[i] = spectrum
 
         lengths = set([len(x[0]) for x in sliced_experiments])
@@ -3059,7 +3299,9 @@ def _(
 @app.cell
 def _(F, math, nn, torch):
     class TinyTransformer(nn.Module):
-        def __init__(self, length, seq_len=4, token_dim=None, d_model=64, d_ff=128):
+        def __init__(
+            self, length, seq_len=4, token_dim=None, d_model=64, d_ff=128
+        ):
             """
             length: original input vector length
             seq_len: number of sequence tokens to split input into
@@ -3083,7 +3325,9 @@ def _(F, math, nn, torch):
             self.pos_emb = nn.Parameter(torch.randn(seq_len, d_model) * 0.01)
 
             # single-head self-attention (scaled dot-product)
-            self.qkv_proj = nn.Linear(d_model, d_model * 3, bias=False)  # produce q,k,v
+            self.qkv_proj = nn.Linear(
+                d_model, d_model * 3, bias=False
+            )  # produce q,k,v
             self.out_proj = nn.Linear(d_model, d_model)
 
             # small feed-forward
@@ -3125,7 +3369,9 @@ def _(F, math, nn, torch):
             qkv = self.qkv_proj(x)  # (B, T, 3*d_model)
             q, k, v = qkv.chunk(3, dim=-1)
             scale = 1.0 / math.sqrt(DM)
-            attn_logits = torch.matmul(q, k.transpose(-2, -1)) * scale  # (B, T, T)
+            attn_logits = (
+                torch.matmul(q, k.transpose(-2, -1)) * scale
+            )  # (B, T, T)
             attn_weights = F.softmax(attn_logits, dim=-1)
             out = torch.matmul(attn_weights, v)  # (B, T, d_model)
             out = self.out_proj(out)
@@ -3134,8 +3380,12 @@ def _(F, math, nn, torch):
         def forward(self, x):
             # x: (batch, length)
             # 1) prepare tokens
-            tokens = self._prepare_tokens(x)                  # (B, seq_len, token_dim)
-            tokens = self.token_proj(tokens)                  # (B, seq_len, d_model)
+            tokens = self._prepare_tokens(
+                x
+            )                  # (B, seq_len, token_dim)
+            tokens = self.token_proj(
+                tokens
+            )                  # (B, seq_len, d_model)
             tokens = tokens + self.pos_emb.unsqueeze(0)       # add pos emb
 
             # 2) transformer block (one layer)
@@ -3163,7 +3413,7 @@ def _(F, TinyTransformer, all_experiments_fft, device, nn, np, torch):
             a = length // 2
             b = a // 2
             c = b // 2
-            d = c //2
+            d = c // 2
 
             self.net = nn.Sequential(
                 nn.Linear(length, a),
@@ -3174,7 +3424,7 @@ def _(F, TinyTransformer, all_experiments_fft, device, nn, np, torch):
                 nn.ReLU(),
                 nn.Linear(c, d),
                 nn.ReLU(),
-                nn.Linear(d, 7)
+                nn.Linear(d, 7),
             )
 
         def forward(self, x):
@@ -3208,10 +3458,13 @@ def _(
         best_loss = np.inf
         optimizer = optim.Adam(SpectraModel.parameters(), lr=1e-3)
 
-        temp_vals = torch.tensor([list(x.values())[:-1] for x in all_experiments], dtype=torch.float32).to(device)
-    
+        temp_vals = torch.tensor(
+            [list(x.values())[:-1] for x in all_experiments],
+            dtype=torch.float32,
+        ).to(device)
+
         while True:
-        # for epoch in range(epochs):
+            # for epoch in range(epochs):
             SpectraModel.train()  # ensure model is in training mode
 
             optimizer.zero_grad()      # reset gradients
@@ -3220,7 +3473,7 @@ def _(
             loss.backward()            # backpropagate
             optimizer.step()           # update weights
 
-            if loss.item() < best_loss: # - loss_diff:
+            if loss.item() < best_loss:   # - loss_diff:
                 best_loss = loss.item()
 
                 count = 0
@@ -3251,7 +3504,7 @@ def _(
     def _():
         SpectraModel.eval()
         with torch.no_grad():
-            slicer = slice(None) # All
+            slicer = slice(None)   # All
             # slicer = slice(0, 24)
             slicer = slice(24, 48)
 
@@ -3266,7 +3519,6 @@ def _(
             plt.legend([*all_experiments[0].keys()])
             plt.title('Predictions')
 
-
             plt.subplot(1, 2, 2)
             plt.plot([list(x.values())[:-1] for x in all_experiments][slicer])
             plt.legend([*all_experiments[0].keys()])
@@ -3280,5 +3532,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
