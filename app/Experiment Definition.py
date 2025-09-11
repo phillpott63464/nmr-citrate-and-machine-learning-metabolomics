@@ -326,6 +326,13 @@ def _(corrected_pka, graph_molarity, mo, search_molarity, speciationfig):
 @app.cell
 def _(corrected_pka, graph_molarity, np, phfork):
     import matplotlib.pyplot as plt
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors, create_subplot_with_theme
+
+    # Apply dark theme
+    setup_dark_theme()
 
     # Sample data for demonstration
     phs = np.linspace(1, 9, 1000)
@@ -337,31 +344,28 @@ def _(corrected_pka, graph_molarity, np, phfork):
     fracs = citricacid.alpha(phs)
 
     # Create a figure with a specific size
-    fig = plt.figure(figsize=(10, 6))
+    fig, ax = create_subplot_with_theme(1, 1, figsize=(10, 6))
+    colors = get_colors(4)  # 4 species
 
-    # Plot the fractions with a color palette
-    plt.plot(phs, fracs, linewidth=2)
+    # Plot the fractions with the color palette
+    for i, species in enumerate(['H3A', 'H2A-', 'HA2-', 'A3-']):
+        ax[0].plot(phs, fracs[:, i], linewidth=2, color=colors[i], label=species)
 
     # Add a legend with a title
-    plt.legend(
-        ['H3A', 'H2A-', 'HA2-', 'A3-'], title='Species', loc='upper right'
-    )
-
-    # Add grid lines for better readability
-    plt.grid(True, linestyle='--', alpha=0.7)
+    ax[0].legend(title='Species', loc='upper right', fontsize=12)
 
     # Set title and labels with larger font sizes
-    plt.title('Citric Acid Speciation', fontsize=16)
-    plt.xlabel('pH', fontsize=14)
-    plt.ylabel('Fraction of Species', fontsize=14)
+    ax[0].set_title('Citric Acid Speciation', fontsize=16)
+    ax[0].set_xlabel('pH', fontsize=14)
+    ax[0].set_ylabel('Fraction of Species', fontsize=14)
 
     # Customize ticks
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
+    ax[0].tick_params(labelsize=12)
 
     # Show the plot
     plt.tight_layout()
-    speciationfig = plt.gca()
+    save_figure(fig, 'citric_acid_speciation.png')
+    speciationfig = ax[0]
     return fig, speciationfig
 
 
@@ -499,6 +503,8 @@ def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
     out = pd.DataFrame.from_dict(volumed_experiments)
     out.to_csv(path_or_buf=f'{directory}/experiments.csv', index=False)
 
+    # Also save to figs directory
+    save_figure(fig, 'experiment_graph.png')
     fig.savefig(f'{directory}/graph.png')
     return
 

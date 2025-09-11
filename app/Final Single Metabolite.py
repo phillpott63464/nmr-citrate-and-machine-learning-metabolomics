@@ -589,25 +589,43 @@ def _(combinations, count, mo, spectra):
 def _(spectra):
     """Generate sample spectrum visualizations"""
     import matplotlib.pyplot as plt # type: ignore
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors, create_subplot_with_theme
+
+    # Apply dark theme
+    setup_dark_theme()
 
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra
 
     # Create visualization grid showing diverse sample spectra
-    plt.figure(figsize=(graph_count * 4, graph_count * 4))
+    fig, axes = create_subplot_with_theme(graph_count, graph_count, figsize=(graph_count * 4, graph_count * 4))
+    colors = get_colors(graph_count**2)
 
     for graphcounter in range(1, graph_count**2 + 1):
-        plt.subplot(graph_count, graph_count, graphcounter)
-        plt.plot(
+        ax_idx = graphcounter - 1
+        row, col = divmod(ax_idx, graph_count)
+        
+        if graph_count == 1:
+            ax = axes[0]
+        else:
+            ax = axes[row * graph_count + col] if hasattr(axes, '__getitem__') else axes
+            
+        ax.plot(
             # spectra[graphcounter]['positions'],
             spectra[graphcounter]['intensities'],
+            color=colors[ax_idx],
+            linewidth=2
         )
-        plt.title(f'Sample {graphcounter}')
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
+        ax.set_title(f'Sample {graphcounter}', fontsize=12)
+        ax.set_xlabel('Chemical Shift (ppm)', fontsize=10)
+        ax.set_ylabel('Intensity', fontsize=10)
 
     plt.tight_layout()
-    spectrafigures = plt.gca()
+    save_figure(fig, 'sample_spectra_grid.png')
+    spectrafigures = fig
     return graph_count, plt, spectrafigures
 
 
@@ -675,26 +693,32 @@ def _(plt, reference_spectra, spectra, substanceDict):
     def _():
         """Visualize reference spectra for each metabolite"""
 
-        plt.figure(figsize=(12, 8))
+        fig, ax = create_subplot_with_theme(1, 1, figsize=(12, 8))
+        colors = get_colors(len(substanceDict))
 
         # Plot reference spectrum for each metabolite
-        for substance in substanceDict:
+        for i, substance in enumerate(substanceDict):
             spectrum_id = substanceDict[substance][0]
-            plt.plot(
+            ax[0].plot(
                 spectra[0]['positions'],
                 reference_spectra[spectrum_id][0],
                 label=substance,
-                alpha=0.7
+                alpha=0.8,
+                color=colors[i],
+                linewidth=2
             )
 
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
-        plt.title('Reference Spectra for Individual Metabolites')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
+        ax[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        ax[0].set_ylabel('Intensity', fontsize=12)
+        ax[0].set_title('Reference Spectra for Individual Metabolites', fontsize=14)
+        ax[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax[0].grid(True, alpha=0.3)
         plt.tight_layout()
+        
+        # Save the figure
+        save_figure(fig, 'reference_spectra.png')
 
-        return plt.gca()
+        return ax[0]
 
 
     referencefigure = _()
@@ -1053,51 +1077,57 @@ def _(
     num_substances = len(substanceDict)
 
     # Create a figure with subplots for each substance
-    plt.figure(figsize=(15, 6 * num_substances))
+    fig, all_axes = create_subplot_with_theme(num_substances, 2, figsize=(15, 6 * num_substances))
+    colors = get_colors(num_substances)
 
     for i, substance in enumerate(substanceDict):
         spectrum_id = substanceDict[substance][0]
 
         # Original spectra (left panel)
-        plt.subplot(num_substances, 2, 2 * i + 1)
-        plt.plot(
+        left_ax = all_axes[i * 2] if num_substances > 1 else all_axes[0]
+        left_ax.plot(
             spectra[0]['positions'],
             reference_spectra[spectrum_id][0],
-            alpha=0.7,
-            label=substance
+            alpha=0.8,
+            label=substance,
+            color=colors[i],
+            linewidth=2
         )
-        plt.title(f'Original Reference Spectrum: {substance}')
-        plt.xlabel('Chemical Shift (ppm)')
-        plt.ylabel('Intensity')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
+        left_ax.set_title(f'Original Reference Spectrum: {substance}', fontsize=12)
+        left_ax.set_xlabel('Chemical Shift (ppm)', fontsize=10)
+        left_ax.set_ylabel('Intensity', fontsize=10)
+        left_ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        left_ax.grid(True, alpha=0.3)
 
         # Preprocessed spectra (right panel)
-        plt.subplot(num_substances, 2, 2 * i + 2)
+        right_ax = all_axes[i * 2 + 1] if num_substances > 1 else all_axes[1]
         if reverse:
             # Time domain: plot magnitude of complex data
             complex_data = preprocessed_reference_spectra[spectrum_id]
-            plt.plot(complex_data, alpha=0.7, label=substance)
-            plt.title(f'Preprocessed (Hilbert Transform - Time Domain): {substance}')
-            plt.xlabel('Time Points')
-            plt.ylabel('Magnitude')
+            right_ax.plot(complex_data, alpha=0.8, label=substance, color=colors[i], linewidth=2)
+            right_ax.set_title(f'Preprocessed (Hilbert Transform - Time Domain): {substance}', fontsize=12)
+            right_ax.set_xlabel('Time Points', fontsize=10)
+            right_ax.set_ylabel('Magnitude', fontsize=10)
         else:
             # Frequency domain: normal plotting
-            plt.plot(
+            right_ax.plot(
                 preprocessed_reference_spectra[spectrum_id][0],
                 preprocessed_reference_spectra[spectrum_id][1],
-                alpha=0.7,
-                label=substance
+                alpha=0.8,
+                label=substance,
+                color=colors[i],
+                linewidth=2
             )
-            plt.title(f'Preprocessed (Frequency Domain): {substance}')
-            plt.xlabel('Chemical Shift (ppm)')
-            plt.ylabel('Intensity')
+            right_ax.set_title(f'Preprocessed (Frequency Domain): {substance}', fontsize=12)
+            right_ax.set_xlabel('Chemical Shift (ppm)', fontsize=10)
+            right_ax.set_ylabel('Intensity', fontsize=10)
 
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
+        right_ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        right_ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    preprocessedreferencefigure = plt.gca()
+    save_figure(fig, 'preprocessed_reference_comparison.png')
+    preprocessedreferencefigure = fig
 
     print(preprocessed_reference_spectra['SP:3368'][0])
     return (preprocessedreferencefigure,)
@@ -1108,27 +1138,37 @@ def _(graph_count, plt, preprocessed_spectra, reverse):
     def _():
         """Compare original vs preprocessed training spectra"""
 
-        plt.figure(figsize=(graph_count * 4, graph_count * 4))
+        fig, all_axes = create_subplot_with_theme(graph_count, graph_count, figsize=(graph_count * 4, graph_count * 4))
+        colors = get_colors(graph_count**2)
 
         for graphcounter2 in range(1, graph_count**2 + 1):
-            plt.subplot(graph_count, graph_count, graphcounter2)
+            ax_idx = graphcounter2 - 1
+            row, col = divmod(ax_idx, graph_count)
+            
+            if graph_count == 1:
+                ax = all_axes[0]
+            else:
+                ax = all_axes[row * graph_count + col] if hasattr(all_axes, '__getitem__') else all_axes
+                
             complex_data_intensities = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['intensities']
             complex_data_positions = preprocessed_spectra.__getitem__(graphcounter2, 'SP:3368')['positions']
 
             if reverse:
                 # Time domain: plot magnitude of complex data
-                plt.plot(complex_data_intensities)
-                plt.title(f'Sample {graphcounter2} (Time Domain)')
-                plt.xlabel('Time Points')
-                plt.ylabel('Magnitude')
+                ax.plot(complex_data_intensities, color=colors[ax_idx], linewidth=2)
+                ax.set_title(f'Sample {graphcounter2} (Time Domain)', fontsize=12)
+                ax.set_xlabel('Time Points', fontsize=10)
+                ax.set_ylabel('Magnitude', fontsize=10)
             else:
                 # Frequency domain: normal plotting
-                plt.plot(complex_data_positions, complex_data_intensities)
-                plt.title(f'Sample {graphcounter2} (Frequency Domain)')
-                plt.xlabel('Data Points')
-                plt.ylabel('Intensity')
-            plt.tight_layout()
-        return plt.gca()
+                ax.plot(complex_data_positions, complex_data_intensities, color=colors[ax_idx], linewidth=2)
+                ax.set_title(f'Sample {graphcounter2} (Frequency Domain)', fontsize=12)
+                ax.set_xlabel('Data Points', fontsize=10)
+                ax.set_ylabel('Intensity', fontsize=10)
+            
+        plt.tight_layout()
+        save_figure(fig, 'preprocessed_samples_comparison.png')
+        return fig
 
 
     preprocessedfigure = _()

@@ -12,6 +12,13 @@ def _():
     import re
     import numpy as np
     import nmrglue as ng
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors, create_subplot_with_theme
+    
+    # Apply dark theme
+    setup_dark_theme()
+    
     return mo, ng, np, os, re
 
 
@@ -139,12 +146,18 @@ def _(bruker_fft, data_dir, indices, np):
 @app.cell
 def _(plt):
     def gen_fig(data, peaks=None):
-        figure = plt.figure()
-        plt.plot(*data)
-
+        figure, ax = create_subplot_with_theme(1, 1, figsize=(10, 6))
+        colors = get_colors(2)
+        
+        ax[0].plot(*data, color=colors[0], linewidth=2)
+        
         if peaks is not None:
             scatterx, scattery = peaks[:, 0], peaks[:, 1]
-            plt.scatter(scatterx, scattery, color='RED')
+            ax[0].scatter(scatterx, scattery, color=colors[1], s=50, alpha=0.8)
+        
+        ax[0].set_xlabel('Chemical Shift (ppm)', fontsize=12)
+        ax[0].set_ylabel('Intensity', fontsize=12)
+        
         return figure
     return (gen_fig,)
 
@@ -154,7 +167,7 @@ def _(data, gen_fig, ng, np):
     figs = {}
     peaks = {}
 
-    for set_name in data:
+    for i, set_name in enumerate(data):
         arr = data[set_name]          # shape (2, 32000)
         y = arr[1]
         threshold = np.percentile(y, 98.5)
@@ -170,6 +183,9 @@ def _(data, gen_fig, ng, np):
         peaks[set_name] = peak_positions
 
         figs[set_name] = gen_fig(data[set_name], peaks[set_name])
+        
+        # Save each figure to figs directory
+        save_figure(figs[set_name], f'spectrum_{set_name}.png')
 
         # if len(figs) > 0:
         #     die

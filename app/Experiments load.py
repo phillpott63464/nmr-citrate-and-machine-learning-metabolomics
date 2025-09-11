@@ -7,7 +7,12 @@ app = marimo.App(width="medium")
 @app.cell
 def _(os):
     import marimo as mo
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from plot_config import setup_dark_theme, save_figure, get_colors, create_subplot_with_theme
 
+    # Apply dark theme and create figs directory
+    setup_dark_theme()
     os.makedirs('figs', exist_ok=True)
     return (mo,)
 

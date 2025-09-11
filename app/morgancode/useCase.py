@@ -6,6 +6,9 @@ import numpy as np
 import os
 import cProfile
 import pstats
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from plot_config import setup_dark_theme, save_figure, get_colors
 
 # Name to Spectrum ID Dictionary.
 # # We can expand this to any of the GISSMO simulated spectra. All the data is in the Casmdb_Data directory.
@@ -99,10 +102,24 @@ np.savetxt(
 )
 
 # Quick plot to see an example sample.
-plt.plot(positions, intensities[0])
+colors = get_colors(2)
+plt.figure(figsize=(10, 6))
+plt.plot(positions, intensities[0], color=colors[0], linewidth=2)
 plt.xlim(max(positions), min(positions))
-plt.savefig((outDir.joinpath('sampleplot.png')))
+plt.title('Example Sample Spectrum', fontsize=14)
+plt.xlabel('Chemical Shift (ppm)', fontsize=12)
+plt.ylabel('Intensity', fontsize=12)
+plt.grid(True, alpha=0.3)
+save_figure(plt.gcf(), 'sampleplot.png', directory=os.path.join(os.path.dirname(__file__), '..', 'figs'))
+plt.close()
+
 # Quick plot to see an example component.
-plt.plot(positions, components[0])
+plt.figure(figsize=(10, 6))
+plt.plot(positions, components[0], color=colors[1], linewidth=2)
 plt.xlim(max(positions), min(positions))
-plt.savefig((outDir.joinpath('componentplot.png')))
+plt.title('Example Component Spectrum', fontsize=14)
+plt.xlabel('Chemical Shift (ppm)', fontsize=12)
+plt.ylabel('Intensity', fontsize=12)
+plt.grid(True, alpha=0.3)
+save_figure(plt.gcf(), 'componentplot.png', directory=os.path.join(os.path.dirname(__file__), '..', 'figs'))
+plt.close()
