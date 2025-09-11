@@ -5,6 +5,7 @@
   - Dockerfile
 - ML Model Notes.md: File of model parameters, testing metrics, and evaluations
 - chelationnotes.md: Notes on solbuility of different citrate metal complexes
+- speciationnotes.md: Notes on speciation graphs and sources
 
 ## App
 
