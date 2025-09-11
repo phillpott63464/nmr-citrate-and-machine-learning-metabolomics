@@ -3063,7 +3063,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-    return device, test_peaks, test_vals, torch
+    return device, test_peaks, test_vals, torch, train_peaks, train_vals
 
 
 @app.cell
@@ -3074,11 +3074,21 @@ def _():
     return F, nn, optim
 
 
-app._unparsable_cell(
-    r"""
+@app.cell
+def _(
+    F,
+    TinyTransformer,
+    device,
+    nn,
+    np,
+    optim,
+    torch,
+    train_peaks,
+    train_vals,
+):
     ### Try a neural network?
 
-    incorrect code to block this from running temporarily
+    # incorrect code to block this from running temporarily
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -3138,9 +3148,7 @@ app._unparsable_cell(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-    """,
-    name="_"
-)
+    return criterion, model
 
 
 @app.cell
