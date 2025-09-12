@@ -349,6 +349,7 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         label='Experiment Data',
     )
     return (
+        a,
         acid_vol,
         base_vol,
         expected_acid_ratios,
@@ -2220,7 +2221,7 @@ def _(mo):
 
     dc=(1-f1)d0+f1d1
 
-    f1 = b/d
+    f1 = b/c
 
     b=-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a)
 
@@ -2250,16 +2251,17 @@ def _(mo):
 
 @app.cell
 def _(
+    a,
     all_deltas,
+    b,
     calcium_peaks,
     citricacid,
+    d1,
     find_peaks,
-    least_squares,
     magnesium_peaks,
     metal_real_experiments,
-    np,
 ):
-    def fitmetalexperiments(c, d, dc, d0):
+    def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
         """
         c: (n,) or (n,1)
         d: (n,) or (n,1)
@@ -2270,71 +2272,11 @@ def _(
         of dc_pred = (1-f1) * d0 + f1 * d1 for each column.
         Returns: a_fit (scalar), d1_fit (length-4), f1_per_sample (n,)
         """
-        c = np.asarray(c).reshape(-1)
-        d = np.asarray(d).reshape(-1)
-        dc = np.asarray(dc)
-        d0 = np.asarray(d0)
-        n = c.shape[0]
-        assert d.shape[0] == n
-        assert dc.shape == (n, 4)
-        assert d0.shape == (n, 4)
+        # dc=(1-f1)d0+f1d1
+        # f1 = b/c
+        # b=-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a)
 
-        def compute_b(a, c_arr, d_arr):
-            # handle a close to zero by using a small floor; caller should avoid a==0
-            # s = a^2 (c-d)^2 + 2 a (c+d) + 1
-            s = (a*a) * (c_arr - d_arr)**2 + 2.0*a*(c_arr + d_arr) + 1.0
-            s = np.maximum(s, 0.0)
-            sqrt_s = np.sqrt(s)
-            return (-sqrt_s + a*(c_arr + d_arr) + 1.0) / (2.0*a)
-
-        def residuals(p, c_arr, d_arr, d0_arr, dc_arr):
-            a = p[0]
-            d1 = p[1:5]
-            # protect against invalid 'a' that would cause divide-by-zero
-            if not np.isfinite(a) or abs(a) < 1e-12:
-                # return large residuals to steer solver away
-                return np.full(n*4, 1e6)
-            b = compute_b(a, c_arr, d_arr)    # shape (n,)
-            f1 = b / d_arr                    # shape (n,)
-            # optional soft penalty: encourage f1 in [0,1] by adding scaled violations
-            # We implement this by appending extra residuals (small weight)
-            pred = (1.0 - f1)[:, None] * d0_arr + f1[:, None] * d1[None, :]  # (n,4)
-            r = (pred - dc_arr).ravel()
-            # penalties for f1 < 0 or f1 > 1 (small weight so primary objective is fit)
-            pen = np.zeros(n)
-            below = f1 < 0.0
-            above = f1 > 1.0
-            pen[below] = f1[below]          # negative values
-            pen[above] = f1[above] - 1.0    # positive excess
-            pen = pen * 100.0               # weight of penalty (tune if needed)
-            return np.concatenate([r, pen])
-
-        # initial guesses
-        # a0: try 1.0; if that causes issues solver will adjust
-        a0 = 4e3
-        # d1 initial guess: weighted mean of dc columns where f1 might be ~0.5;
-        # use simple mean of (dc - d0) added to d0 mean
-        d1_0 = np.mean(dc - d0, axis=0) + np.mean(d0, axis=0)
-        p0 = np.concatenate([[a0], d1_0])
-
-        # bounds: keep a away from zero and within reasonable range
-        lower = np.array([1, -np.inf, -np.inf, -np.inf, -np.inf])
-        upper = np.array([1e8,  np.inf,  np.inf,  np.inf,  np.inf])
-
-        res = least_squares(residuals, p0, args=(c, d, d0, dc),
-                            bounds=(lower, upper),
-                            xtol=1e-12, ftol=1e-12, gtol=1e-12,
-                            verbose=0)
-
-        a_fit = res.x[0]
-        d1_fit = res.x[1:5]
-        # compute final f1 per sample (use compute_b and clip to [0,1] if desired)
-        b_fit = compute_b(a_fit, c, d)
-        f1_per_sample = b_fit / d
-        # clip to [0,1] (optional; comment out if you prefer raw values)
-        f1_per_sample = np.clip(f1_per_sample, 0.0, 1.0)
-
-        return {'kf': a_fit, 'delta': d1_fit, 'metal ligand ratio': f1_per_sample}
+        return a, b, d1
     
 
     def _():
@@ -2366,9 +2308,11 @@ def _(
         dcarr = [mgdc, cadc]
         d0arr = [mgd0, cad0]
 
+        result = []
         for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
-            print(fitmetalexperiments(c, d, dc, d0))
+            result.append(fitmetalexperiments(c, d, dc, d0))
 
+        print(result[0][1])
     
     _()
     return
