@@ -1946,29 +1946,8 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
-def _(chelation_extra_fig, chelation_fig, mo):
-    mo.md(
-        rf"""
-    ## Chelation Experiment Results
-
-    ### Initial Relationships
-
-    {mo.as_html(chelation_fig)}
-
-    ### Extra Relationships
-
-    {mo.as_html(chelation_extra_fig)}
-    """
-    )
-    return
-
-
 @app.cell
-def _(chelation_peak_values, continueaaa, metal_real_experiments, plt):
-    if continueaaa:
-        pass
-
+def _(chelation_peak_values, metal_real_experiments):
     chelation_peak_values_no_intensities = [
         [float(x[0]) for x in y] for y in chelation_peak_values
     ]   # Chemical shift of each peak in citrate [experiments, 4(ppm)]
@@ -1987,93 +1966,7 @@ def _(chelation_peak_values, continueaaa, metal_real_experiments, plt):
         return magnesium_peaks, calcium_peaks
 
     magnesium_peaks, calcium_peaks = _()
-    magnesium_percentages = [
-        exp['salt stock molarity / M']
-        for exp in metal_real_experiments
-        if exp.get('Sample number') in range(25, 37)
-    ]
-
-    calcium_percentages = [
-        exp['salt stock molarity / M']
-        for exp in metal_real_experiments
-        if exp.get('Sample number') > 36
-    ]
-
-    magnesium_complex_molarity = [
-        x['metal ligand complex molarity / M'] for x in metal_real_experiments
-    ][:12]
-    calcium_complex_molarity = [
-        x['metal ligand complex molarity / M'] for x in metal_real_experiments
-    ][12:]
-
-    plt.figure(figsize=(10, 10))
-
-    plt.subplot(2, 2, 1)
-    plt.plot(
-        magnesium_percentages,
-        magnesium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('Chemical Shift / ppm', fontsize=12)
-
-    plt.subplot(2, 2, 2)
-    plt.plot(
-        calcium_percentages,
-        calcium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.title('Calcium Molarity vs Citrate Chemical Shift', fontsize=14)
-    plt.xlabel('Calcium Molarity / M', fontsize=12)
-    plt.ylabel('Chemical Shift / ppm', fontsize=12)
-
-    plt.subplot(2, 2, 3)
-    plt.plot(
-        magnesium_complex_molarity,
-        magnesium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
-    plt.xlabel('Magnesium Complex Molarity', fontsize=12)
-    plt.ylabel('Chemical Shift / ppm', fontsize=12)
-
-    plt.subplot(2, 2, 4)
-    plt.plot(
-        calcium_complex_molarity,
-        calcium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-    plt.title('Calcium Molarity vs Citrate Chemical Shift', fontsize=14)
-    plt.xlabel('Calcium Complex Molarity / M', fontsize=12)
-    plt.ylabel('Chemical Shift / ppm', fontsize=12)
-
-    # plt.gca().invert_xaxis()
-
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-
-    plt.savefig('figs/chelation.svg')
-
-    chelation_fig = plt.gca()
-    return (
-        calcium_peaks,
-        calcium_percentages,
-        chelation_fig,
-        chelation_peak_values_no_intensities,
-        magnesium_peaks,
-        magnesium_percentages,
-    )
+    return calcium_peaks, chelation_peak_values_no_intensities, magnesium_peaks
 
 
 @app.cell
@@ -2094,93 +1987,7 @@ def _(calcium_peaks, magnesium_peaks):
         ((pea[0] + pea[1]) / 2) - ((pea[2] + pea[3]) / 2)
         for pea in calcium_peaks
     ]
-    return (
-        calcium_j_coupling,
-        calcium_peak_shifts,
-        magnesium_j_coupling,
-        magnesium_peak_shifts,
-    )
-
-
-@app.cell
-def _(
-    calcium_j_coupling,
-    calcium_peak_shifts,
-    calcium_percentages,
-    magnesium_j_coupling,
-    magnesium_peak_shifts,
-    magnesium_percentages,
-    plt,
-):
-    plt.figure(figsize=(10, 10))
-    plt.subplot(2, 2, 1)
-    plt.plot(
-        magnesium_percentages,
-        magnesium_j_coupling,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Magnesium Molarity vs magnesium_j_coupling ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('magnesium_j_coupling', fontsize=12)
-
-    plt.subplot(2, 2, 2)
-    plt.plot(
-        magnesium_percentages,
-        magnesium_peak_shifts,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Magnesium Molarity vs magnesium_peak_shifts ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('magnesium_peak_shifts', fontsize=12)
-
-    plt.subplot(2, 2, 3)
-    plt.plot(
-        calcium_percentages,
-        calcium_j_coupling,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Calcium Molarity vs calcium_j_coupling Shift ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('calcium_j_coupling', fontsize=12)
-
-    plt.subplot(2, 2, 4)
-    plt.plot(
-        calcium_percentages,
-        calcium_peak_shifts,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-    )
-
-    plt.title('Calcium Molarity vs calcium_peak_shifts ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
-    plt.ylabel('calcium_peak_shifts', fontsize=12)
-
-    # plt.gca().invert_xaxis()
-
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-
-    plt.savefig('figs/chelation-extra.svg')
-
-    chelation_extra_fig = plt.gca()
-
-    print(
-        [
-            f'x: {x}, y: {y}'
-            for x, y in zip(calcium_percentages, calcium_j_coupling)
-        ]
-    )
-    return (chelation_extra_fig,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -2249,12 +2056,12 @@ def _(
     calcium_peaks,
     citricacid,
     find_peaks,
-    least_squares,
     magnesium_peaks,
     math,
     metal_real_experiments,
     np,
 ):
+    from scipy.optimize import least_squares
 
     def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
         """
@@ -2435,330 +2242,30 @@ def _(
         dcarr = [mgdc, cadc]
         d0arr = [mgd0, cad0]
 
+        result = []
         for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
-            print(fitmetalexperiments(c, d, dc, d0))
+            result.append(fitmetalexperiments(c, d, dc, d0))
 
-    _()
-    return
+        print([x[0] for x in result])
+    
+        magnesium_deltas = result[0][1]
+        calcium_deltas = result[1][1]
 
+        magnesiumfs = list(result[0][2])
+        calciumfs = list(result[1][2])
 
-@app.cell
-def _(math, metal_real_experiments):
-    # This assumes metals citrate only form a 1:1 complex.
-    # kf = [ML]/([M_free][L_free])
-    # M_free = [M_tot] - [ML]
-    # L_free = [L_tot] - [ML]
-    # kf = [ML]/(([M_tot] - [ML])([L_tot] - [ML]))
-    # a = b/((c-b)(d-b))
-    # b = (-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a) and a!=0 and sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1)!=a (c + d) + 1 (https://www.wolframalpha.com/input?i=solve+for+b%3A+a+%3D+b%2F%28%28c-b%29%28d-b%29%29)
+        print(magnesiumfs)
+    
+        fittedfs = magnesiumfs + calciumfs
 
-    def solve_for_b(a, c, d, tol=1e-12):
-        # special-case a ≈ 0: linear limit from the quadratic reduces to b = 0 (physically)
-        if abs(a) < tol:
-            return 0.0
+        return magnesium_deltas, calcium_deltas, fittedfs
 
-        disc = a * a * (c - d) ** 2 + 2 * a * (c + d) + 1.0
-        if disc < -tol:
-            return 0.0
+    magnesium_deltas, calcium_deltas, fittedfs = _()
 
-        disc = max(disc, 0.0)
-        numerator = (
-            a * (c + d) + 1.0 - math.sqrt(disc)
-        )   # minus branch (physical)
-        b = numerator / (2.0 * a)
-
-        # apply physical acceptance tests
-        if b < -tol or b > min(c, d) + tol:
-            return 0.0
-        if abs((c - b) * (d - b)) <= tol:
-            return 0.0
-        return max(b, 0.0)
-
-    k1 = 3.011e3   # Formation constant of calcium citrate, k11, from source
-    k2 = 2.19e3   # Formation constant of magnesium citrate, from https://www.sciencedirect.com/science/article/abs/pii/0003269774903911, incorrect temperature (37C) but I can't find anything at the correct temperature or the values I need to correct
-
-    def _():
-        for idx, mexperiment in enumerate(metal_real_experiments):
-            if idx < 12:
-                a = k2
-            else:
-                a = k1
-
-            c = mexperiment['salt stock molarity / M']
-            d = mexperiment['citric acid molarity / M']
-
-            if c == 0:
-                b = 0.0
-            else:
-                b = solve_for_b(a, c, d)
-
-            mexperiment['metal ligand complex molarity / M'] = b
-
-    _()
-
-    continueaaa = True
-    return (continueaaa,)
-
-
-@app.cell
-def _(continueaaa, metal_real_experiments, plt):
-    if continueaaa:
-        pass
-    # Extracting the data
-    salt_stock_molarity = [
-        x['salt stock molarity / M'] for x in metal_real_experiments
-    ]
-    metal_ligand_complex_molarity = [
-        x['metal ligand complex molarity / M'] for x in metal_real_experiments
-    ]
-
-    # Combining the data into a list of tuples
-    combined_data = list(
-        zip(salt_stock_molarity, metal_ligand_complex_molarity)
-    )
-
-    calcium_combined = combined_data[12:]
-    magnesium_combined = combined_data[:12]
-
-    # Sorting the combined data by salt stock molarity
-    sorted_calcium = sorted(calcium_combined, key=lambda x: x[0])
-    sorted_magnesium = sorted(magnesium_combined, key=lambda x: x[0])
-
-    # Unzipping the sorted data back into two lists
-    sorted_calcium_molarity, sorted_calcium_complex_molarity = zip(
-        *sorted_calcium
-    )
-    sorted_magnesium_molarity, sorted_magnesium_complex_molarity = zip(
-        *sorted_magnesium
-    )
-
-    # Plotting the sorted data
-    plt.figure(figsize=(15, 8))
-
-    plt.subplot(1, 2, 1)
-    plt.scatter(sorted_calcium_molarity, sorted_calcium_complex_molarity)
-    plt.xlabel('Salt Stock Molarity (M)')
-    plt.ylabel('Metal Ligand Complex Molarity (M)')
-    plt.title(
-        'Plot of Calcium Metal Ligand Complex Molarity vs. Salt Stock Molarity'
-    )
-
-    plt.subplot(1, 2, 2)
-    plt.scatter(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
-    plt.xlabel('Salt Stock Molarity (M)')
-    plt.ylabel('Metal Ligand Complex Molarity (M)')
-    plt.title(
-        'Plot of Magnesium Metal Ligand Complex Molarity vs. Salt Stock Molarity'
-    )
-
-    plt.tight_layout()
-
-    plt.show()
-    return
-
-
-@app.cell
-def _(
-    all_deltas,
-    calcium_peaks,
-    citricacid,
-    continueaaa,
-    find_peaks,
-    magnesium_peaks,
-    metal_real_experiments,
-    np,
-):
-    # We know f0 and f1 and L, but not ML
-    # Hopefully, it's a constant
-    # shift=f0*L+f1*ML
-    # shift-f0*L=f1*ML
-    # (shift-f0*l)/f1=ML
-    # a = (b-cd)/e
-
-    if continueaaa:
-        pass
-
-    assumed_ratios = citricacid.alpha([7.2])
-
-    assumed_shifts = find_peaks(all_deltas=all_deltas, ratios=assumed_ratios)
-
-    def _():
-        all_peaks = magnesium_peaks + calcium_peaks
-        transposed_peaks = [list(x) for x in zip(*all_peaks)]
-
-        deltas = []
-        for peaks, assumedpeak in zip(transposed_peaks, assumed_shifts):
-            variables = []
-            for (idx, mexperiment), peak in zip(
-                enumerate(metal_real_experiments), peaks
-            ):
-                b = peak   # observed shift
-                d = assumedpeak   # shift based on speciation
-
-                if (
-                    mexperiment['metal ligand complex molarity / M']
-                    is not None
-                ):
-                    complex = mexperiment['metal ligand complex molarity / M']
-                    total = mexperiment['citric acid molarity / M']
-                    free_citrate = total - complex
-
-                    c = free_citrate / total
-                    # ratio of ligand to metal ligand
-                    e = complex / total
-                    # ratio of metal ligand to ligand
-                else:
-                    c = 0
-                    e = 1
-
-                variables.append([b, c, d, e])
-
-            variables = [variables[:12], variables[12:]]
-            for vars in variables:
-                b = np.array([v[0] for v in vars])
-                c = np.array([v[1] for v in vars])
-                d = np.array([v[2] for v in vars])
-                e = np.array([v[3] for v in vars])
-
-                rhs = b - c * d
-
-                a, *_ = np.linalg.lstsq(e.reshape(-1, 1), rhs, rcond=None)
-
-                deltas.append(a[0])
-
-        calcium_deltas = [deltas[1], deltas[3], deltas[5], deltas[7]]
-        magnesium_deltas = [deltas[0], deltas[2], deltas[4], deltas[6]]
-
-        return calcium_deltas, magnesium_deltas
-
-    calcium_deltas, magnesium_deltas = _()
-
-    print(calcium_deltas)
-    return assumed_shifts, calcium_deltas, magnesium_deltas
-
-
-@app.cell
-def _(
-    assumed_shifts,
-    calcium_deltas,
-    calcium_peaks,
-    magnesium_deltas,
-    magnesium_peaks,
-    metal_real_experiments,
-    np,
-    plt,
-):
-    # Try and reverse calculate
-    # Now, we know l, and the ML constant, and shift, but we don't know f0 and f1, only that they have to add up to 1.0
-    # (shift-f0*l)/f1=ML
-    # f0 + f1 = 1.0
-    # f0 = 1 - f1
-    # (shift-(1 - f1)*l)/f1=ML
-    # a = (b-(1-cd)/c
-    # a = (b-d(-c+1))/c
-    # a = (b+cd-d)/c
-    # ac = b+cd-d
-    # ac-cd = b-d
-    # c(a-d) = b-d
-    # c = (b-d)/(a-d)
-
-    def _():
-        from scipy.optimize import lsq_linear
-
-        all_peaks = magnesium_peaks + calcium_peaks
-
-        innerdict = {
-            'e': [],
-            'c': [],
-            'real_e': [],
-            'real_c': [],
-        }
-
-        dict = {
-            'magnesium': {k: v.copy() for k, v in innerdict.items()},
-            'calcium': {k: v.copy() for k, v in innerdict.items()},
-        }
-
-        for (idx, mexperiment), peaks in zip(
-            enumerate(metal_real_experiments), all_peaks
-        ):
-            if idx < 12:
-                a = np.array(magnesium_deltas)
-                key = 'magnesium'
-            else:
-                a = np.array(calcium_deltas)   # Deltas array
-                key = 'calcium'
-
-            b = np.array(peaks)
-            d = np.array(assumed_shifts)
-
-            A = (a - d)[:, None]
-            y = b - d
-            res = lsq_linear(A, y, bounds=(0.0, 1.0))
-
-            c = res.x[0]   # ratio of metal ligand to ligand
-            e = 1.0 - c   # ratio of ligand to metal ligand
-
-            if mexperiment['metal ligand complex molarity / M'] is not None:
-                complex = mexperiment['metal ligand complex molarity / M']
-                total = mexperiment['citric acid molarity / M']
-                free_citrate = total - complex
-
-                real_e = (
-                    free_citrate / total
-                )   # ratio of ligand to metal ligand
-                real_c = complex / total   # ratio of metal ligand to ligand
-            else:
-                real_e = 1   # ratio of ligand to metal ligand
-                real_c = 0   # ratio of metal ligand to ligand
-
-            dict[key]['e'].append(e)
-            dict[key]['c'].append(c)
-            dict[key]['real_e'].append(real_e)
-            dict[key]['real_c'].append(real_c)
-
-        return dict
-
-    chelation_predictions = _()
-
-    def mse(pred, true):
-        pred = np.asarray(pred, dtype=float)
-        true = np.asarray(true, dtype=float)
-        if pred.shape != true.shape:
-            raise ValueError('Shapes must match')
-        return float(np.mean((true - pred) ** 2))
-
-    errors = {}
-    for ion, vals in chelation_predictions.items():
-        errors[ion] = {
-            'mse': mse(vals['e'], vals['real_e']),
-        }
-
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
-    for ax, ion in zip(axes, chelation_predictions):
-        vals = chelation_predictions[ion]
-        mse = errors[ion]['mse']
-        rmse = round(np.sqrt(mse), 5)
-        mse = round(mse, 5)
-
-        ax.plot(vals['real_e'], vals['e'], marker='o')
-        ax.plot(vals['real_c'], vals['c'], marker='s')
-        identity = np.linspace(0, 1, 100)
-        ax.plot(identity, identity, '--')
-        ax.set_title(f'{ion.capitalize()}\nRMSE: {rmse}')
-        ax.set_xlabel('Calculated')
-        ax.set_ylabel('Predicted')
-        ax.legend(
-            [
-                f'fL',
-                f'fML',
-                'Perfect',
-            ]
-        )
-    plt.tight_layout()
-    plt.savefig('figs/chelation_predictions.svg')
-    plt.show()
-    return
+    print(len(magnesium_deltas))
+    print(len(calcium_deltas))
+    print(len(fittedfs))
+    return calcium_deltas, fittedfs, least_squares, magnesium_deltas
 
 
 @app.cell(hide_code=True)
@@ -2793,15 +2300,12 @@ def _(mo, predictions_fig):
 def _(
     chelation_peak_values_no_intensities,
     citricacid,
-    continueaaa,
+    fittedfs,
     fracs,
     metal_real_experiments,
     peak_values_no_intensities,
 ):
     """Concatenate all experiments into an array with only the required values"""
-
-    if continueaaa:
-        pass
 
     def _():
         na_experiments = [
@@ -2823,15 +2327,9 @@ def _(
         assumed_fracs = citricacid.alpha([7.2])
 
         mgca_experiments = []
-        for idx, mexperiment in enumerate(metal_real_experiments):
-            complex = mexperiment['metal ligand complex molarity / M']
-            total = mexperiment['citric acid molarity / M']
-            free_citrate = total - complex
-
-            c = free_citrate / total
-            # ratio of ligand to metal ligand
-            e = complex / total
-            # ratio of metal ligand to ligand
+        for idx, (mexperiment, f) in enumerate(zip(metal_real_experiments, fittedfs)):
+            e = f # ratio of metal ligand to ligand
+            c = 1 - f # ratio of ligand to metal ligand
 
             if idx < 12:
                 f4 = e
@@ -2860,92 +2358,15 @@ def _(
         return all_experiments
 
     all_experiments = _()
+
+    print(len(fittedfs))
+    print(len(all_experiments))
     return (all_experiments,)
 
 
 @app.cell
-def _(all_experiments, np):
-    """
-    Calculate integrated model deltas using nonlinear least squares
-    ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
-    """
-    from scipy.optimize import least_squares
-
-    def _():
-        # Each peak is calculated separately, so we have to extract the peaks
-        all_peaks = [x['peaks'] for x in all_experiments]
-        transposed_peaks = [list(x) for x in zip(*all_peaks)]
-
-        # Extract f values for all experiments
-        fs_matrix = []
-        for experiment in all_experiments:
-            fs_matrix.append(
-                [
-                    experiment['f0'],
-                    experiment['f1'],
-                    experiment['f2'],
-                    experiment['f3'],
-                    experiment['f4'],
-                    experiment['f5'],
-                    experiment['f6'],
-                ]
-            )
-        fs_matrix = np.array(fs_matrix)
-
-        deltas = []
-
-        for peak_idx, peaks in enumerate(transposed_peaks):
-            peaks = np.array(peaks)
-
-            def residuals(deltas_peak):
-                """
-                deltas_peak: [d0, d1, d2, d3, d4, d5] for this peak
-                """
-                predicted_shifts = []
-
-                for exp_idx in range(len(all_experiments)):
-                    f0, f1, f2, f3, f4, f5, f6 = fs_matrix[exp_idx]
-
-                    # Model: δ_shift = f6(f0*δ0 + f1*δ1 + f2*δ2 + f3*δ3) + f4*δ4 + f5*δ5
-                    speciation_term = (
-                        f0 * deltas_peak[0]
-                        + f1 * deltas_peak[1]
-                        + f2 * deltas_peak[2]
-                        + f3 * deltas_peak[3]
-                    )
-                    chelation_term = f4 * deltas_peak[4] + f5 * deltas_peak[5]
-
-                    predicted_shift = f6 * speciation_term + chelation_term
-                    predicted_shifts.append(predicted_shift)
-
-                predicted_shifts = np.array(predicted_shifts)
-                return predicted_shifts - peaks
-
-            # Initial guess for deltas - use average peak position
-            x0 = np.full(6, np.mean(peaks))
-
-            # Solve nonlinear least squares
-            result = least_squares(residuals, x0, method='trf')
-
-            if not result.success:
-                print(
-                    f'Warning: optimization failed for peak {peak_idx}: {result.message}'
-                )
-
-            deltas.append(result.x)
-
-        return np.array(deltas)
-
-    integrated_deltas = _()
-    print('Integrated deltas shape:', integrated_deltas.shape)
-    print('Integrated deltas:')
-    print(integrated_deltas)
-    return integrated_deltas, least_squares
-
-
-@app.cell
 def _(all_deltas, calcium_deltas, magnesium_deltas, np):
-    """Alternatively, create the integrated deltas from the previous three models"""
+    """Create the integrated deltas from the previous three models"""
 
     def _():
         out = []
@@ -2959,20 +2380,14 @@ def _(all_deltas, calcium_deltas, magnesium_deltas, np):
 
         return np.array(out)
 
-    alternative_integrated_deltas = _()
+    integrated_deltas = _()
 
-    print(alternative_integrated_deltas)
-    return (alternative_integrated_deltas,)
+    print(integrated_deltas)
+    return (integrated_deltas,)
 
 
 @app.cell
-def _(
-    all_experiments,
-    alternative_integrated_deltas,
-    integrated_deltas,
-    least_squares,
-    np,
-):
+def _(all_experiments, integrated_deltas, least_squares, np):
     """
     Calculate f values from integrated deltas and chemical shifts
     ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
@@ -3050,7 +2465,7 @@ def _(
     def _():
         all_peaks = [x['peaks'] for x in all_experiments]
 
-        fs, alternativefs = [], []
+        fs = []
         for peaks in all_peaks:
             # Convert peaks to numpy array and ensure correct shape
             peaks_array = np.array(peaks)
@@ -3059,36 +2474,20 @@ def _(
                 continue
 
             f_values = find_f_integrated(integrated_deltas, peaks_array)
-            alternative_f_values = find_f_integrated(
-                alternative_integrated_deltas, peaks_array
-            )
             fs.append(f_values)
-            alternativefs.append(alternative_f_values)
 
-        return fs, alternativefs
+        return fs
 
-    integrated_predictions, alternative_integrated_predictions = _()
+    integrated_predictions = _()
 
     print('Integrated predictions shape:', len(integrated_predictions))
-    print(
-        'Alternative integrated predictions shape:',
-        len(alternative_integrated_predictions),
-    )
     if integrated_predictions:
         print('Sample prediction:', integrated_predictions[0])
-    if alternative_integrated_predictions:
-        print('Sample prediction:', alternative_integrated_predictions[0])
-    return alternative_integrated_predictions, integrated_predictions
+    return (integrated_predictions,)
 
 
 @app.cell
-def _(
-    all_experiments,
-    alternative_integrated_predictions,
-    integrated_predictions,
-    np,
-    plt,
-):
+def _(all_experiments, integrated_predictions, np, plt):
     from sklearn.metrics import r2_score
 
     def _():
@@ -3100,7 +2499,6 @@ def _(
 
         values = [list(x) for x in zip(*values)]
         fs = [list(x) for x in zip(*integrated_predictions)]
-        afs = [list(x) for x in zip(*alternative_integrated_predictions)]
 
         keys = [*all_experiments[0].keys()]
         keys.pop()
@@ -3112,7 +2510,7 @@ def _(
         fig, axes = plt.subplots(2, 4, figsize=(15, 8), sharex=True, sharey=False)
         axes = axes.ravel()
 
-        for i, (f, af, val) in enumerate(zip(fs, afs, values)):
+        for i, (f, val) in enumerate(zip(fs, values)):
             ax = axes[i]
 
             # ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2)
@@ -3123,21 +2521,17 @@ def _(
             ax.set_xlabel("Real Values" if i >= 4 else "")         # only label bottom row
             ax.set_ylabel("Predictions" if i % 4 == 0 else "")    # only label first column
 
-            ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2, label='Individual')
-            ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2, label='Integrated')
+            ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2,)
             ax.plot([0, 1], [0, 1], color='gray', lw=0.8)
 
             # compute R² for the integrated predictions (or both)
-            r2 = r2_score(val, af)
+            r2 = r2_score(val, f)
 
             # define shading limits (e.g., ±√(1‑R²) around the diagonal)
             delta = np.sqrt(1 - r2) * 0.5   # scale factor for visual clarity
             ax.fill_between([0, 1], [0 - delta, 1 - delta],
                             [0 + delta, 1 + delta],
                             color='orange', alpha=0.2)
-
-            if i == 0:
-                ax.legend(['Individual Model Predictions', 'Integrated Model Predictions'], loc='upper left')
 
             ax.text(0.05, 0.9, f'R²={r2:.2f}', transform=ax.transAxes,
                 fontsize=9)
@@ -3156,12 +2550,7 @@ def _(
 
 
 @app.cell
-def _(
-    all_experiments,
-    alternative_integrated_predictions,
-    integrated_predictions,
-    np,
-):
+def _(all_experiments, integrated_predictions, np):
     def find_prediction_errors():
         values = []
         for experiment in all_experiments:
@@ -3176,22 +2565,14 @@ def _(
         print(f'MSE of integrated predictions: {mse}')
         print(f'RMSE of integrated predictions: {rmse}')
 
-        amse = np.mean(
-            (np.array(values) - np.array(alternative_integrated_predictions))
-            ** 2
-        )
-        armse = np.sqrt(amse)
-        print(f'MSE of alternative integrated predictions: {amse}')
-        print(f'RMSE of alternative integrated predictions: {armse}')
 
-        return (mse, rmse, amse, armse)
+        return (mse, rmse)
     return (find_prediction_errors,)
 
 
 @app.cell
 def _(
     all_experiments,
-    alternative_integrated_predictions,
     find_prediction_errors,
     integrated_predictions,
     np,
@@ -3199,9 +2580,8 @@ def _(
     plt,
 ):
     def _():
-        mse, rmse, amse, armse = find_prediction_errors()
+        mse, rmse = find_prediction_errors()
         fs = integrated_predictions
-        afs = alternative_integrated_predictions
 
         values = []
         for experiment in all_experiments:
@@ -3220,13 +2600,6 @@ def _(
         plt.ylabel('Ratio')
         plt.title(f'Integrated Predictions.')
 
-        plt.subplot(3, 3, 4)
-        plt.plot(afs[:24])
-        plt.legend([*all_experiments[0].keys()])
-        plt.xlabel('No axis')
-        plt.ylabel('Ratio')
-        plt.title(f'Alternative Integrated Predictions')
-
         plt.subplot(3, 3, 7)
         plt.plot(values[:24])
         plt.legend([*all_experiments[0].keys()])
@@ -3241,13 +2614,6 @@ def _(
         plt.xlabel('No axis')
         plt.ylabel('Ratio')
         plt.title(f'Integrated Predictions')
-
-        plt.subplot(3, 3, 5)
-        plt.plot(afs[24:36])
-        plt.legend([*all_experiments[0].keys()])
-        plt.xlabel('No axis')
-        plt.ylabel('Ratio')
-        plt.title(f'Alternative Integrated Predictions')
 
         plt.subplot(3, 3, 8)
         plt.plot(values[24:36])
@@ -3264,13 +2630,6 @@ def _(
         plt.ylabel('Ratio')
         plt.title(f'Integrated Predictions')
 
-        plt.subplot(3, 3, 6)
-        plt.plot(afs[36:])
-        plt.legend([*all_experiments[0].keys()])
-        plt.xlabel('No axis')
-        plt.ylabel('Ratio')
-        plt.title(f'Alternative Integrated Predictions')
-
         plt.subplot(3, 3, 9)
         plt.plot(values[36:])
         plt.legend([*all_experiments[0].keys()])
@@ -3279,7 +2638,7 @@ def _(
         plt.title('Real Values')
 
         plt.suptitle(
-            f'Integrated Model Predictions\nIntegrated Deltas RMSE: {np.format_float_positional(rmse, 5)}\nSeparate Deltas RMSE: {np.format_float_positional(armse, 5)}'
+            f'Integrated Model Predictions\nIntegrated Deltas RMSE: {np.format_float_positional(rmse, 5)}'
         )
 
         plt.tight_layout()
