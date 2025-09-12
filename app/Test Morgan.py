@@ -1,22 +1,53 @@
 import marimo
 
-__generated_with = '0.14.17'
-app = marimo.App(width='medium')
+__generated_with = "0.15.2"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        rf"""Code block to profile Morgan's code from where I was converting numpy to jax."""
-    )
+    mo.md(rf"""Code block to profile Morgan's code from where I was converting numpy to jax.""")
     return
+
+
+@app.cell
+def _():
+    import matplotlib.pyplot as plt
+    from cycler import cycler
+
+    colors = [
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
+    ]
+
+    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
+
+
+    # Colors
+    fig_bg = "#1B1B1D"    # figure background
+    ax_bg = fig_bg   # axes background
+
+    plt.rcParams['figure.facecolor'] = fig_bg
+    plt.rcParams['axes.facecolor'] = ax_bg
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.labelcolor'] = colors[0]
+    plt.rcParams['xtick.color'] = colors[0]
+    plt.rcParams['ytick.color'] = colors[0]
+    plt.rcParams['text.color'] = colors[0]
+
+    # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
+    return (plt,)
 
 
 @app.cell
@@ -77,7 +108,6 @@ def _(cProfile, createTrainingData, substanceSpectrumIds):
     )
 
     dumbvar = True   # So that the next cell always runs when this is rerun
-
     return (dumbvar,)
 
 
@@ -96,18 +126,16 @@ def _(dumbvar, pstats):
 
 
 @app.cell
-def _(createTrainingData, substanceSpectrumIds):
+def _(createTrainingData, plt, substanceSpectrumIds):
     # Ensure the plot is reasonable
 
     substance = createTrainingData(
         substanceSpectrumIds=substanceSpectrumIds, sampleNumber=1, scale=0.5
     )
 
-    import matplotlib.pyplot as plt
-
     plt.plot(substance['positions'], substance['intensities'][0])
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

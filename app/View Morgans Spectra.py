@@ -6,6 +6,40 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
+    from cycler import cycler
+
+    colors = [
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
+    ]
+
+    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
+
+
+    # Colors
+    fig_bg = "#1B1B1D"    # figure background
+    ax_bg = fig_bg   # axes background
+
+    plt.rcParams['figure.facecolor'] = fig_bg
+    plt.rcParams['axes.facecolor'] = ax_bg
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.labelcolor'] = colors[0]
+    plt.rcParams['xtick.color'] = colors[0]
+    plt.rcParams['ytick.color'] = colors[0]
+    plt.rcParams['text.color'] = colors[0]
+
+    # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
+    return (plt,)
+
+
+@app.cell
+def _():
     import marimo as mo
 
     import os
@@ -117,8 +151,6 @@ def _():
 
 @app.cell
 def _(bruker_fft, data_dir, indices, np):
-    from matplotlib import pyplot as plt
-
     data = {}
     for experiment in indices:
         data[experiment] = np.array(bruker_fft(data_dir, experiment, experiment_number=''))
@@ -133,7 +165,7 @@ def _(bruker_fft, data_dir, indices, np):
         mask = (x >= lower_bound) & (x <= upper_bound)
 
         data[experiment] = data[experiment][:, mask]
-    return data, plt
+    return (data,)
 
 
 @app.cell
@@ -190,7 +222,7 @@ def _(peaks):
     # for peak_name in peaks:
     #     if len(peaks[peak_name]) > 4:
             #(number_peaks, (position, intensities))
-        
+
             # There should only be 4 values. 
             # Those values should be in ascending order of position.
             # The second intensity needs to be higher than the first intensity.

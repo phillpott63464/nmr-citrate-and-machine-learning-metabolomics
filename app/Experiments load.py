@@ -15,28 +15,34 @@ def _(os):
 @app.cell
 def _():
     import matplotlib.pyplot as plt
+    from cycler import cycler
 
     colors = [
-        '#DE8CDE',  # lilac (accent)
-        '#00C2A8',  # teal — high contrast & distinct
-        '#FFB84D',  # warm amber — stands out, good for highlights
-        '#4DA6FF',  # bright blue — clear on dark
-        '#FF6B6B',  # coral red — grabs attention for warnings
+        "#DE8CDE",  # lilac (accent)
+        "#00C2A8",  # teal — high contrast & distinct
+        "#FFB84D",  # warm amber — stands out, good for highlights
+        "#4DA6FF",  # bright blue — clear on dark
+        "#FF6B6B",  # coral red — grabs attention for warnings
     ]
 
+    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
+
+
     # Colors
-    fig_bg = '#1B1B1D'    # figure background
+    fig_bg = "#1B1B1D"    # figure background
     ax_bg = fig_bg   # axes background
 
     plt.rcParams['figure.facecolor'] = fig_bg
     plt.rcParams['axes.facecolor'] = ax_bg
-    plt.rcParams['axes.edgecolor'] = '#333333'  # axes border
+    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
     plt.rcParams['axes.labelcolor'] = colors[0]
     plt.rcParams['xtick.color'] = colors[0]
     plt.rcParams['ytick.color'] = colors[0]
     plt.rcParams['text.color'] = colors[0]
 
-    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+    # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
     return (plt,)
 
 
@@ -1802,19 +1808,19 @@ def _(
         experiment_dir_chelation = (
             '20250811_cit_ca_mg_cit_titr'
         )
-    
+
         chelation_experiments = get_experiment_directories(
             data_dir, experiment_dir_chelation, experiment_count
         )
-    
+
         chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
         chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
-    
+
     elif chelation_selection == 1:
         experiment_dir_chelation = (
             '20250811_cit_ca_mg_cit_titr_rep'
         )
-    
+
         chelation_experiments = get_experiment_directories(
             data_dir, experiment_dir_chelation, experiment_count
         )
