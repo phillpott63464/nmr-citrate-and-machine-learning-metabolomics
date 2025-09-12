@@ -11,6 +11,7 @@ def _(os):
     os.makedirs('figs', exist_ok=True)
     return (mo,)
 
+
 @app.cell
 def _():
     import matplotlib.pyplot as plt
@@ -38,6 +39,7 @@ def _():
 
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
     return (plt,)
+
 
 @app.cell(hide_code=True)
 def _(mo):
@@ -385,6 +387,7 @@ def _(
     expected_phs,
     phs,
     pkasolver_phs,
+    plt,
     stocks,
 ):
 
@@ -426,20 +429,19 @@ def _(
 
     for id, point in enumerate(corrected_pka):
         plt.axhline(
-            y=point, color='red', linestyle='--', label=f'pka{id+1} = {point}'
+            y=point, linestyle='--', label=f'pka{id+1} = {point}'
         )
 
     plt.title('Effect of Molar Ratio on pH Values')
     plt.xlabel('Molar Ratio')
     plt.ylabel('pH Value')
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.grid(True)
     plt.tight_layout()
 
     plt.savefig('figs/phgraph.svg')
 
     phgraph = plt.gca()
-    return phgraph, plt
+    return (phgraph,)
 
 
 @app.cell
@@ -503,7 +505,6 @@ def _(
     plt.xlabel('Molar Ratio')
     plt.ylabel('pH Value')
     plt.legend()
-    plt.grid(True)
     plt.tight_layout()  # Adjust layout to prevent clipping
     plt.show()
     return
@@ -1112,7 +1113,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.title('J Coupling vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
     plt.ylabel('J Coupling', fontsize=12)
-    plt.grid(True)
 
     # Second subplot
     plt.subplot(1, 3, 2)
@@ -1127,7 +1127,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.title('J Coupling vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
     plt.ylabel('J Coupling', fontsize=12)
-    plt.grid(True)
 
     # Third subplot
     plt.subplot(1, 3, 3)
@@ -1143,7 +1142,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.ylabel('Speciation Ratio', fontsize=12)
     plt.gca().invert_xaxis()
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    plt.grid(True)
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
@@ -1233,7 +1231,6 @@ def _(
     plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
     plt.ylabel('Peak Differences', fontsize=12)
-    plt.grid(True)
 
     # Second subplot
     plt.subplot(1, 3, 2)
@@ -1248,7 +1245,6 @@ def _(
     plt.title('Peak Differences vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
     plt.ylabel('Peak Differences', fontsize=12)
-    plt.grid(True)
 
     # Third subplot
     plt.subplot(1, 3, 3)
@@ -1265,7 +1261,6 @@ def _(
     plt.ylabel('Speciation Ratio', fontsize=12)
     plt.gca().invert_xaxis()
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
-    plt.grid(True)
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
@@ -1293,14 +1288,8 @@ def _(fidfig, mo):
 @app.cell
 def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
     import struct
-    import seaborn as sns
 
     def plot_fid_experiments(experiments, experiment_number, data_dir):
-        # Set the style for the plots
-        sns.set(
-            style='whitegrid'
-        )  # Use Seaborn's whitegrid style for a clean look
-
         # Create a new figure
         plt.figure(figsize=(12, 10))
 
@@ -1327,7 +1316,6 @@ def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
                 'Time (ms)', fontsize=12
             )  # Replace with actual time unit if different
             plt.ylabel('Magnitude', fontsize=12)  # Magnitude of FID data
-            plt.grid(True)  # Add grid lines for better readability
             plt.xticks(fontsize=10)
             plt.yticks(fontsize=10)
 
@@ -1454,7 +1442,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
             if abs(max(data)) > abs(min(data)):
                 data *= -1
-            
+
             if (
                 idx == 0
             ):   # The first one doesn't flip properly for some reason
@@ -1470,7 +1458,6 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
                 'Chemical Shift / PPM', fontsize=12
             )  # Replace with actual x-axis label if needed
             ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-            ax.grid(True)  # Add grid lines for better readability
             ax.tick_params(axis='both', which='major', labelsize=10)
 
         plt.tight_layout()  # Adjust layout to prevent overlap
@@ -1514,7 +1501,6 @@ def _(bruker_fft, data_dir, experiment_number, experiments, mo, plt):
             'Chemical Shift / PPM', fontsize=12
         )  # Replace with actual x-axis label if needed
         plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-        plt.grid(True)  # Add grid lines for better readability
 
         plt.legend()
 
@@ -1809,15 +1795,20 @@ def _(
     sr_values,
 ):
     experiment_dir_chelation = (
-        '20250811_cit_ca_mg_cit_titr'  # Not fetched it yet
+        '20250811_cit_ca_mg_cit_titr_rep'  # Not fetched it yet
     )
 
     chelation_experiments = get_experiment_directories(
         data_dir, experiment_dir_chelation, experiment_count
     )
 
-    chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
-    chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
+    ## Initial corrections
+    # chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
+    # chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
+
+    ## Secondary corrections
+    chelation_experiments[5] = '20250811_cit_ca_mg_cit_titr_6'
+    chelation_experiments[6] = '20250811_cit_ca_mg_cit_titr_7'
 
     def _():
         chelation_sr_values, chelation_peak_values = [], []
@@ -1896,7 +1887,6 @@ def _(
                 'Data Points', fontsize=12
             )  # Replace with actual x-axis label if needed
             ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-            ax.grid(True)  # Add grid lines for better readability
             ax.tick_params(axis='both', which='major', labelsize=10)
 
         plt.tight_layout()  # Adjust layout to prevent overlap
@@ -1941,7 +1931,6 @@ def _(
             'Chemical Shift / PPM', fontsize=12
         )  # Replace with actual x-axis label if needed
         plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-        plt.grid(True)  # Add grid lines for better readability
 
         plt.legend()
 
@@ -2072,7 +2061,6 @@ def _(chelation_peak_values, continueaaa, metal_real_experiments, plt):
     plt.ylabel('Chemical Shift / ppm', fontsize=12)
 
     # plt.gca().invert_xaxis()
-    plt.grid(True)
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
@@ -2180,7 +2168,6 @@ def _(
     plt.ylabel('calcium_peak_shifts', fontsize=12)
 
     # plt.gca().invert_xaxis()
-    plt.grid(True)
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
@@ -2512,7 +2499,7 @@ def _(
         mse = errors[ion]['mse']
         rmse = round(np.sqrt(mse), 5)
         mse = round(mse, 5)
-    
+
         ax.plot(vals['real_e'], vals['e'], marker='o')
         ax.plot(vals['real_c'], vals['c'], marker='s')
         identity = np.linspace(0, 1, 100)
@@ -2527,7 +2514,6 @@ def _(
                 'Perfect',
             ]
         )
-        ax.grid(True)
     plt.tight_layout()
     plt.savefig('figs/chelation_predictions.svg')
     plt.show()
@@ -2855,7 +2841,12 @@ def _(
 
 
 @app.cell
-def _(all_experiments, integrated_predictions, plt):
+def _(
+    all_experiments,
+    alternative_integrated_predictions,
+    integrated_predictions,
+    plt,
+):
     def _():
         values = []
         for experiment in all_experiments:
@@ -2865,6 +2856,7 @@ def _(all_experiments, integrated_predictions, plt):
 
         values = [list(x) for x in zip(*values)]
         fs = [list(x) for x in zip(*integrated_predictions)]
+        afs = [list(x) for x in zip(*alternative_integrated_predictions)]
 
         keys = [*all_experiments[0].keys()]
         keys.pop()
@@ -2873,16 +2865,24 @@ def _(all_experiments, integrated_predictions, plt):
         y = 1
         length = len(fs)  # 7
 
-        plt.figure(figsize=(15, 8))
-        for f, val in zip(fs, values):
-            plt.subplot(2, 4, i)
-            # plt.plot(f, val)
-            # plt.plot((0.0, 1.0), (0.0, 1.0))
+        fig, axes = plt.subplots(2, 4, figsize=(15, 8), sharex=True, sharey=False)
+        axes = axes.ravel()
 
-            plt.plot([(x - y) ** 2 for x, y in zip(f, val)])
-            plt.title(keys[i - 1])
-            i += 1
+        for i, (f, af, val) in enumerate(zip(fs, afs, values)):
+            ax = axes[i]
+            ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2)
+            ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2)
+            ax.plot([0, 1], [0, 1])
+            ax.set_title(keys[i], fontsize=11)
+            ax.set_xlabel("x" if i >= 4 else "")         # only label bottom row
+            ax.set_ylabel("y" if i % 4 == 0 else "")    # only label first column
 
+        for j in range(len(fs), len(axes)):
+            axes[j].set_visible(False)
+
+        plt.tight_layout(pad=1.0)
+        plt.subplots_adjust(top=0.95)
+        fig.suptitle("Improved scatter subplots", fontsize=14)
         plt.show()
 
     _()
@@ -3083,7 +3083,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-    return device, test_peaks, test_vals, torch, train_peaks, train_vals
+    return device, test_peaks, test_vals, torch
 
 
 @app.cell
@@ -3094,21 +3094,11 @@ def _():
     return F, nn, optim
 
 
-@app.cell
-def _(
-    F,
-    TinyTransformer,
-    device,
-    nn,
-    np,
-    optim,
-    torch,
-    train_peaks,
-    train_vals,
-):
+app._unparsable_cell(
+    r"""
     ### Try a neural network?
 
-    # incorrect code to block this from running temporarily
+    incorrect code to block this from running temporarily
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -3168,7 +3158,9 @@ def _(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-    return criterion, model
+    """,
+    name="_"
+)
 
 
 @app.cell
