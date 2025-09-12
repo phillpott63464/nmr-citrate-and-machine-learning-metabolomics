@@ -1960,7 +1960,6 @@ def _(chelation_extra_fig, chelation_fig, mo):
 
     {mo.as_html(chelation_extra_fig)}
 
-    Magnesium is sigmoidal to j coupling, and calcium is
     """
     )
     return
@@ -2195,9 +2194,183 @@ def _(mo):
 
     $\delta_L$ = chemical shift from the free citric acid (from before), $\delta_{ML}$ = chemical shift from the metal complex
 
-    We know the $f_0, f_1, \delta_{L}$. We don't know the $\delta_{ML}$. Then, once we have the constant $\delta_{ML}$ for each peak, we can find the $f_0,f_1$, which should give ratio of complex to free citric acid. This model assumes there is only a single complex.
+    We know the $\delta_{L}$. We don't know the $\delta_{ML}$, $f_0$, or $f_1$. However, we do know that:
+
+    $f_0+f_1=1$
+
+    $f_1=[ML]$
+
+    And the mass action equation:
+
+    kf = [ML]/([M_free][L_free])
+
+    M_free = [M_tot] - [ML]
+
+    L_free = [L_tot] - [ML]
+
+    kf = [ML]/(([M_tot] - [ML])([L_tot] - [ML]))
+
+    a = b/((c-b)(d-b))
+
+    b = (-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a) and a!=0 and sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1)!=a (c + d) + 1 (https://www.wolframalpha.com/input?i=solve+for+b%3A+a+%3D+b%2F%28%28c-b%29%28d-b%29%29)
+
+    Ignoring those coditions for now - we know M_tot (c), L_tot (d). b is ML, which is equivalent to $f_1$.
+
+    So, in total:
+
+    dc=(1-f1)d0+f1d1
+
+    f1 = b/d
+
+    b=-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a)
+
+    dc = observed peak shift (known)
+
+    d0 = citric acid peak shift (known, calculated from pH/speciation)
+
+    d1 = metal citrate peak shift (unknown)
+
+    f1 = ratio of metal ligand to ligand (unknown)
+
+    b = [ML] (unknown)
+
+    a = kf (unknown)
+
+    c = [M_tot] (known)
+
+    d = [L_tot] (known)
+
+
+
+
     """
     )
+    return
+
+
+@app.cell
+def _(
+    all_deltas,
+    calcium_peaks,
+    citricacid,
+    find_peaks,
+    least_squares,
+    magnesium_peaks,
+    metal_real_experiments,
+    np,
+):
+    def fitmetalexperiments(c, d, dc, d0):
+        """
+        c: (n,) or (n,1)
+        d: (n,) or (n,1)
+        dc: (n,4)
+        d0: (n,4)
+
+        Fits scalar a and vector d1 (length 4) minimizing least squares
+        of dc_pred = (1-f1) * d0 + f1 * d1 for each column.
+        Returns: a_fit (scalar), d1_fit (length-4), f1_per_sample (n,)
+        """
+        c = np.asarray(c).reshape(-1)
+        d = np.asarray(d).reshape(-1)
+        dc = np.asarray(dc)
+        d0 = np.asarray(d0)
+        n = c.shape[0]
+        assert d.shape[0] == n
+        assert dc.shape == (n, 4)
+        assert d0.shape == (n, 4)
+
+        def compute_b(a, c_arr, d_arr):
+            # handle a close to zero by using a small floor; caller should avoid a==0
+            # s = a^2 (c-d)^2 + 2 a (c+d) + 1
+            s = (a*a) * (c_arr - d_arr)**2 + 2.0*a*(c_arr + d_arr) + 1.0
+            s = np.maximum(s, 0.0)
+            sqrt_s = np.sqrt(s)
+            return (-sqrt_s + a*(c_arr + d_arr) + 1.0) / (2.0*a)
+
+        def residuals(p, c_arr, d_arr, d0_arr, dc_arr):
+            a = p[0]
+            d1 = p[1:5]
+            # protect against invalid 'a' that would cause divide-by-zero
+            if not np.isfinite(a) or abs(a) < 1e-12:
+                # return large residuals to steer solver away
+                return np.full(n*4, 1e6)
+            b = compute_b(a, c_arr, d_arr)    # shape (n,)
+            f1 = b / d_arr                    # shape (n,)
+            # optional soft penalty: encourage f1 in [0,1] by adding scaled violations
+            # We implement this by appending extra residuals (small weight)
+            pred = (1.0 - f1)[:, None] * d0_arr + f1[:, None] * d1[None, :]  # (n,4)
+            r = (pred - dc_arr).ravel()
+            # penalties for f1 < 0 or f1 > 1 (small weight so primary objective is fit)
+            pen = np.zeros(n)
+            below = f1 < 0.0
+            above = f1 > 1.0
+            pen[below] = f1[below]          # negative values
+            pen[above] = f1[above] - 1.0    # positive excess
+            pen = pen * 100.0               # weight of penalty (tune if needed)
+            return np.concatenate([r, pen])
+
+        # initial guesses
+        # a0: try 1.0; if that causes issues solver will adjust
+        a0 = 4e3
+        # d1 initial guess: weighted mean of dc columns where f1 might be ~0.5;
+        # use simple mean of (dc - d0) added to d0 mean
+        d1_0 = np.mean(dc - d0, axis=0) + np.mean(d0, axis=0)
+        p0 = np.concatenate([[a0], d1_0])
+
+        # bounds: keep a away from zero and within reasonable range
+        lower = np.array([1, -np.inf, -np.inf, -np.inf, -np.inf])
+        upper = np.array([1e8,  np.inf,  np.inf,  np.inf,  np.inf])
+
+        res = least_squares(residuals, p0, args=(c, d, d0, dc),
+                            bounds=(lower, upper),
+                            xtol=1e-12, ftol=1e-12, gtol=1e-12,
+                            verbose=0)
+
+        a_fit = res.x[0]
+        d1_fit = res.x[1:5]
+        # compute final f1 per sample (use compute_b and clip to [0,1] if desired)
+        b_fit = compute_b(a_fit, c, d)
+        f1_per_sample = b_fit / d
+        # clip to [0,1] (optional; comment out if you prefer raw values)
+        f1_per_sample = np.clip(f1_per_sample, 0.0, 1.0)
+
+        return {'kf': a_fit, 'delta': d1_fit, 'metal ligand ratio': f1_per_sample}
+    
+
+    def _():
+
+        assumedfracs = citricacid.alpha(7.2)
+        assumed_shifts = find_peaks(all_deltas=all_deltas, ratios=assumedfracs) # Array of d0
+    
+        c = []
+        d = []
+    
+        for idx, mexperiment in enumerate(metal_real_experiments):
+            c.append(mexperiment['salt stock molarity / M'])
+            d.append(mexperiment['citric acid molarity / M'])
+
+        mgc = c[:12] #c
+        mgd = d[:12] #d
+
+        cac = c[12:] #c
+        cad = c[12:] #d
+
+        mgdc = magnesium_peaks #dc
+        cadc = calcium_peaks #dc
+
+        mgd0 = [assumed_shifts]*12
+        cad0 = mgd0
+
+        carr = [mgc, mgd]
+        darr = [mgd, cad]
+        dcarr = [mgdc, cadc]
+        d0arr = [mgd0, cad0]
+
+        for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
+            print(fitmetalexperiments(c, d, dc, d0))
+
+    
+    _()
     return
 
 
@@ -2295,7 +2468,7 @@ def _(continueaaa, metal_real_experiments, plt):
     plt.figure(figsize=(15, 8))
 
     plt.subplot(1, 2, 1)
-    plt.plot(sorted_calcium_molarity, sorted_calcium_complex_molarity)
+    plt.scatter(sorted_calcium_molarity, sorted_calcium_complex_molarity)
     plt.xlabel('Salt Stock Molarity (M)')
     plt.ylabel('Metal Ligand Complex Molarity (M)')
     plt.title(
@@ -2303,7 +2476,7 @@ def _(continueaaa, metal_real_experiments, plt):
     )
 
     plt.subplot(1, 2, 2)
-    plt.plot(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
+    plt.scatter(sorted_magnesium_molarity, sorted_magnesium_complex_molarity)
     plt.xlabel('Salt Stock Molarity (M)')
     plt.ylabel('Metal Ligand Complex Molarity (M)')
     plt.title(
@@ -2845,8 +3018,11 @@ def _(
     all_experiments,
     alternative_integrated_predictions,
     integrated_predictions,
+    np,
     plt,
 ):
+    from sklearn.metrics import r2_score
+
     def _():
         values = []
         for experiment in all_experiments:
@@ -2870,16 +3046,38 @@ def _(
 
         for i, (f, af, val) in enumerate(zip(fs, afs, values)):
             ax = axes[i]
-            ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2)
-            ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2)
+        
+            # ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2)
+            # ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2)
             ax.plot([0, 1], [0, 1])
             ax.set_title(keys[i], fontsize=11)
-            ax.set_xlabel("x" if i >= 4 else "")         # only label bottom row
-            ax.set_ylabel("y" if i % 4 == 0 else "")    # only label first column
+
+            ax.set_xlabel("Real Values" if i >= 4 else "")         # only label bottom row
+            ax.set_ylabel("Predictions" if i % 4 == 0 else "")    # only label first column
+
+            ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2, label='Individual')
+            ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2, label='Integrated')
+            ax.plot([0, 1], [0, 1], color='gray', lw=0.8)
+    
+            # compute R² for the integrated predictions (or both)
+            r2 = r2_score(val, af)
+    
+            # define shading limits (e.g., ±√(1‑R²) around the diagonal)
+            delta = np.sqrt(1 - r2) * 0.5   # scale factor for visual clarity
+            ax.fill_between([0, 1], [0 - delta, 1 - delta],
+                            [0 + delta, 1 + delta],
+                            color='orange', alpha=0.2)
+
+            if i == 0:
+                ax.legend(['Individual Model Predictions', 'Integrated Model Predictions'], loc='upper left')
+    
+            ax.text(0.05, 0.9, f'R²={r2:.2f}', transform=ax.transAxes,
+                fontsize=9)
 
         for j in range(len(fs), len(axes)):
             axes[j].set_visible(False)
 
+        # plt.legend(['Individual Model Predictions', 'Integrated Model Predictions'])
         plt.tight_layout(pad=1.0)
         plt.subplots_adjust(top=0.95)
         fig.suptitle("Improved scatter subplots", fontsize=14)
@@ -3096,7 +3294,7 @@ def _():
 
 app._unparsable_cell(
     r"""
-    ### Try a neural network?
+    I can't s### Try a neural network?
 
     incorrect code to block this from running temporarily
 
