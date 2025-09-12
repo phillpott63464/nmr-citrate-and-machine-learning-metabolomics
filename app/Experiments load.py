@@ -349,7 +349,6 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         label='Experiment Data',
     )
     return (
-        a,
         acid_vol,
         base_vol,
         expected_acid_ratios,
@@ -1960,7 +1959,6 @@ def _(chelation_extra_fig, chelation_fig, mo):
     ### Extra Relationships
 
     {mo.as_html(chelation_extra_fig)}
-
     """
     )
     return
@@ -2240,10 +2238,6 @@ def _(mo):
     c = [M_tot] (known)
 
     d = [L_tot] (known)
-
-
-
-
     """
     )
     return
@@ -2251,42 +2245,175 @@ def _(mo):
 
 @app.cell
 def _(
-    a,
     all_deltas,
-    b,
     calcium_peaks,
     citricacid,
-    d1,
     find_peaks,
+    least_squares,
     magnesium_peaks,
+    math,
     metal_real_experiments,
+    np,
 ):
+
     def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
         """
-        c: (n,) or (n,1)
-        d: (n,) or (n,1)
-        dc: (n,4)
-        d0: (n,4)
+        c: (n,) or (n,1) - total metal concentration
+        d: (n,) or (n,1) - total ligand concentration  
+        dc: (n,4) - observed chemical shifts for 4 peaks
+        d0: (n,4) - free ligand chemical shifts for 4 peaks
 
         Fits scalar a and vector d1 (length 4) minimizing least squares
         of dc_pred = (1-f1) * d0 + f1 * d1 for each column.
         Returns: a_fit (scalar), d1_fit (length-4), f1_per_sample (n,)
         """
-        # dc=(1-f1)d0+f1d1
-        # f1 = b/c
-        # b=-sqrt(a^2 (c - d)^2 + 2 a (c + d) + 1) + a (c + d) + 1)/(2 a)
+        # Convert inputs to numpy arrays
+        c = np.asarray(c).flatten()
+        d = np.asarray(d).flatten() 
+        dc = np.asarray(dc)
+        d0 = np.asarray(d0)
 
-        return a, b, d1
-    
+        n_samples = len(c)
+        n_peaks = dc.shape[1] if dc.ndim > 1 else 1
+
+        # Ensure dc and d0 are 2D
+        if dc.ndim == 1:
+            dc = dc.reshape(-1, 1)
+        if d0.ndim == 1:
+            d0 = d0.reshape(-1, 1)
+
+        def solve_for_b(a, c_val, d_val, tol=1e-12):
+            """Solve for bound ligand concentration given binding constant"""
+            if abs(a) < tol:
+                return 0.0
+
+            disc = a * a * (c_val - d_val) ** 2 + 2 * a * (c_val + d_val) + 1.0
+            if disc < -tol:
+                return 0.0
+
+            disc = max(disc, 0.0)
+            numerator = a * (c_val + d_val) + 1.0 - math.sqrt(disc)
+            b = numerator / (2.0 * a)
+
+            # Physical constraints
+            if b < -tol or b > min(c_val, d_val) + tol:
+                return 0.0
+            if abs((c_val - b) * (d_val - b)) <= tol:
+                return 0.0
+            return max(b, 0.0)
+
+        def residuals(params):
+            """Calculate residuals for optimization"""
+            a = params[0]
+            d1 = params[1:]  # Chemical shifts for bound ligand
+
+            residuals_all = []
+
+            for i in range(n_samples):
+                # Calculate bound ligand fraction for this sample
+                b = solve_for_b(a, c[i], d[i])
+
+                if d[i] > 0:
+                    f1 = b / d[i]  # Fraction of ligand that is bound
+                else:
+                    f1 = 0.0
+
+                f0 = 1.0 - f1  # Fraction of ligand that is free
+
+                # Calculate predicted chemical shifts for all peaks
+                for j in range(n_peaks):
+                    dc_pred = f0 * d0[i, j] + f1 * d1[j]
+                    residuals_all.append(dc_pred - dc[i, j])
+
+            return np.array(residuals_all)
+
+        # Better initial parameter guess
+        if d10 is None:
+            # Estimate d1 as shifts that are different from d0
+            d1_init = np.max(dc, axis=0) + 0.1  # Slightly larger than observed max
+        else:
+            d1_init = np.asarray(d10)
+
+        # Ensure d1_init has correct length
+        if len(d1_init) != n_peaks:
+            d1_init = np.full(n_peaks, np.mean(dc) + 0.1)
+
+        # Try multiple initial guesses for 'a' to avoid local minima
+        a_initial_guesses = [a0, a0/10, a0*10, 1e2, 1e3, 1e4]
+
+        best_result = None
+        best_cost = np.inf
+
+        for a_init in a_initial_guesses:
+            params_init = np.concatenate([[a_init], d1_init])
+
+            # Tighter bounds for binding constant based on literature values
+            bounds_lower = np.concatenate([[1e2], [-10] * n_peaks])  # More realistic lower bound for a
+            bounds_upper = np.concatenate([[1e5], [10] * n_peaks])   # More realistic upper bound for a
+
+            # Perform optimization
+            result = least_squares(
+                residuals,
+                params_init,
+                bounds=(bounds_lower, bounds_upper),
+                method='trf',
+                max_nfev=20000,  # More iterations
+                ftol=1e-12,      # Tighter convergence
+                xtol=1e-12,
+                gtol=1e-12
+            )
+
+            if result.success and result.cost < best_cost:
+                best_result = result
+                best_cost = result.cost
+
+        if best_result is None:
+            print("Warning: All optimization attempts failed")
+            # Fallback to first attempt
+            params_init = np.concatenate([[a0], d1_init])
+            bounds_lower = np.concatenate([[1e2], [-10] * n_peaks])
+            bounds_upper = np.concatenate([[1e5], [10] * n_peaks])
+
+            best_result = least_squares(
+                residuals,
+                params_init,
+                bounds=(bounds_lower, bounds_upper),
+                method='trf',
+                max_nfev=20000
+            )
+
+        if not best_result.success:
+            print(f"Warning: Optimization failed: {best_result.message}")
+
+        # Extract results
+        a_fit = best_result.x[0]
+        d1_fit = best_result.x[1:]
+
+        # Calculate f1 for each sample using fitted parameters
+        f1_per_sample = []
+        for i in range(n_samples):
+            b = solve_for_b(a_fit, c[i], d[i])
+            if d[i] > 0:
+                f1_per_sample.append(b / d[i])
+            else:
+                f1_per_sample.append(0.0)
+
+        f1_per_sample = np.array(f1_per_sample)
+
+        print(f"Fitted binding constant: {a_fit:.2e}")
+        print(f"Final cost: {best_result.cost:.2e}")
+
+        return a_fit, d1_fit, f1_per_sample
+
 
     def _():
 
         assumedfracs = citricacid.alpha(7.2)
         assumed_shifts = find_peaks(all_deltas=all_deltas, ratios=assumedfracs) # Array of d0
-    
+
         c = []
         d = []
-    
+
         for idx, mexperiment in enumerate(metal_real_experiments):
             c.append(mexperiment['salt stock molarity / M'])
             d.append(mexperiment['citric acid molarity / M'])
@@ -2295,7 +2422,7 @@ def _(
         mgd = d[:12] #d
 
         cac = c[12:] #c
-        cad = c[12:] #d
+        cad = d[12:] #d
 
         mgdc = magnesium_peaks #dc
         cadc = calcium_peaks #dc
@@ -2303,17 +2430,14 @@ def _(
         mgd0 = [assumed_shifts]*12
         cad0 = mgd0
 
-        carr = [mgc, mgd]
+        carr = [mgc, cac]
         darr = [mgd, cad]
         dcarr = [mgdc, cadc]
         d0arr = [mgd0, cad0]
 
-        result = []
         for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
-            result.append(fitmetalexperiments(c, d, dc, d0))
+            print(fitmetalexperiments(c, d, dc, d0))
 
-        print(result[0][1])
-    
     _()
     return
 
@@ -2990,7 +3114,7 @@ def _(
 
         for i, (f, af, val) in enumerate(zip(fs, afs, values)):
             ax = axes[i]
-        
+
             # ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2)
             # ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2)
             ax.plot([0, 1], [0, 1])
@@ -3002,10 +3126,10 @@ def _(
             ax.scatter(f, val, s=20, alpha=0.7, linewidth=0.2, label='Individual')
             ax.scatter(af, val, s=20, alpha=0.7, linewidth=0.2, label='Integrated')
             ax.plot([0, 1], [0, 1], color='gray', lw=0.8)
-    
+
             # compute R² for the integrated predictions (or both)
             r2 = r2_score(val, af)
-    
+
             # define shading limits (e.g., ±√(1‑R²) around the diagonal)
             delta = np.sqrt(1 - r2) * 0.5   # scale factor for visual clarity
             ax.fill_between([0, 1], [0 - delta, 1 - delta],
@@ -3014,7 +3138,7 @@ def _(
 
             if i == 0:
                 ax.legend(['Individual Model Predictions', 'Integrated Model Predictions'], loc='upper left')
-    
+
             ax.text(0.05, 0.9, f'R²={r2:.2f}', transform=ax.transAxes,
                 fontsize=9)
 
