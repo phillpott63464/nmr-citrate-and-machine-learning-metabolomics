@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PeakList modified="2025-09-12T10:18:00">
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:18:00" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_23" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.795336ppm, F2=2.186251ppm, MI=0.01cm, MAXI=0.07cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+    <Peak1D F1="2.703413" intensity="0.03098197" type="0"/>
+    <Peak1D F1="2.676172" intensity="0.04028961" type="0"/>
+    <Peak1D F1="2.514734" intensity="0.03992135" type="0"/>
+    <Peak1D F1="2.487463" intensity="0.03067274" type="0"/>
+  </PeakList1D>
+</PeakList>

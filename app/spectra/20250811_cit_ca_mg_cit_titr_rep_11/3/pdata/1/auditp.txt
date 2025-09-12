@@ -1,0 +1,44 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_rep_11/3/pdata/1/auditp.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-09-11 14:47:52.549 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-09-11 14:45:12.276 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       36 F7 FB AE 74 3C 1A E3 B6 98 30 56 29 78 54 1F>)
+(   2,<2025-09-11 14:47:52.583 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       36 F7 FB AE 74 3C 1A E3 B6 98 30 56 29 78 54 1F>)
+(   3,<2025-09-12 09:53:42.424 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <Start of raw data processing
+       efp LB = 1 FT_mod = 6 PKNL = 1 PHC0 = 283.5583 PHC1 = 3.15 SI = 32K 
+       data hash MD5: 32K
+       04 34 35 A3 58 11 09 82 86 8A 1C A3 E3 3F 7A 47>)
+(   4,<2025-09-12 09:53:43.202 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       C0 05 DA 7A 6B 9A 22 47 D7 FD F5 1C B5 99 94 20>)
+(   5,<2025-09-12 09:54:44.780 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = -180 PHC1 = 0 
+       data hash MD5: 32K
+       5C 11 49 9A FF AC 87 30 0E 30 91 0C 30 C1 E9 1F>)
+(   6,<2025-09-12 10:26:27.007 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 2.936478 PHC1 = -3.675 
+       data hash MD5: 32K
+       C6 48 1D 91 29 14 1D 66 67 A8 23 67 B3 4B AD 29>)
+(   7,<2025-09-12 10:27:36.311 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 18293 8434 7.545009e+05 -3.638325e+02 6.462616e-02 -4.991694e-06 1.452732e-10 
+       data hash MD5: 32K
+       B8 E8 FC FE 1C 80 44 31 8C 0A 10 40 EE 22 73 16>)
+##END=
+
+$$ hash MD5
+$$ B4 8E B3 5D 85 3F 65 48 44 57 8D E4 FE 13 A1 93

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PeakList modified="2025-09-12T10:24:23">
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:24:23" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_4" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.853758ppm, F2=2.771224ppm, MI=0.00cm, MAXI=0.01cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:24:23" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_4" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.771224ppm, F2=2.752178ppm, MI=0.01cm, MAXI=0.01cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:24:23" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_4" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.752178ppm, F2=2.441090ppm, MI=0.00cm, MAXI=0.01cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+    <Peak1D F1="2.680644" intensity="0.005656717" type="0"/>
+    <Peak1D F1="2.654639" intensity="0.008467258" type="0"/>
+    <Peak1D F1="2.561162" intensity="0.01319991" type="0"/>
+    <Peak1D F1="2.534947" intensity="0.008784737" type="0"/>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:24:23" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_4" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.441090ppm, F2=2.422044ppm, MI=0.01cm, MAXI=0.01cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-12T10:24:23" expNo="3" name="20250811_cit_ca_mg_cit_titr_rep_4" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=2.422044ppm, F2=2.380777ppm, MI=0.00cm, MAXI=0.01cm, PC=1.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+  </PeakList1D>
+</PeakList>

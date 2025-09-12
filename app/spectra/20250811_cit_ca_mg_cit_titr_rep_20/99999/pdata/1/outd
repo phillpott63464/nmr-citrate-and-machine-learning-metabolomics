@@ -1,0 +1,16 @@
+##TITLE= Parameter file, TopSpin 3.6.1
+##JCAMPDX= 5.0
+##DATATYPE= Parameter Values
+##NPOINTS= 1	$$ modification sequence number
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ 2025-09-11 17:06:43.948 +0100  ukc@CZC8417J16
+$$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_rep_20/99999/pdata/1/outd
+$$ process /opt/topspin3.6.1/prog/au/bin/user/findwaterTS3
+##$CURPLOT= <printer>
+##$CURPRIN= <$printer>
+##$DFORMAT= <normdp>
+##$LAYOUT= <+/1D_H.xwp>
+##$LFORMAT= <normlp>
+##$PFORMAT= <normpl>
+##END=

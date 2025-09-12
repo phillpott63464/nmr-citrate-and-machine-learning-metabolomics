@@ -17,20 +17,12 @@ $$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_22_rep/3/pdata/1/auditp.tx
        ICON-NMR User ID: ukc
        data hash MD5: 32K
        3A 2D 11 D0 AB 21 D8 56 F6 4A DB 90 98 87 93 A6>)
-(   3,<2025-09-01 16:42:53.453 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+(   3,<2025-09-01 16:45:42.598 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
       <Start of raw data processing
-       efp LB = 1 FT_mod = 6 PKNL = 1 PHC0 = 283.5583 PHC1 = 3.15 SI = 32K 
+       fp FT_mod = 6 PKNL = 1 PHC0 = 324.7973 PHC1 = 6.705335 SI = 32K 
        data hash MD5: 32K
-       6F 02 39 73 8A E2 EF 4A 73 90 98 E1 2A AA E1 77>)
-(   4,<2025-09-01 16:42:53.643 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
-      <apk 
-       data hash MD5: 32K
-       0E 6A BC 8F 09 38 14 19 4B 6C 9F 75 D9 FE B6 24>)
-(   5,<2025-09-01 16:43:23.968 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
-      <pk fgphup PHC0 = -2.938918 PHC1 = 3.4125 
-       data hash MD5: 32K
-       71 A3 32 9A 9F BC 09 5F 92 B0 E2 EA 89 8B 7A 0C>)
+       92 4D E8 D7 63 F8 03 A3 D0 AC FC FE 87 67 3E F3>)
 ##END=
 
 $$ hash MD5
-$$ AF 4E 1D 55 73 99 77 81 B5 D2 32 EF 1B E2 E1 1B
+$$ EC DE 37 A6 2D 9F 80 D6 66 AE 55 71 EB D2 36 BE

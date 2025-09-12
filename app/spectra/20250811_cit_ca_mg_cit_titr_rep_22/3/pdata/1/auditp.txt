@@ -1,0 +1,44 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_rep_22/3/pdata/1/auditp.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-09-11 17:44:00.243 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-09-11 17:41:20.036 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       B4 A0 98 6F AC 4E 18 D7 96 EE 10 F1 3C CC 5A BD>)
+(   2,<2025-09-11 17:44:00.266 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       B4 A0 98 6F AC 4E 18 D7 96 EE 10 F1 3C CC 5A BD>)
+(   3,<2025-09-12 10:14:19.048 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <Start of raw data processing
+       efp LB = 1 FT_mod = 6 PKNL = 1 PHC0 = 283.5583 PHC1 = 3.15 SI = 32K 
+       data hash MD5: 32K
+       C3 C7 39 6D D3 23 41 6D F8 1E A7 E3 55 70 39 D7>)
+(   4,<2025-09-12 10:14:19.814 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       63 64 08 3B C5 F3 2C A9 7F 84 89 92 74 37 8C B3>)
+(   5,<2025-09-12 10:14:42.118 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 172.9935 PHC1 = 13.6125 
+       data hash MD5: 32K
+       56 AE 9D BD 4E CC 66 C9 FF 33 84 67 69 15 71 0D>)
+(   6,<2025-09-12 10:15:04.616 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 0 PHC1 = 0 
+       data hash MD5: 32K
+       56 AE 9D BD 4E CC 66 C9 FF 33 84 67 69 15 71 0D>)
+(   7,<2025-09-12 10:16:39.175 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 17515 9707 1.465239e+05 -4.783678e+01 4.001913e-03 1.719758e-07 -2.281326e-11 
+       data hash MD5: 32K
+       1C 49 D4 83 61 E9 88 CA 40 CD 36 F5 00 E4 BA C4>)
+##END=
+
+$$ hash MD5
+$$ 4D 27 34 5B 0E 24 D5 21 E4 A9 6C 8A 49 BB 15 10

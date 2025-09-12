@@ -1,0 +1,44 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_rep_16/3/pdata/1/auditp.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-09-11 16:08:03.536 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-09-11 16:05:23.234 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       18 62 2E D0 2F 93 52 62 23 63 62 E6 27 0B 80 A8>)
+(   2,<2025-09-11 16:08:03.557 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       18 62 2E D0 2F 93 52 62 23 63 62 E6 27 0B 80 A8>)
+(   3,<2025-09-12 10:03:39.167 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <Start of raw data processing
+       efp LB = 1 FT_mod = 6 PKNL = 1 PHC0 = 283.5583 PHC1 = 3.15 SI = 32K 
+       data hash MD5: 32K
+       F7 1D 0D 70 F5 55 D1 0F E1 F8 87 15 51 77 13 EF>)
+(   4,<2025-09-12 10:03:40.082 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       8B FC 29 B1 AB 4D F5 AE 8E 33 A0 12 2A E8 D0 BD>)
+(   5,<2025-09-12 10:03:52.217 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 1.84375 PHC1 = 0 
+       data hash MD5: 32K
+       C7 C5 8B 78 56 F8 D4 6D 49 3C 2A 14 C2 FE D9 AF>)
+(   6,<2025-09-12 10:04:07.569 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = -2.996063 PHC1 = 3.75 
+       data hash MD5: 32K
+       B8 44 AB A0 78 F8 11 7E 22 A2 F5 91 C9 63 26 F5>)
+(   7,<2025-09-12 10:04:24.755 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 17773 9553 1.448405e+04 -1.402465e+00 0.000000e+00 4.153467e-10 2.173907e-13 
+       data hash MD5: 32K
+       93 D2 66 D4 22 B5 05 11 1D C7 16 6B 3D 91 26 E6>)
+##END=
+
+$$ hash MD5
+$$ F2 85 2A 87 83 53 46 72 7F 54 52 F4 B1 79 15 06

@@ -1,0 +1,56 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/sp/20250811_cit_ca_mg_cit_titr_rep_4/3/pdata/1/auditp.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-09-11 13:27:54.236 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-09-11 13:25:13.862 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       F5 9E 3D 1D D1 6F BD 61 11 9E 47 66 93 01 03 FA>)
+(   2,<2025-09-11 13:27:54.257 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       F5 9E 3D 1D D1 6F BD 61 11 9E 47 66 93 01 03 FA>)
+(   3,<2025-09-12 09:37:16.211 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <Start of raw data processing
+       efp LB = 1 FT_mod = 6 PKNL = 1 PHC0 = 283.5583 PHC1 = 3.15 SI = 32K 
+       data hash MD5: 32K
+       56 D4 A7 BA A7 B9 A5 60 A9 18 53 9D B9 25 39 D3>)
+(   4,<2025-09-12 09:37:16.909 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       23 CF 53 5C 27 39 74 78 51 BC C0 CD E5 BF 42 C3>)
+(   5,<2025-09-12 09:38:46.921 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = -19.83294 PHC1 = 36.4875 
+       data hash MD5: 32K
+       1B 3D 17 F2 AA F7 BA B8 3F 08 DE AD BF 48 2B 51>)
+(   6,<2025-09-12 09:39:52.043 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       62 E0 7A DA 10 49 38 23 CB 55 C0 65 C4 DE EF 46>)
+(   7,<2025-09-12 09:41:28.715 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 8.129811 PHC1 = -18.6875 
+       data hash MD5: 32K
+       A4 30 60 B8 C1 28 CA D7 2D 76 1D EA 0B B8 54 C7>)
+(   8,<2025-09-12 09:43:18.241 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 0 32768 6.506465e+04 1.327731e+00 -1.160818e-04 1.292246e-09 1.767830e-14 
+       data hash MD5: 32K
+       F4 60 60 08 2E ED E7 C2 F7 93 82 8E 19 E5 12 12>)
+(   9,<2025-09-12 10:23:09.918 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = -2.457053 PHC1 = 3.075 
+       data hash MD5: 32K
+       E6 9E 0D BD 80 AA BB 0E 9C 75 2A 30 F5 46 D7 55>)
+(  10,<2025-09-12 10:24:14.438 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 18241 8174 2.887569e+04 -4.104576e+01 1.133954e-02 -1.072553e-06 2.802954e-11 
+       data hash MD5: 32K
+       6B 26 E3 47 C7 BB D8 B4 2A E6 BC 22 E1 FD F2 85>)
+##END=
+
+$$ hash MD5
+$$ C0 70 61 DD EB 80 C1 2E A7 FD B3 48 D9 41 0E 80
