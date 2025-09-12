@@ -45,6 +45,7 @@ def _():
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
     return (plt,)
 
+
 @app.cell(hide_code=True)
 def _(cuda_built, gpu_count, hip_version, mo):
     mo.md(
@@ -72,7 +73,7 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100                   # Number of samples per metabolite combination
+    count = 1000                   # Number of samples per metabolite combination
     trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
@@ -617,7 +618,7 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 
 
 @app.cell
-def _(spectra):
+def _(plt, spectra):
     """Generate sample spectrum visualizations"""
 
     print(f"Total spectra available: {len(spectra)}")
@@ -638,7 +639,7 @@ def _(spectra):
 
     plt.tight_layout()
     spectrafigures = plt.gca()
-    return graph_count, plt, spectrafigures
+    return graph_count, spectrafigures
 
 
 @app.cell(hide_code=True)

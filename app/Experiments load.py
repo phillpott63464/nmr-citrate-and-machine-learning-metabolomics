@@ -1685,7 +1685,12 @@ def _(
 ):
     from collections import OrderedDict
 
-    metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs_again.csv')
+    chelation_selection = 1 # 0 for original, 1 for new
+
+    if chelation_selection == 0:
+        metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
+    elif chelation_selection == 1:
+        metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs_again.csv')
     metal_real_experiments = []
 
     for midx in range(len(metal_imported)):
@@ -1776,13 +1781,14 @@ def _(
         data=metal_real_experiments_rounded,
         label='Experiment Data',
     )
-    return metal_output, metal_real_experiments
+    return chelation_selection, metal_output, metal_real_experiments
 
 
 @app.cell
 def _(
     adjust_peak_values,
     calculate_ppm_shift,
+    chelation_selection,
     data_dir,
     experiment_count,
     experiment_number,
@@ -1791,21 +1797,30 @@ def _(
     get_experiment_directories,
     sr_values,
 ):
-    experiment_dir_chelation = (
-        '20250811_cit_ca_mg_cit_titr_rep'  # Not fetched it yet
-    )
+    if chelation_selection == 0:
 
-    chelation_experiments = get_experiment_directories(
-        data_dir, experiment_dir_chelation, experiment_count
-    )
+        experiment_dir_chelation = (
+            '20250811_cit_ca_mg_cit_titr'
+        )
+    
+        chelation_experiments = get_experiment_directories(
+            data_dir, experiment_dir_chelation, experiment_count
+        )
+    
+        chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
+        chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
+    
+    elif chelation_selection == 1:
+        experiment_dir_chelation = (
+            '20250811_cit_ca_mg_cit_titr_rep'
+        )
+    
+        chelation_experiments = get_experiment_directories(
+            data_dir, experiment_dir_chelation, experiment_count
+        )
 
-    ## Initial corrections
-    # chelation_experiments[16] = f'{chelation_experiments[16]}_rep'
-    # chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
-
-    ## Secondary corrections
-    chelation_experiments[5] = '20250811_cit_ca_mg_cit_titr_6'
-    chelation_experiments[6] = '20250811_cit_ca_mg_cit_titr_7'
+        chelation_experiments[5] = '20250811_cit_ca_mg_cit_titr_6'
+        chelation_experiments[6] = '20250811_cit_ca_mg_cit_titr_7'
 
     def _():
         chelation_sr_values, chelation_peak_values = [], []
@@ -2131,7 +2146,7 @@ def _(
     def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
         """
         c: (n,) or (n,1) - total metal concentration
-        d: (n,) or (n,1) - total ligand concentration
+        d: (n,) or (n,1) - total ligand concentration  
         dc: (n,4) - observed chemical shifts for 4 peaks
         d0: (n,4) - free ligand chemical shifts for 4 peaks
 
@@ -2141,7 +2156,7 @@ def _(
         """
         # Convert inputs to numpy arrays
         c = np.asarray(c).flatten()
-        d = np.asarray(d).flatten()
+        d = np.asarray(d).flatten() 
         dc = np.asarray(dc)
         d0 = np.asarray(d0)
 
@@ -2154,24 +2169,36 @@ def _(
         if d0.ndim == 1:
             d0 = d0.reshape(-1, 1)
 
-        def solve_for_b(a, c_val, d_val, tol=1e-12):
+        def solve_for_b(a, c_val, d_val, tol=1e-8):  # Relaxed tolerance
             """Solve for bound ligand concentration given binding constant"""
             if abs(a) < tol:
                 return 0.0
 
             disc = a * a * (c_val - d_val) ** 2 + 2 * a * (c_val + d_val) + 1.0
+
+            # More lenient discriminant handling
             if disc < -tol:
+                print(f"Warning: Negative discriminant {disc} for a={a}, c={c_val}, d={d_val}")
                 return 0.0
 
             disc = max(disc, 0.0)
             numerator = a * (c_val + d_val) + 1.0 - math.sqrt(disc)
             b = numerator / (2.0 * a)
 
-            # Physical constraints
-            if b < -tol or b > min(c_val, d_val) + tol:
+            # Relaxed physical constraints
+            max_binding = min(c_val, d_val)
+            if b < -tol:
+                print(f"Warning: Negative binding {b}")
                 return 0.0
+            if b > max_binding + tol:
+                print(f"Warning: Excessive binding {b} > {max_binding}")
+                return max_binding
+
+            # Check for zero denominator in original equation
             if abs((c_val - b) * (d_val - b)) <= tol:
+                # print(f"Warning: Zero denominator for b={b}")
                 return 0.0
+
             return max(b, 0.0)
 
         def residuals(params):
@@ -2202,9 +2229,7 @@ def _(
         # Better initial parameter guess
         if d10 is None:
             # Estimate d1 as shifts that are different from d0
-            d1_init = (
-                np.max(dc, axis=0) + 0.1
-            )  # Slightly larger than observed max
+            d1_init = np.max(dc, axis=0) + 0.1  # Slightly larger than observed max
         else:
             d1_init = np.asarray(d10)
 
@@ -2212,8 +2237,8 @@ def _(
         if len(d1_init) != n_peaks:
             d1_init = np.full(n_peaks, np.mean(dc) + 0.1)
 
-        # Try multiple initial guesses for 'a' to avoid local minima
-        a_initial_guesses = [a0, a0 / 10, a0 * 10, 1e2, 1e3, 1e4]
+        # Expanded initial guesses for 'a' including higher values
+        a_initial_guesses = [a0, a0/100, a0/10, a0*10, a0*100, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6]
 
         best_result = None
         best_cost = np.inf
@@ -2221,13 +2246,9 @@ def _(
         for a_init in a_initial_guesses:
             params_init = np.concatenate([[a_init], d1_init])
 
-            # Tighter bounds for binding constant based on literature values
-            bounds_lower = np.concatenate(
-                [[1e2], [-10] * n_peaks]
-            )  # More realistic lower bound for a
-            bounds_upper = np.concatenate(
-                [[1e5], [10] * n_peaks]
-            )   # More realistic upper bound for a
+            # Expanded bounds for binding constant
+            bounds_lower = np.concatenate([[1e0], [-10] * n_peaks])   # Lower bound for a
+            bounds_upper = np.concatenate([[1e7], [10] * n_peaks])    # Higher upper bound for a
 
             # Perform optimization
             result = least_squares(
@@ -2235,33 +2256,34 @@ def _(
                 params_init,
                 bounds=(bounds_lower, bounds_upper),
                 method='trf',
-                max_nfev=20000,  # More iterations
-                ftol=1e-12,  # Tighter convergence
-                xtol=1e-12,
-                gtol=1e-12,
+                max_nfev=50000,  # More iterations
+                ftol=1e-15,      # Tighter convergence
+                xtol=1e-15,
+                gtol=1e-15
             )
 
             if result.success and result.cost < best_cost:
                 best_result = result
                 best_cost = result.cost
+                print(f"Better result found with a_init={a_init}: cost={result.cost:.2e}, a_fit={result.x[0]:.2e}")
 
         if best_result is None:
-            print('Warning: All optimization attempts failed')
+            print("Warning: All optimization attempts failed")
             # Fallback to first attempt
             params_init = np.concatenate([[a0], d1_init])
-            bounds_lower = np.concatenate([[1e2], [-10] * n_peaks])
-            bounds_upper = np.concatenate([[1e5], [10] * n_peaks])
+            bounds_lower = np.concatenate([[1e0], [-10] * n_peaks])
+            bounds_upper = np.concatenate([[1e7], [10] * n_peaks])
 
             best_result = least_squares(
                 residuals,
                 params_init,
                 bounds=(bounds_lower, bounds_upper),
                 method='trf',
-                max_nfev=20000,
+                max_nfev=50000
             )
 
         if not best_result.success:
-            print(f'Warning: Optimization failed: {best_result.message}')
+            print(f"Warning: Optimization failed: {best_result.message}")
 
         # Extract results
         a_fit = best_result.x[0]
@@ -2278,8 +2300,9 @@ def _(
 
         f1_per_sample = np.array(f1_per_sample)
 
-        print(f'Fitted binding constant: {a_fit:.2e}')
-        print(f'Final cost: {best_result.cost:.2e}')
+        print(f"Fitted binding constant: {a_fit:.2e}")
+        print(f"Final cost: {best_result.cost:.2e}")
+        print(f"Binding fractions: {f1_per_sample}")
 
         return a_fit, d1_fit, f1_per_sample
 
@@ -2318,7 +2341,7 @@ def _(
         for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
             result.append(fitmetalexperiments(c, d, dc, d0))
 
-        print([x[0] for x in result])
+        print(result)
 
         magnesium_deltas = result[0][1]
         calcium_deltas = result[1][1]
@@ -2326,17 +2349,15 @@ def _(
         magnesiumfs = list(result[0][2])
         calciumfs = list(result[1][2])
 
-        print(magnesiumfs)
-
         fittedfs = magnesiumfs + calciumfs
 
         return magnesium_deltas, calcium_deltas, fittedfs
 
     magnesium_deltas, calcium_deltas, fittedfs = _()
 
-    print(len(magnesium_deltas))
-    print(len(calcium_deltas))
-    print(len(fittedfs))
+    # print(len(magnesium_deltas))
+    # print(len(calcium_deltas))
+    # print(len(fittedfs))
     return calcium_deltas, fittedfs, least_squares, magnesium_deltas
 
 
