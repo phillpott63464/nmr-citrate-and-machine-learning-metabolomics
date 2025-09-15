@@ -18,14 +18,16 @@ def _():
     from cycler import cycler
 
     colors = [
-        "#DE8CDE",  # lilac (accent)
-        "#00C2A8",  # teal — high contrast & distinct
-        "#FFB84D",  # warm amber — stands out, good for highlights
-        "#4DA6FF",  # bright blue — clear on dark
-        "#FF6B6B",  # coral red — grabs attention for warnings
+        "#DE8CDE",  # lilac
+        "#00C2A8",  # teal
+        "#FFB84D",  # warm amber
+        "#57ABFF",  # bright blue
+        "#FF8A8A",  # coral red
+        "#8CE99A", # mint green
+        "#A9A9AD", # light grey
     ]
 
-    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
+    linestyles = ['-', '--', ':', '-.', (0, (5, 1)), (0, (3, 5, 1, 5)), (0, (1, 1))] 
 
 
     # Colors
@@ -2623,8 +2625,8 @@ def _(all_experiments, integrated_predictions, np, plt):
             )    # only label first column
 
             ax.scatter(
-                f,
                 val,
+                f,
                 s=20,
                 alpha=0.7,
                 linewidth=0.2,
