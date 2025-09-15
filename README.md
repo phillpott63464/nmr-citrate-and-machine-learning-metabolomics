@@ -27,6 +27,7 @@ Marimo files, all containing self-documentation, run with uv run marimo edit fro
 - Randomisation Hold Back: Uses machine learning and Morgan's spectra generation code to determine classification and concentration of unseen (not in training data) randomised metabolites in complex mixture.
 - Test Morgan.py: Tests morgan's  using cProfile and pStats. Used during optimisation of qm. 
 - View Morgans Spectra.py: Views spectra from morganspectra. 
+- Clean Fitting Data.py: Fitting data from Experiments load, but in a much simpler, cleaner, and stationary format.
 
 ### experimental
 

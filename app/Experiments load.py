@@ -424,16 +424,16 @@ def _(
 
     # Plotting
     plt.figure(figsize=(10, 6))
-    plt.plot(molar_ratios, phs, label='Experimental pHs', marker='o')
+    plt.plot(molar_ratios, phs, label='Experimental pHs')
     plt.plot(
-        expected_molar_ratios, expected_phs, label='Expected pHs', marker='x'
+        expected_molar_ratios, expected_phs, label='Expected pHs'
     )
     plt.plot(
-        expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs', marker='x'
+        expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs'
     )
 
     for id, point in enumerate(corrected_pka):
-        plt.axhline(y=point, linestyle='--', label=f'pka{id+1} = {point}')
+        plt.axhline(y=point, label=f'pka{id+1} = {point}')
 
     plt.title('Effect of Molar Ratio on pH Values')
     plt.xlabel('Molar Ratio')
@@ -492,13 +492,11 @@ def _(
         for id, point in enumerate(corrected_pka):
             plt.axhline(
                 y=point,
-                linestyle='--',
                 label=f'pka{id+1} = {point}',
             )
         for id, point in enumerate(pkasolver):
             plt.axhline(
                 y=point,
-                linestyle='--',
                 label=f'pkasolver{id+1} = {point}',
             )
 
@@ -891,10 +889,6 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     plt.plot(
         [x / 0.0006 * 100 for x in base_vol],
         fracs,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
@@ -906,10 +900,6 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     plt.plot(
         phs,
         fracs,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
@@ -921,10 +911,6 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     plt.plot(
         avg_ppm,
         fracs,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.gca().invert_xaxis()
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
@@ -1049,10 +1035,6 @@ def _(avg_ppm, fracs, np, plt, predicted_ratios):
     plt.plot(
         avg_ppm,
         predicted_ratios,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.gca().invert_xaxis()
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
@@ -1108,10 +1090,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.plot(
         [x / 0.0006 * 100 for x in base_vol],
         citrate_couplings,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.title('J Coupling vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
@@ -1122,10 +1100,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.plot(
         phs,
         citrate_couplings,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.title('J Coupling vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
@@ -1136,9 +1110,6 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     plt.plot(
         citrate_couplings,
         fracs,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
     )
     plt.title('J Coupling vs. Citrate Species', fontsize=14)
     plt.xlabel('J Coupling', fontsize=12)
@@ -1180,7 +1151,6 @@ def _(
     experiment_number,
     experiments,
     extract_peak_values,
-    fracs,
     np,
     phs,
     plt,
@@ -1226,10 +1196,6 @@ def _(
     plt.plot(
         [x / 0.0006 * 100 for x in base_vol],
         citrate_differences,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
     plt.xlabel('Sodium Citrate Percentage', fontsize=12)
@@ -1240,10 +1206,6 @@ def _(
     plt.plot(
         phs,
         citrate_differences,
-        marker='s',
-        linestyle='-',
-        linewidth=2,
-        markersize=5,
     )
     plt.title('Peak Differences vs. pH', fontsize=14)
     plt.xlabel('pH', fontsize=12)
@@ -1253,10 +1215,6 @@ def _(
     plt.subplot(1, 3, 3)
     plt.plot(
         citrate_differences,
-        fracs,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
     )
 
     plt.title('Peak Differences vs. Citrate Species', fontsize=14)
@@ -1308,9 +1266,6 @@ def _(data_dir, experiment_number, experiments, math, plt, read_bruker):
             plt.subplot(rows, cols, idx + 1)
             plt.plot(
                 data,
-                linestyle='-',
-                linewidth=0.5,
-                markersize=5,
             )
 
             # Add titles and labels
@@ -1354,7 +1309,7 @@ def _(data_dir, experiment_number, experiments, plt, read_bruker):
         experiment_number=experiment_number,
     )
 
-    plt.plot(fiddata, linestyle='-', linewidth=0.5, markersize=5)
+    plt.plot(fiddata)
     plt.savefig('figs/singleFID.svg')
     singlefidfig = plt.gca()
     return (singlefidfig,)
@@ -2011,15 +1966,12 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         if exp.get('Sample number') > 36
     ]
 
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(10, 8))
 
     plt.subplot(2, 2, 1)
     plt.plot(
         magnesium_percentages,
         magnesium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
     )
 
     plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
@@ -2030,9 +1982,6 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     plt.plot(
         calcium_percentages,
         calcium_peaks,
-        marker='o',
-        linestyle='-',
-        linewidth=2,
     )
 
     plt.title('Calcium Molarity vs Citrate Chemical Shift ', fontsize=14)
@@ -2149,6 +2098,38 @@ def _(
 ):
     from scipy.optimize import least_squares
 
+    def solve_for_b(a, c_val, d_val, tol=1e-8):  # Relaxed tolerance
+        """Solve for bound ligand concentration given binding constant"""
+        if abs(a) < tol:
+            return 0.0
+
+        disc = a * a * (c_val - d_val) ** 2 + 2 * a * (c_val + d_val) + 1.0
+
+        # More lenient discriminant handling
+        if disc < -tol:
+            print(f"Warning: Negative discriminant {disc} for a={a}, c={c_val}, d={d_val}")
+            return 0.0
+
+        disc = max(disc, 0.0)
+        numerator = a * (c_val + d_val) + 1.0 - math.sqrt(disc)
+        b = numerator / (2.0 * a)
+
+        # Relaxed physical constraints
+        max_binding = min(c_val, d_val)
+        if b < -tol:
+            print(f"Warning: Negative binding {b}")
+            return 0.0
+        if b > max_binding + tol:
+            print(f"Warning: Excessive binding {b} > {max_binding}")
+            return max_binding
+
+        # Check for zero denominator in original equation
+        if abs((c_val - b) * (d_val - b)) <= tol:
+            # print(f"Warning: Zero denominator for b={b}")
+            return 0.0
+
+        return max(b, 0.0)
+
     def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
         """
         c: (n,) or (n,1) - total metal concentration
@@ -2174,38 +2155,6 @@ def _(
             dc = dc.reshape(-1, 1)
         if d0.ndim == 1:
             d0 = d0.reshape(-1, 1)
-
-        def solve_for_b(a, c_val, d_val, tol=1e-8):  # Relaxed tolerance
-            """Solve for bound ligand concentration given binding constant"""
-            if abs(a) < tol:
-                return 0.0
-
-            disc = a * a * (c_val - d_val) ** 2 + 2 * a * (c_val + d_val) + 1.0
-
-            # More lenient discriminant handling
-            if disc < -tol:
-                print(f"Warning: Negative discriminant {disc} for a={a}, c={c_val}, d={d_val}")
-                return 0.0
-
-            disc = max(disc, 0.0)
-            numerator = a * (c_val + d_val) + 1.0 - math.sqrt(disc)
-            b = numerator / (2.0 * a)
-
-            # Relaxed physical constraints
-            max_binding = min(c_val, d_val)
-            if b < -tol:
-                print(f"Warning: Negative binding {b}")
-                return 0.0
-            if b > max_binding + tol:
-                print(f"Warning: Excessive binding {b} > {max_binding}")
-                return max_binding
-
-            # Check for zero denominator in original equation
-            if abs((c_val - b) * (d_val - b)) <= tol:
-                # print(f"Warning: Zero denominator for b={b}")
-                return 0.0
-
-            return max(b, 0.0)
 
         def residuals(params):
             """Calculate residuals for optimization"""
@@ -2364,7 +2313,45 @@ def _(
     # print(len(magnesium_deltas))
     # print(len(calcium_deltas))
     # print(len(fittedfs))
-    return calcium_deltas, fittedfs, least_squares, magnesium_deltas
+    return calcium_deltas, least_squares, magnesium_deltas, solve_for_b
+
+
+@app.cell
+def _(metal_real_experiments, solve_for_b):
+    ## Real fractions from literature kf values
+
+    kfmg = 2.818e3
+    kfca = 2.818e3 
+    # Martell and Smith (1989)
+
+    def _():
+        carr = []
+        darr = []
+        for idx, mexperiment in enumerate(metal_real_experiments):
+            carr.append(mexperiment['salt stock molarity / M'])
+            darr.append(mexperiment['citric acid molarity / M'])
+
+        aarr = [kfmg] * 12 + [kfca] * 12
+
+        literature_fs = []
+        ratio_check = set()
+
+        for a, c, d in zip(aarr, carr, darr):
+            b = solve_for_b(a, c, d)
+            f0 = (d-b) / d # ratio of ligand to metal complex
+            f1 = b/d # ratio of metal complex to total ligand
+
+            ratio_check.add(f0+f1)
+
+            literature_fs.append(f1)
+
+        print(ratio_check)
+        return literature_fs
+
+    literature_fs = _()
+
+    print(literature_fs[:12])
+    return (literature_fs,)
 
 
 @app.cell(hide_code=True)
@@ -2399,8 +2386,8 @@ def _(mo, predictions_fig):
 def _(
     chelation_peak_values_no_intensities,
     citricacid,
-    fittedfs,
     fracs,
+    literature_fs,
     metal_real_experiments,
     peak_values_no_intensities,
 ):
@@ -2427,7 +2414,8 @@ def _(
 
         mgca_experiments = []
         for idx, (mexperiment, f) in enumerate(
-            zip(metal_real_experiments, fittedfs)
+            # zip(metal_real_experiments, fittedfs) # Uses the metal complex coefficient values from fitted data
+            zip(metal_real_experiments, literature_fs) # Uses the metal complex coefficient values from literature kf values
         ):
             e = f   # ratio of metal ligand to ligand
             c = 1 - f   # ratio of ligand to metal ligand
@@ -2460,8 +2448,10 @@ def _(
 
     all_experiments = _()
 
-    print(len(fittedfs))
-    print(len(all_experiments))
+    # print(len(fittedfs))
+    # print(len(all_experiments))
+
+    print(repr(all_experiments))
     return (all_experiments,)
 
 
@@ -2483,7 +2473,7 @@ def _(all_deltas, calcium_deltas, magnesium_deltas, np):
 
     integrated_deltas = _()
 
-    print(integrated_deltas)
+    print(repr(integrated_deltas.tolist()))
     return (integrated_deltas,)
 
 
@@ -2585,6 +2575,12 @@ def _(all_experiments, integrated_deltas, least_squares, np):
     if integrated_predictions:
         print('Sample prediction:', integrated_predictions[0])
     return (integrated_predictions,)
+
+
+@app.cell
+def _(integrated_predictions):
+    print(repr([x.tolist() for x in integrated_predictions]))
+    return
 
 
 @app.cell
