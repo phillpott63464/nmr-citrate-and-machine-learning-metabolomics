@@ -12,7 +12,7 @@ def _(os):
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     import matplotlib.pyplot as plt
     from cycler import cycler
@@ -1228,7 +1228,7 @@ def _(
     # Adjust layout to prevent overlap
     plt.tight_layout()
 
-    plt.savefig('figs/citratepeakdifferencesfig')
+    plt.savefig('figs/citratepeakdifferencesfig.svg')
 
     # Show the plots
     citratepeakdifferencesfig = plt.gca()
@@ -1410,7 +1410,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(
-                ppmscale[19000:22000], data[19000:22000]
+                ppmscale[19900:21500], data[19900:21500]
             )  # Adjust the range as needed
             # ax.plot(data)
             ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
@@ -1995,7 +1995,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     # Adjust layout to prevent overlap
     plt.tight_layout()
 
-    plt.savefig('figs/chelation.svg')
+    plt.savefig('figs/chelation.svg', bbox_inches='tight')
 
     chelation_fig = plt.gca()
     return (
@@ -2132,16 +2132,17 @@ def _(
 
         return max(b, 0.0)
 
-    def fitmetalexperiments(c, d, dc, d0, a0=2.19e3, d10=None):
+    def fitmetalexperiments(c, d, dc, d0, a0=2.818e3, d10=None):
         """
         c: (n,) or (n,1) - total metal concentration
         d: (n,) or (n,1) - total ligand concentration  
         dc: (n,4) - observed chemical shifts for 4 peaks
         d0: (n,4) - free ligand chemical shifts for 4 peaks
+        a0: fixed binding constant (Martell & Smith. (1989))
 
         Fits scalar a and vector d1 (length 4) minimizing least squares
         of dc_pred = (1-f1) * d0 + f1 * d1 for each column.
-        Returns: a_fit (scalar), d1_fit (length-4), f1_per_sample (n,)
+        Returns: a0 (scalar), d1_fit (length-4), f1_per_sample (n,)
         """
         # Convert inputs to numpy arrays
         c = np.asarray(c).flatten()
@@ -2160,14 +2161,14 @@ def _(
 
         def residuals(params):
             """Calculate residuals for optimization"""
-            a = params[0]
-            d1 = params[1:]  # Chemical shifts for bound ligand
+            # a is fixed: use a0
+            d1 = params[:]  # Chemical shifts for bound ligand (length = n_peaks)
 
             residuals_all = []
 
             for i in range(n_samples):
-                # Calculate bound ligand fraction for this sample
-                b = solve_for_b(a, c[i], d[i])
+                # Calculate bound ligand fraction for this sample using fixed a0
+                b = solve_for_b(a0, c[i], d[i])
 
                 if d[i] > 0:
                     f1 = b / d[i]  # Fraction of ligand that is bound
@@ -2183,70 +2184,38 @@ def _(
 
             return np.array(residuals_all)
 
-        # Better initial parameter guess
+        # Initial guess for d1
         if d10 is None:
-            # Estimate d1 as shifts that are different from d0
-            d1_init = np.max(dc, axis=0) + 0.1  # Slightly larger than observed max
+            d1_init = np.max(dc, axis=0) + 0.1
         else:
             d1_init = np.asarray(d10)
 
-        # Ensure d1_init has correct length
         if len(d1_init) != n_peaks:
             d1_init = np.full(n_peaks, np.mean(dc) + 0.1)
 
-        # Expanded initial guesses for 'a' including higher values
-        a_initial_guesses = [a0, a0/100, a0/10, a0*10, a0*100, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6]
+        # Bounds for d1 only (a is fixed)
+        bounds_lower = np.array([-10] * n_peaks)
+        bounds_upper = np.array([10] * n_peaks)
 
-        best_result = None
-        best_cost = np.inf
+        result = least_squares(
+            residuals,
+            d1_init,
+            bounds=(bounds_lower, bounds_upper),
+            method='trf',
+            max_nfev=50000,
+            ftol=1e-15,
+            xtol=1e-15,
+            gtol=1e-15
+        )
 
-        for a_init in a_initial_guesses:
-            params_init = np.concatenate([[a_init], d1_init])
+        if not result.success:
+            print(f"Warning: Optimization failed: {result.message}")
 
-            # Expanded bounds for binding constant
-            bounds_lower = np.concatenate([[1e0], [-10] * n_peaks])   # Lower bound for a
-            bounds_upper = np.concatenate([[1e7], [10] * n_peaks])    # Higher upper bound for a
+        # a is fixed
+        a_fit = a0
+        d1_fit = result.x
 
-            # Perform optimization
-            result = least_squares(
-                residuals,
-                params_init,
-                bounds=(bounds_lower, bounds_upper),
-                method='trf',
-                max_nfev=50000,  # More iterations
-                ftol=1e-15,      # Tighter convergence
-                xtol=1e-15,
-                gtol=1e-15
-            )
-
-            if result.success and result.cost < best_cost:
-                best_result = result
-                best_cost = result.cost
-                print(f"Better result found with a_init={a_init}: cost={result.cost:.2e}, a_fit={result.x[0]:.2e}")
-
-        if best_result is None:
-            print("Warning: All optimization attempts failed")
-            # Fallback to first attempt
-            params_init = np.concatenate([[a0], d1_init])
-            bounds_lower = np.concatenate([[1e0], [-10] * n_peaks])
-            bounds_upper = np.concatenate([[1e7], [10] * n_peaks])
-
-            best_result = least_squares(
-                residuals,
-                params_init,
-                bounds=(bounds_lower, bounds_upper),
-                method='trf',
-                max_nfev=50000
-            )
-
-        if not best_result.success:
-            print(f"Warning: Optimization failed: {best_result.message}")
-
-        # Extract results
-        a_fit = best_result.x[0]
-        d1_fit = best_result.x[1:]
-
-        # Calculate f1 for each sample using fitted parameters
+        # Calculate f1 for each sample using fixed a0
         f1_per_sample = []
         for i in range(n_samples):
             b = solve_for_b(a_fit, c[i], d[i])
@@ -2257,8 +2226,8 @@ def _(
 
         f1_per_sample = np.array(f1_per_sample)
 
-        print(f"Fitted binding constant: {a_fit:.2e}")
-        print(f"Final cost: {best_result.cost:.2e}")
+        print(f"Using fixed binding constant: {a_fit:.2e}")
+        print(f"Final cost: {result.cost:.2e}")
         print(f"Binding fractions: {f1_per_sample}")
 
         return a_fit, d1_fit, f1_per_sample
@@ -2294,8 +2263,11 @@ def _(
         dcarr = [mgdc, cadc]
         d0arr = [mgd0, cad0]
 
+        aarr = [2.818e3, 2.818e3]
+        #Martell & Smith. (1989)
+
         result = []
-        for c, d, dc, d0 in zip(carr, darr, dcarr, d0arr):
+        for c, d, dc, d0, a in zip(carr, darr, dcarr, d0arr, aarr):
             result.append(fitmetalexperiments(c, d, dc, d0))
 
         print(result)
@@ -2315,45 +2287,7 @@ def _(
     # print(len(magnesium_deltas))
     # print(len(calcium_deltas))
     # print(len(fittedfs))
-    return calcium_deltas, least_squares, magnesium_deltas, solve_for_b
-
-
-@app.cell
-def _(metal_real_experiments, solve_for_b):
-    ## Real fractions from literature kf values
-
-    kfmg = 2.818e3
-    kfca = 2.818e3 
-    # Martell and Smith (1989)
-
-    def _():
-        carr = []
-        darr = []
-        for idx, mexperiment in enumerate(metal_real_experiments):
-            carr.append(mexperiment['salt stock molarity / M'])
-            darr.append(mexperiment['citric acid molarity / M'])
-
-        aarr = [kfmg] * 12 + [kfca] * 12
-
-        literature_fs = []
-        ratio_check = set()
-
-        for a, c, d in zip(aarr, carr, darr):
-            b = solve_for_b(a, c, d)
-            f0 = (d-b) / d # ratio of ligand to metal complex
-            f1 = b/d # ratio of metal complex to total ligand
-
-            ratio_check.add(f0+f1)
-
-            literature_fs.append(f1)
-
-        print(ratio_check)
-        return literature_fs
-
-    literature_fs = _()
-
-    print(literature_fs[:12])
-    return (literature_fs,)
+    return calcium_deltas, fittedfs, least_squares, magnesium_deltas
 
 
 @app.cell(hide_code=True)
@@ -2388,8 +2322,8 @@ def _(mo, predictions_fig):
 def _(
     chelation_peak_values_no_intensities,
     citricacid,
+    fittedfs,
     fracs,
-    literature_fs,
     metal_real_experiments,
     peak_values_no_intensities,
 ):
@@ -2416,8 +2350,7 @@ def _(
 
         mgca_experiments = []
         for idx, (mexperiment, f) in enumerate(
-            # zip(metal_real_experiments, fittedfs) # Uses the metal complex coefficient values from fitted data
-            zip(metal_real_experiments, literature_fs) # Uses the metal complex coefficient values from literature kf values
+            zip(metal_real_experiments, fittedfs) # Uses the metal complex coefficient values from fitted data
         ):
             e = f   # ratio of metal ligand to ligand
             c = 1 - f   # ratio of ligand to metal ligand
@@ -2547,7 +2480,7 @@ def _(all_experiments, integrated_deltas, least_squares, np):
             x0,
             bounds=(bounds_lower, bounds_upper),
             method='trf',
-            max_nfev=20000,
+            max_nfev=50000,
         )
 
         if not res.success:
@@ -2647,7 +2580,7 @@ def _(all_experiments, integrated_predictions, np, plt):
                 [0, 1],
                 [0 - delta, 1 - delta],
                 [0 + delta, 1 + delta],
-                color='orange',
+                # color='orange',
                 alpha=0.2,
             )
 
@@ -2774,7 +2707,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
     """
     Generate additional synthetic data from previous models
     ds=f6(f0d0+f1d1+f2d2+f3d3)+f4d4+f5d5
-    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% MSE model. Probably good for noise though.)
+    Just a straight forward calculation (though not entirely great, since we're depending on the intrinisc chemical shifts from the 10% RMSE model. Probably good for noise though.)
     """
 
     import torch
@@ -2826,7 +2759,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-    return device, test_peaks, test_vals, torch
+    return device, test_peaks, test_vals, torch, train_peaks, train_vals
 
 
 @app.cell
@@ -2837,11 +2770,21 @@ def _():
     return F, nn, optim
 
 
-app._unparsable_cell(
-    r"""
-    I can't s### Try a neural network?
+@app.cell
+def _(
+    F,
+    TinyTransformer,
+    device,
+    nn,
+    np,
+    optim,
+    torch,
+    train_peaks,
+    train_vals,
+):
+    ### Try a neural network?
 
-    incorrect code to block this from running temporarily
+    # incorrect code to block this from running temporarily
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -2868,6 +2811,7 @@ app._unparsable_cell(
             return torch.cat([first4, last3], dim=1)
 
     model = TinyTransformer(4).to(device)
+    # model = ConstrainedModel().to(device)
 
     X = torch.tensor(train_peaks, dtype=torch.float32).to(device)  # (samples, 4)
     y = torch.tensor(train_vals, dtype=torch.float32).to(device)  # (samples, 7)
@@ -2901,9 +2845,7 @@ app._unparsable_cell(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-    """,
-    name="_"
-)
+    return criterion, model
 
 
 @app.cell
