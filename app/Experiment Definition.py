@@ -84,7 +84,7 @@ def _():
     graph_molarity = 0.001
     stock_molarity = 0.01
     stock_volume = 50   # ml
-    sample_vol = 0.0006   # l
+    sample_vol = 0.001   # l
     acid_mass = 21.01   # g/l, 0.1M
     base_mass = 29.41   # g/1, 0.1M
     acid_molecular_weight = 192.12   # g/mol
@@ -434,7 +434,7 @@ def _(mo, stock_output):
 
 
 @app.cell
-def _(experiments, mo, rounding, sample_vol, stock_molarity):
+def _(experiments, mo, rounding, sample_vol):
     acid_vol = 0
     base_vol = 0
 
@@ -454,12 +454,15 @@ def _(experiments, mo, rounding, sample_vol, stock_molarity):
         volumed_experiments.append(
             {
                 'pH': row['pH'],
-                'acid volume': round(
-                    acid_vol_add * 1 / stock_molarity, rounding
+                'acid volume / uL': round(
+                    acid_vol_add * 1000 * 1000, rounding #uL
                 ),
-                'base volume': round(
-                    base_vol_add * 1 / stock_molarity, rounding
+                'base volume / uL': round(
+                    base_vol_add * 1000 * 1000 , rounding #uL
                 ),
+                'weight': None,
+                'post acid weight': None,
+                'post base weight': None,
             }
         )
 
@@ -527,6 +530,7 @@ def _(corrected_pka, fig, pd, pka, stock_output, study, volumed_experiments):
         f.writelines(stock_output)
 
     volumed_experiments.sort(key=operator.itemgetter('pH'))
+    volumed_experiments
 
     out = pd.DataFrame.from_dict(volumed_experiments)
     out.to_csv(path_or_buf=f'{directory}/experiments.csv', index=False)
