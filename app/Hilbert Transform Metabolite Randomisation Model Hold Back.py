@@ -20,6 +20,7 @@ def _():
 @app.cell
 def _():
     import matplotlib.pyplot as plt
+    from cycler import cycler
 
     colors = [
         "#DE8CDE",  # lilac (accent)
@@ -28,6 +29,8 @@ def _():
         "#4DA6FF",  # bright blue — clear on dark
         "#FF6B6B",  # coral red — grabs attention for warnings
     ]
+
+    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
 
 
     # Colors
@@ -42,8 +45,11 @@ def _():
     plt.rcParams['ytick.color'] = colors[0]
     plt.rcParams['text.color'] = colors[0]
 
-    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+    # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
     return (plt,)
+
 
 @app.cell(hide_code=True)
 def _(cuda_built, gpu_count, hip_version, mo):
@@ -617,9 +623,8 @@ def _(combinations, count, held_back_metabolites, mo, spectra):
 
 
 @app.cell
-def _(spectra):
+def _(plt, spectra):
     """Generate sample spectrum visualizations"""
-
     print(f"Total spectra available: {len(spectra)}")
     graph_count = 3  # 3x3 grid of sample spectra
 
@@ -638,7 +643,7 @@ def _(spectra):
 
     plt.tight_layout()
     spectrafigures = plt.gca()
-    return graph_count, plt, spectrafigures
+    return graph_count, spectrafigures
 
 
 @app.cell(hide_code=True)
