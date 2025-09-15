@@ -18,7 +18,6 @@
 - bufferdata.csv: Table of citrate/citric acid buffer pHs and ratios taken from Data for Biochemical Research, Third Edition (Make this a full reference)
 - PKA_STUDY.db: Optuna database of trials used to determine pKas from bufferdata.
 - metal_experiments.csv - Spreadsheet containing concentrations of components used to create samples for chelation experiments, including stock requirements.
-- new_metal_experiments.csv - Spreadsheet containing concentrations of components not yet used.
 
 Marimo files, all containing self-documentation, run with uv run marimo edit from app and follow provided link or docker compose up -d from root directory and go to url localhost:27182:
 - Experiment Definition.py: calculates speciation and pkas, defines experiment parameters
@@ -31,7 +30,7 @@ Marimo files, all containing self-documentation, run with uv run marimo edit fro
 
 ### experimental
 
-Folder containing CSV files of experimental samples, including blanks. Includes metal_eppendorfs for chelation and na-eppendorfs for speciation.
+Folder containing CSV files of experimental samples, including blanks. Includes metal_eppendorfs for chelation and na-eppendorfs for speciation. metal_eppendorfs_again for repeat samples.
 
 ### figs
 
@@ -74,3 +73,9 @@ Due to errors with bubbles in the sample
 #### 20250811_cit_ca_mg_cit_titr_22_rep
 
 Due to errors with bubbles in the sample
+
+#### 20250811_cit_ca_mg_cit_titr_rep_x, x=1-24, non inclusive of 6 and 7
+
+Repeated due to not smooth graphs
+
+Due to errors with lost samples (6/7)
