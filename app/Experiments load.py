@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.15.2"
-app = marimo.App(width="medium")
+__generated_with = '0.15.2'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -18,25 +18,32 @@ def _():
     from cycler import cycler
 
     colors = [
-        "#DE8CDE",  # lilac
-        "#00C2A8",  # teal
-        "#FFB84D",  # warm amber
-        "#57ABFF",  # bright blue
-        "#FF8A8A",  # coral red
-        "#8CE99A", # mint green
-        "#A9A9AD", # light grey
+        '#DE8CDE',  # lilac
+        '#00C2A8',  # teal
+        '#FFB84D',  # warm amber
+        '#57ABFF',  # bright blue
+        '#FF8A8A',  # coral red
+        '#8CE99A',  # mint green
+        '#A9A9AD',  # light grey
     ]
 
-    linestyles = ['-', '--', ':', '-.', (0, (5, 1)), (0, (3, 5, 1, 5)), (0, (1, 1))] 
-
+    linestyles = [
+        '-',
+        '--',
+        ':',
+        '-.',
+        (0, (5, 1)),
+        (0, (3, 5, 1, 5)),
+        (0, (1, 1)),
+    ]
 
     # Colors
-    fig_bg = "#1B1B1D"    # figure background
+    fig_bg = '#1B1B1D'    # figure background
     ax_bg = fig_bg   # axes background
 
     plt.rcParams['figure.facecolor'] = fig_bg
     plt.rcParams['axes.facecolor'] = ax_bg
-    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.edgecolor'] = '#333333'  # axes border
     plt.rcParams['axes.labelcolor'] = colors[0]
     plt.rcParams['xtick.color'] = colors[0]
     plt.rcParams['ytick.color'] = colors[0]
@@ -44,7 +51,9 @@ def _():
 
     # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
-    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(
+        linestyle=linestyles
+    )
     return colors, plt
 
 
@@ -427,12 +436,8 @@ def _(
     # Plotting
     plt.figure(figsize=(10, 6))
     plt.plot(molar_ratios, phs, label='Experimental pHs')
-    plt.plot(
-        expected_molar_ratios, expected_phs, label='Expected pHs'
-    )
-    plt.plot(
-        expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs'
-    )
+    plt.plot(expected_molar_ratios, expected_phs, label='Expected pHs')
+    plt.plot(expected_molar_ratios, pkasolver_phs, label='Pkasolver pHs')
 
     for id, point in enumerate(corrected_pka):
         plt.axhline(y=point, label=f'pka{id+1} = {point}')
@@ -1648,7 +1653,7 @@ def _(
 ):
     from collections import OrderedDict
 
-    chelation_selection = 1 # 0 for original, 1 for new
+    chelation_selection = 1   # 0 for original, 1 for new
 
     if chelation_selection == 0:
         metal_imported = pd.read_csv(f'{out_dir}/metal_eppendorfs.csv')
@@ -1762,9 +1767,7 @@ def _(
 ):
     if chelation_selection == 0:
 
-        experiment_dir_chelation = (
-            '20250811_cit_ca_mg_cit_titr'
-        )
+        experiment_dir_chelation = '20250811_cit_ca_mg_cit_titr'
 
         chelation_experiments = get_experiment_directories(
             data_dir, experiment_dir_chelation, experiment_count
@@ -1774,9 +1777,7 @@ def _(
         chelation_experiments[21] = f'{chelation_experiments[21]}_rep'
 
     elif chelation_selection == 1:
-        experiment_dir_chelation = (
-            '20250811_cit_ca_mg_cit_titr_rep'
-        )
+        experiment_dir_chelation = '20250811_cit_ca_mg_cit_titr_rep'
 
         chelation_experiments = get_experiment_directories(
             data_dir, experiment_dir_chelation, experiment_count
@@ -2109,7 +2110,9 @@ def _(
 
         # More lenient discriminant handling
         if disc < -tol:
-            print(f"Warning: Negative discriminant {disc} for a={a}, c={c_val}, d={d_val}")
+            print(
+                f'Warning: Negative discriminant {disc} for a={a}, c={c_val}, d={d_val}'
+            )
             return 0.0
 
         disc = max(disc, 0.0)
@@ -2119,10 +2122,10 @@ def _(
         # Relaxed physical constraints
         max_binding = min(c_val, d_val)
         if b < -tol:
-            print(f"Warning: Negative binding {b}")
+            print(f'Warning: Negative binding {b}')
             return 0.0
         if b > max_binding + tol:
-            print(f"Warning: Excessive binding {b} > {max_binding}")
+            print(f'Warning: Excessive binding {b} > {max_binding}')
             return max_binding
 
         # Check for zero denominator in original equation
@@ -2135,7 +2138,7 @@ def _(
     def fitmetalexperiments(c, d, dc, d0, a0=2.818e3, d10=None):
         """
         c: (n,) or (n,1) - total metal concentration
-        d: (n,) or (n,1) - total ligand concentration  
+        d: (n,) or (n,1) - total ligand concentration
         dc: (n,4) - observed chemical shifts for 4 peaks
         d0: (n,4) - free ligand chemical shifts for 4 peaks
         a0: fixed binding constant (Martell & Smith. (1989))
@@ -2146,7 +2149,7 @@ def _(
         """
         # Convert inputs to numpy arrays
         c = np.asarray(c).flatten()
-        d = np.asarray(d).flatten() 
+        d = np.asarray(d).flatten()
         dc = np.asarray(dc)
         d0 = np.asarray(d0)
 
@@ -2162,7 +2165,9 @@ def _(
         def residuals(params):
             """Calculate residuals for optimization"""
             # a is fixed: use a0
-            d1 = params[:]  # Chemical shifts for bound ligand (length = n_peaks)
+            d1 = params[
+                :
+            ]  # Chemical shifts for bound ligand (length = n_peaks)
 
             residuals_all = []
 
@@ -2205,11 +2210,11 @@ def _(
             max_nfev=50000,
             ftol=1e-15,
             xtol=1e-15,
-            gtol=1e-15
+            gtol=1e-15,
         )
 
         if not result.success:
-            print(f"Warning: Optimization failed: {result.message}")
+            print(f'Warning: Optimization failed: {result.message}')
 
         # a is fixed
         a_fit = a0
@@ -2226,9 +2231,9 @@ def _(
 
         f1_per_sample = np.array(f1_per_sample)
 
-        print(f"Using fixed binding constant: {a_fit:.2e}")
-        print(f"Final cost: {result.cost:.2e}")
-        print(f"Binding fractions: {f1_per_sample}")
+        print(f'Using fixed binding constant: {a_fit:.2e}')
+        print(f'Final cost: {result.cost:.2e}')
+        print(f'Binding fractions: {f1_per_sample}')
 
         return a_fit, d1_fit, f1_per_sample
 
@@ -2264,7 +2269,7 @@ def _(
         d0arr = [mgd0, cad0]
 
         aarr = [2.818e3, 2.818e3]
-        #Martell & Smith. (1989)
+        # Martell & Smith. (1989)
 
         result = []
         for c, d, dc, d0, a in zip(carr, darr, dcarr, d0arr, aarr):
@@ -2350,7 +2355,9 @@ def _(
 
         mgca_experiments = []
         for idx, (mexperiment, f) in enumerate(
-            zip(metal_real_experiments, fittedfs) # Uses the metal complex coefficient values from fitted data
+            zip(
+                metal_real_experiments, fittedfs
+            )  # Uses the metal complex coefficient values from fitted data
         ):
             e = f   # ratio of metal ligand to ligand
             c = 1 - f   # ratio of ligand to metal ligand
@@ -2533,7 +2540,7 @@ def _(all_experiments, colors, integrated_predictions, np, plt):
         fs = [list(x) for x in zip(*integrated_predictions)]
 
         keys = [*all_experiments[0].keys()]
-        keys.pop() # Remove peaks key
+        keys.pop()   # Remove peaks key
 
         i = 1
         y = 1
@@ -2568,39 +2575,55 @@ def _(all_experiments, colors, integrated_predictions, np, plt):
 
             # residuals and statistics
             resid = np.array(f) - np.array(val)
-            sigma = resid.std(ddof=0)            # population std; use ddof=1 for sample std
-            mse = np.mean(resid ** 2)
+            sigma = resid.std(
+                ddof=0
+            )            # population std; use ddof=1 for sample std
+            mse = np.mean(resid**2)
             rmse = np.sqrt(mse)
             r2 = r2_score(val, f)
 
-            stdevs = 3 # How many standard deviations to plot
+            stdevs = 3   # How many standard deviations to plot
 
             axtext = f'R²={r2:.3f}\nRMSE={rmse:.3}'
 
             def ring_color(i, base_colors=colors):
                 # i is 1..stdevs, pick colors cyclically or slice for distinct rings
-                return base_colors[(i-1) % len(base_colors)]
-        
-            for x in range(1, stdevs+1):
-                lower = np.array([0 - x*sigma, 1 - x*sigma])
-                upper = np.array([0 + x*sigma, 1 + x*sigma])
+                return base_colors[(i - 1) % len(base_colors)]
+
+            for x in range(1, stdevs + 1):
+                lower = np.array([0 - x * sigma, 1 - x * sigma])
+                upper = np.array([0 + x * sigma, 1 + x * sigma])
 
                 axtext = f'{axtext}\n±{x}σ={x*sigma:.3f}'
-        
-                col = ring_color(x+1)
+
+                col = ring_color(x + 1)
                 if x == 1:
-                    ax.fill_between([0,1], lower, upper, color=col, alpha=0.45)
+                    ax.fill_between(
+                        [0, 1], lower, upper, color=col, alpha=0.45
+                    )
                 else:
-                    prev_lower = np.array([0 - (x-1)*sigma, 1 - (x-1)*sigma])
-                    prev_upper = np.array([0 + (x-1)*sigma, 1 + (x-1)*sigma])
-                    ax.fill_between([0,1], prev_upper, upper, color=col, alpha=0.35)
-                    ax.fill_between([0,1], lower, prev_lower, color=col, alpha=0.35)
-            
+                    prev_lower = np.array(
+                        [0 - (x - 1) * sigma, 1 - (x - 1) * sigma]
+                    )
+                    prev_upper = np.array(
+                        [0 + (x - 1) * sigma, 1 + (x - 1) * sigma]
+                    )
+                    ax.fill_between(
+                        [0, 1], prev_upper, upper, color=col, alpha=0.35
+                    )
+                    ax.fill_between(
+                        [0, 1], lower, prev_lower, color=col, alpha=0.35
+                    )
 
             ax.text(
-                0.02, 0.98, axtext,
-                transform=ax.transAxes, fontsize=8,
-                va='top', ha='left', color=colors[0]
+                0.02,
+                0.98,
+                axtext,
+                transform=ax.transAxes,
+                fontsize=8,
+                va='top',
+                ha='left',
+                color=colors[0],
             )
 
         for j in range(len(fs), len(axes)):
@@ -2633,6 +2656,7 @@ def _(all_experiments, integrated_predictions, np):
         print(f'RMSE of integrated predictions: {rmse}')
 
         return (mse, rmse)
+
     return (find_prediction_errors,)
 
 
@@ -2782,6 +2806,7 @@ def _():
     import torch.nn as nn
     import torch.optim as optim
     import torch.nn.functional as F
+
     return F, nn, optim
 
 
@@ -2828,8 +2853,12 @@ def _(
     model = TinyTransformer(4).to(device)
     # model = ConstrainedModel().to(device)
 
-    X = torch.tensor(train_peaks, dtype=torch.float32).to(device)  # (samples, 4)
-    y = torch.tensor(train_vals, dtype=torch.float32).to(device)  # (samples, 7)
+    X = torch.tensor(train_peaks, dtype=torch.float32).to(
+        device
+    )  # (samples, 4)
+    y = torch.tensor(train_vals, dtype=torch.float32).to(
+        device
+    )  # (samples, 7)
 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -2839,7 +2868,7 @@ def _(
     full_count = 0
     count = 0
     while True:
-    # for epoch in range(epochs):
+        # for epoch in range(epochs):
         model.train()  # ensure model is in training mode
 
         optimizer.zero_grad()      # reset gradients
@@ -3121,6 +3150,7 @@ def _(F, math, nn, torch):
             first4 = F.softmax(logits[:, :4], dim=1)
             last3 = F.softmax(logits[:, 4:], dim=1)
             return torch.cat([first4, last3], dim=1)
+
     return (TinyTransformer,)
 
 
@@ -3251,5 +3281,5 @@ def _(
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()

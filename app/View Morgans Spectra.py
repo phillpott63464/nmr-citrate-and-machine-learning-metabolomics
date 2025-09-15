@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = "0.15.2"
-app = marimo.App(width="medium")
+__generated_with = '0.15.2'
+app = marimo.App(width='medium')
 
 
 @app.cell
@@ -10,23 +10,28 @@ def _():
     from cycler import cycler
 
     colors = [
-        "#DE8CDE",  # lilac (accent)
-        "#00C2A8",  # teal — high contrast & distinct
-        "#FFB84D",  # warm amber — stands out, good for highlights
-        "#4DA6FF",  # bright blue — clear on dark
-        "#FF6B6B",  # coral red — grabs attention for warnings
+        '#DE8CDE',  # lilac (accent)
+        '#00C2A8',  # teal — high contrast & distinct
+        '#FFB84D',  # warm amber — stands out, good for highlights
+        '#4DA6FF',  # bright blue — clear on dark
+        '#FF6B6B',  # coral red — grabs attention for warnings
     ]
 
-    linestyles = ['-', '--', ':', '-.', (0, (5, 1))]  # last one is custom dash tuple
-
+    linestyles = [
+        '-',
+        '--',
+        ':',
+        '-.',
+        (0, (5, 1)),
+    ]  # last one is custom dash tuple
 
     # Colors
-    fig_bg = "#1B1B1D"    # figure background
+    fig_bg = '#1B1B1D'    # figure background
     ax_bg = fig_bg   # axes background
 
     plt.rcParams['figure.facecolor'] = fig_bg
     plt.rcParams['axes.facecolor'] = ax_bg
-    plt.rcParams['axes.edgecolor'] = "#333333"  # axes border
+    plt.rcParams['axes.edgecolor'] = '#333333'  # axes border
     plt.rcParams['axes.labelcolor'] = colors[0]
     plt.rcParams['xtick.color'] = colors[0]
     plt.rcParams['ytick.color'] = colors[0]
@@ -34,7 +39,9 @@ def _():
 
     # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
-    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(
+        linestyle=linestyles
+    )
     return (plt,)
 
 
@@ -46,6 +53,7 @@ def _():
     import re
     import numpy as np
     import nmrglue as ng
+
     return mo, ng, np, os, re
 
 
@@ -87,7 +95,6 @@ def _(ng, np, os, re):
         https://github.com/jjhelmus/nmrglue/blob/master/examples/bruker_processed_1d/bruker_processed_1d.py
         """
 
-
         phc = extract_phc(
             data_dir=data_dir,
             experiment_number=experiment_number,
@@ -127,6 +134,7 @@ def _(ng, np, os, re):
         data = ng.bruker.remove_digital_filter(dic, data)
 
         return data, dic
+
     return (bruker_fft,)
 
 
@@ -138,9 +146,15 @@ def _():
 
     file = pd.ExcelFile('morganspectra/Synthetic_Mixture_Lookup.xlsx')
 
-    spectra_sheet = pd.read_excel(file,'Spectra')
+    spectra_sheet = pd.read_excel(file, 'Spectra')
 
-    indices = [x for x, y in zip(spectra_sheet['spectrumFileName'], spectra_sheet['experimentType']) if y == 'H']
+    indices = [
+        x
+        for x, y in zip(
+            spectra_sheet['spectrumFileName'], spectra_sheet['experimentType']
+        )
+        if y == 'H'
+    ]
     return data_dir, indices
 
 
@@ -153,7 +167,9 @@ def _():
 def _(bruker_fft, data_dir, indices, np):
     data = {}
     for experiment in indices:
-        data[experiment] = np.array(bruker_fft(data_dir, experiment, experiment_number=''))
+        data[experiment] = np.array(
+            bruker_fft(data_dir, experiment, experiment_number='')
+        )
 
         if max(data[experiment][1]) < min(data[experiment][1]):
             data[experiment][1] = data[experiment][1] * -1
@@ -178,6 +194,7 @@ def _(plt):
             scatterx, scattery = peaks[:, 0], peaks[:, 1]
             plt.scatter(scatterx, scattery, color='RED')
         return figure
+
     return (gen_fig,)
 
 
@@ -191,12 +208,17 @@ def _(data, gen_fig, ng, np):
         y = arr[1]
         threshold = np.percentile(y, 98.5)
 
-        ymask = (y >= threshold)
+        ymask = y >= threshold
 
         # peaks[set_name] = data[set_name][:, ymask]
 
         # print(len(peaks[set_name][0]))
-        peak_positions = [x[1] for x in ng.analysis.peakpick.pick(data[set_name], threshold, algorithm='downward')]
+        peak_positions = [
+            x[1]
+            for x in ng.analysis.peakpick.pick(
+                data[set_name], threshold, algorithm='downward'
+            )
+        ]
         peak_positions = [data[set_name][:, int(i)] for i in peak_positions]
         peak_positions = np.vstack(peak_positions)
         peaks[set_name] = peak_positions
@@ -221,16 +243,15 @@ def _(peaks):
 
     # for peak_name in peaks:
     #     if len(peaks[peak_name]) > 4:
-            #(number_peaks, (position, intensities))
+    # (number_peaks, (position, intensities))
 
-            # There should only be 4 values. 
-            # Those values should be in ascending order of position.
-            # The second intensity needs to be higher than the first intensity.
-            # The third intensity needs to be higher than the fourth intensity. 
-            # The fourth and first intensities should be similar.
-            # The second and third intensities should be similar.
-            # Find the values within the dataset that fit this pattern.
-
+    # There should only be 4 values.
+    # Those values should be in ascending order of position.
+    # The second intensity needs to be higher than the first intensity.
+    # The third intensity needs to be higher than the fourth intensity.
+    # The fourth and first intensities should be similar.
+    # The second and third intensities should be similar.
+    # Find the values within the dataset that fit this pattern.
 
     for peak_name in peaks:
         if len(peaks[peak_name]) < 4:
@@ -269,5 +290,5 @@ def _(figs, mo, peaks):
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run()
