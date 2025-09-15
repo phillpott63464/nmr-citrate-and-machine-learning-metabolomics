@@ -78,7 +78,7 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100                   # Number of samples per metabolite combination
+    count = 1000                   # Number of samples per metabolite combination
     trials = 100                  # Number of hyperparameter optimization trialss
     combo_number = 30             # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
