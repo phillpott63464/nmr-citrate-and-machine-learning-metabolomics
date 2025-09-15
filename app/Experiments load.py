@@ -45,7 +45,7 @@ def _():
     # plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
     plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(linestyle=linestyles)
-    return (plt,)
+    return colors, plt
 
 
 @app.cell(hide_code=True)
@@ -2519,7 +2519,7 @@ def _(integrated_predictions):
 
 
 @app.cell
-def _(all_experiments, integrated_predictions, np, plt):
+def _(all_experiments, colors, integrated_predictions, np, plt):
     from sklearn.metrics import r2_score
 
     def _():
@@ -2566,26 +2566,41 @@ def _(all_experiments, integrated_predictions, np, plt):
             )
             ax.plot([0, 1], [0, 1], color='gray', lw=0.8)
 
-            # compute R² for the integrated predictions (or both)
+            # residuals and statistics
+            resid = np.array(f) - np.array(val)
+            sigma = resid.std(ddof=0)            # population std; use ddof=1 for sample std
+            mse = np.mean(resid ** 2)
+            rmse = np.sqrt(mse)
             r2 = r2_score(val, f)
 
-            mse = np.mean(
-                (np.array(val) - np.array(f)) ** 2
-            )
-            rmse = np.sqrt(mse)
+            stdevs = 3 # How many standard deviations to plot
 
-            # define shading limits (e.g., ±√(1‑R²) around the diagonal)
-            delta = np.sqrt(1 - r2) * 0.5   # scale factor for visual clarity
-            ax.fill_between(
-                [0, 1],
-                [0 - delta, 1 - delta],
-                [0 + delta, 1 + delta],
-                # color='orange',
-                alpha=0.2,
-            )
+            axtext = f'R²={r2:.3f}\nRMSE={rmse:.3}'
+
+            def ring_color(i, base_colors=colors):
+                # i is 1..stdevs, pick colors cyclically or slice for distinct rings
+                return base_colors[(i-1) % len(base_colors)]
+        
+            for x in range(1, stdevs+1):
+                lower = np.array([0 - x*sigma, 1 - x*sigma])
+                upper = np.array([0 + x*sigma, 1 + x*sigma])
+
+                axtext = f'{axtext}\n±{x}σ={x*sigma:.3f}'
+        
+                col = ring_color(x+1)
+                if x == 1:
+                    ax.fill_between([0,1], lower, upper, color=col, alpha=0.45)
+                else:
+                    prev_lower = np.array([0 - (x-1)*sigma, 1 - (x-1)*sigma])
+                    prev_upper = np.array([0 + (x-1)*sigma, 1 + (x-1)*sigma])
+                    ax.fill_between([0,1], prev_upper, upper, color=col, alpha=0.35)
+                    ax.fill_between([0,1], lower, prev_lower, color=col, alpha=0.35)
+            
 
             ax.text(
-                0.05, 0.9, f'R²={r2:.3f}\nRMSE={rmse:.3}', transform=ax.transAxes, fontsize=9
+                0.02, 0.98, axtext,
+                transform=ax.transAxes, fontsize=8,
+                va='top', ha='left', color=colors[0]
             )
 
         for j in range(len(fs), len(axes)):
