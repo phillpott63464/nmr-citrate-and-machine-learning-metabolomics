@@ -38,7 +38,7 @@ SVGs of all figures generated in python files.
 
 ### manim
 
-Experimental animated figures using [manim community](https://github.com/manimCommunity/manim) ([MIT License](licenses/LICENSE-3b1b)) ([MIT License](licenses/LICENSE-manimcommunity))
+Experimental animated figures using [manim community](https://github.com/manimCommunity/manim)
 
 ### morgancode
 
