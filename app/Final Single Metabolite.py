@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.15.4'
-app = marimo.App(width='medium')
+__generated_with = "0.15.5"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -55,7 +55,7 @@ def _():
     plt.rcParams['axes.prop_cycle'] = cycler(color=colors) + cycler(
         linestyle=linestyles
     )
-    return (plt,)
+    return colors, plt
 
 
 @app.cell(hide_code=True)
@@ -216,7 +216,6 @@ def _(hashlib):
 
         # Generate a hash of the combined string
         return hashlib.sha256(processed_key.encode()).hexdigest()
-
     return generate_processed_cache_key, generate_raw_cache_key
 
 
@@ -235,7 +234,6 @@ def _():
     import os
     import h5py   # type: ignore
     import hashlib
-
     return (
         createTrainingData,
         h5py,
@@ -420,7 +418,6 @@ def _(createTrainingData, h5py, itertools, np, os, random, raw_data_dir, tqdm):
 
         print(f'Successfully streamed {total_spectra} spectra to {filepath}')
         return filepath
-
     return (create_streaming_dataset,)
 
 
@@ -498,7 +495,6 @@ def _(h5py, np, os):
                 'start_idx': start_idx,
                 'end_idx': end_idx,
             }
-
     return get_spectrum_batch, load_streaming_dataset
 
 
@@ -1034,7 +1030,6 @@ def _(np):
             if 'tsp' in scales and scales['tsp'][0] > 0
         }
         return ratios
-
     return preprocess_peaks, preprocess_ratio
 
 
@@ -1301,7 +1296,6 @@ def _(
 def _():
     """Import machine learning dependencies"""
     from torch.utils.data import Dataset, DataLoader   # type: ignore
-
     return DataLoader, Dataset
 
 
@@ -1339,7 +1333,6 @@ def _(Dataset, h5py, torch):
                     f[f'{self.dataset_labels_name}'][idx], dtype=torch.float32
                 )
             return data, labels
-
     return (StreamableNMRDataset,)
 
 
@@ -1388,7 +1381,6 @@ def _(StreamableNMRDataset, h5py, os, processed_data_dir):
             'val_dataset': val_dataset,
             'test_dataset': test_dataset,
         }, data_length
-
     return (load_datasets_from_files,)
 
 
@@ -1769,7 +1761,6 @@ def _():
     import torch.optim as optim   # type: ignore
     import torch.nn as nn   # type: ignore
     import math
-
     return copy, math, nn, optim
 
 
@@ -1817,7 +1808,6 @@ def _(torch):
             return tensor[:, :0]
         else:
             return tensor[:0]
-
     return (remove_padding,)
 
 
@@ -1878,7 +1868,6 @@ def _(nn, torch):
                 x = torch.cat([x_real, x_imag], dim=-1)
 
             return self.model(x)
-
     return (MLPRegressor,)
 
 
@@ -2120,7 +2109,6 @@ def _(math, nn, torch):
             concentration_pred = self.concentration_head(pooled_features)
 
             return torch.cat([presence_logits, concentration_pred], dim=1)
-
     return (TransformerRegressor,)
 
 
@@ -2184,7 +2172,6 @@ def _(MLPRegressor, TransformerRegressor, nn, remove_padding, torch):
             return torch.stack(
                 [classification_pred, concentration_pred], dim=1
             )
-
     return (HybridEnsembleRegressor,)
 
 
@@ -2253,7 +2240,6 @@ def _(nn, torch):
             concentration_mae,
             concentration_rmse,
         )
-
     return (compute_loss,)
 
 
@@ -2281,6 +2267,7 @@ def _(
     HybridEnsembleRegressor,
     MLPRegressor,
     TransformerRegressor,
+    colors,
     compute_loss,
     copy,
     np,
@@ -2530,26 +2517,75 @@ def _(
             )
 
             # Create scatter plot: true (x) vs predicted (y)
-            fig = plt.figure(figsize=(6, 6))
+            fig = plt.figure(figsize=(8, 8))
             ax = fig.add_subplot(1, 1, 1)
+            axtext = f'R² = {float(conc_r2):.3f}\nMAE = {float(conc_mae):.4f}\nRMSE = {float(conc_rmse):.4f}'
 
             if conc_true_np is not None and conc_pred_np is not None:
+                # Calculate residuals and standard deviation for shading
+                residuals = conc_pred_np - conc_true_np
+                residual_std = np.std(residuals)
+
+                # Create data range for smooth confidence bands
+                min_val = min(conc_true_np.min(), conc_pred_np.min())
+                max_val = max(conc_true_np.max(), conc_pred_np.max())
+                x_line = np.linspace(min_val, max_val, 100)
+
+                stdevs = 3
+
+                def ring_color(i, base_colors=colors):
+                    # i is 1..stdevs, pick colors cyclically or slice for distinct rings
+                    return base_colors[(i - 1) % len(base_colors)]
+
+                for x in range(1, stdevs + 1):
+                    lower = x_line - x * residual_std  # Use x_line instead of separate arrays
+                    upper = x_line + x * residual_std
+
+                    axtext = f'{axtext}\n±{x}σ={x*residual_std:.3f}'
+
+                    col = ring_color(x + 1)
+                    if x == 1:
+                        ax.fill_between(
+                            x_line, lower, upper, color=col, alpha=0.45, label=f'±{x}σ'
+                        )
+                    else:
+                        prev_lower = x_line - (x - 1) * residual_std
+                        prev_upper = x_line + (x - 1) * residual_std
+
+                        # Fill the outer ring (between current and previous bounds)
+                        ax.fill_between(
+                            x_line, prev_upper, upper, color=col, alpha=0.35
+                        )
+                        ax.fill_between(
+                            x_line, lower, prev_lower, color=col, alpha=0.35
+                        )
+
+                # Plot scatter points
                 ax.scatter(
                     conc_true_np,
                     conc_pred_np,
-                    alpha=0.6,
+                    alpha=0.7,
+                    s=50,
                     label='Predicted vs True',
                 )
-                # Plot y=x reference line over data range
-                min_val = min(conc_true_np.min(), conc_pred_np.min())
-                max_val = max(conc_true_np.max(), conc_pred_np.max())
+
+                # Plot y=x reference line
                 ax.plot(
-                    [min_val, max_val],
-                    [min_val, max_val],
-                    color='red',
-                    linestyle='--',
-                    label='y = x',
+                    x_line,
+                    x_line,
+                    linewidth=2,
+                    label='Perfect prediction (y = x)',
                 )
+
+                # Add performance metrics as text
+                ax.text(
+                    0.05, 0.95,
+                    axtext,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round', alpha=0.8)
+                )
+
             else:
                 ax.text(
                     0.5,
@@ -2557,15 +2593,20 @@ def _(
                     'No present samples to plot',
                     ha='center',
                     va='center',
+                    transform=ax.transAxes,
+                    fontsize=14
                 )
 
-            ax.set_xlabel('True concentration')
-            ax.set_ylabel('Predicted concentration')
-            ax.set_title('True vs Predicted Concentration (present samples)')
+            ax.set_xlabel('True concentration', fontsize=12)
+            ax.set_ylabel('Predicted concentration', fontsize=12)
+            ax.set_title('True vs Predicted Concentration (present samples)', fontsize=14)
             ax.legend()
-            ax.grid(True)
+            ax.grid(True, alpha=0.3)
+
+            # Ensure equal aspect ratio for better visualization
+            ax.set_aspect('equal', adjustable='box')
+
             plt.tight_layout()
-            # plt.savefig('figs/temp.svg')
 
             return (
                 float(accuracy),
@@ -2964,5 +3005,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
