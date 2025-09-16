@@ -15,7 +15,7 @@
 - CONDA environment for docker image:
   - environment.yml
   - requirements.txt
-- bufferdata.csv: Table of citrate/citric acid buffer pHs and ratios taken from Data for Biochemical Research, Third Edition (Make this a full reference)
+- bufferdata.csv: Table of citrate/citric acid buffer pHs and ratios taken from Woods, R. J. (1993). Data for Biochemical Research (3rd ed.). Oxford University Press
 - PKA_STUDY.db: Optuna database of trials used to determine pKas from bufferdata.
 - metal_experiments.csv - Spreadsheet containing concentrations of components used to create samples for chelation experiments, including stock requirements.
 
