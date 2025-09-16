@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = '0.15.2'
+__generated_with = '0.15.4'
 app = marimo.App(width='medium')
 
 
@@ -85,8 +85,8 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 1000  # Number of samples per metabolite combination
-    trials = 1                  # Number of hyperparameter optimization trialss
+    count = 100  # Number of samples per metabolite combination
+    trials = 100  # Number of hyperparameter optimization trialss
     combo_number = None  # Number of random metabolite combinations to generate
     notebook_name = 'final_single_metabolite'  # Cache directory identifier
 
@@ -2285,6 +2285,7 @@ def _(
     copy,
     np,
     optim,
+    plt,
     torch,
     tqdm,
 ):
@@ -2489,49 +2490,89 @@ def _(
             presence_binary = (presence_pred > 0.5).float()
             accuracy = torch.mean((presence_binary == presence_true).float())
 
-            # Regression metrics
+            # Regression metrics (only where presence is true)
             present_mask = presence_true == 1
             if present_mask.sum() > 0:
+                conc_pred_present = concentration_pred[present_mask]
+                conc_true_present = concentration_true[present_mask]
+
                 conc_mae = torch.mean(
-                    torch.abs(
-                        concentration_pred[present_mask]
-                        - concentration_true[present_mask]
-                    )
+                    torch.abs(conc_pred_present - conc_true_present)
                 )
                 conc_rmse = torch.sqrt(
-                    torch.mean(
-                        (
-                            concentration_pred[present_mask]
-                            - concentration_true[present_mask]
-                        )
-                        ** 2
-                    )
+                    torch.mean((conc_pred_present - conc_true_present) ** 2)
                 )
+
                 ss_res = torch.sum(
-                    (
-                        concentration_true[present_mask]
-                        - concentration_pred[present_mask]
-                    )
-                    ** 2
+                    (conc_true_present - conc_pred_present) ** 2
                 )
                 ss_tot = torch.sum(
-                    (
-                        concentration_true[present_mask]
-                        - torch.mean(concentration_true[present_mask])
-                    )
-                    ** 2
+                    (conc_true_present - torch.mean(conc_true_present)) ** 2
                 )
                 conc_r2 = 1 - (ss_res / ss_tot)
             else:
                 conc_mae = torch.tensor(0.0)
                 conc_rmse = torch.tensor(0.0)
                 conc_r2 = torch.tensor(0.0)
+                conc_pred_present = torch.tensor([])
+                conc_true_present = torch.tensor([])
+
+            # Move to CPU and numpy for plotting
+            conc_pred_np = (
+                conc_pred_present.detach().cpu().numpy()
+                if conc_pred_present.numel() > 0
+                else None
+            )
+            conc_true_np = (
+                conc_true_present.detach().cpu().numpy()
+                if conc_true_present.numel() > 0
+                else None
+            )
+
+            # Create scatter plot: true (x) vs predicted (y)
+            fig = plt.figure(figsize=(6, 6))
+            ax = fig.add_subplot(1, 1, 1)
+
+            if conc_true_np is not None and conc_pred_np is not None:
+                ax.scatter(
+                    conc_true_np,
+                    conc_pred_np,
+                    alpha=0.6,
+                    label='Predicted vs True',
+                )
+                # Plot y=x reference line over data range
+                min_val = min(conc_true_np.min(), conc_pred_np.min())
+                max_val = max(conc_true_np.max(), conc_pred_np.max())
+                ax.plot(
+                    [min_val, max_val],
+                    [min_val, max_val],
+                    color='red',
+                    linestyle='--',
+                    label='y = x',
+                )
+            else:
+                ax.text(
+                    0.5,
+                    0.5,
+                    'No present samples to plot',
+                    ha='center',
+                    va='center',
+                )
+
+            ax.set_xlabel('True concentration')
+            ax.set_ylabel('Predicted concentration')
+            ax.set_title('True vs Predicted Concentration (present samples)')
+            ax.legend()
+            ax.grid(True)
+            plt.tight_layout()
+            # plt.savefig('figs/temp.svg')
 
             return (
                 float(accuracy),
                 float(conc_r2),
                 float(conc_mae),
                 float(conc_rmse),
+                fig,
             )
 
         # Compute validation and test metrics
@@ -2540,12 +2581,14 @@ def _(
             val_conc_r2,
             val_conc_mae,
             val_conc_rmse,
+            val_fig,
         ) = compute_metrics(val_loader)
         (
             test_accuracy,
             test_conc_r2,
             test_conc_mae,
             test_conc_rmse,
+            test_fig,
         ) = compute_metrics(test_loader)
 
         return (
@@ -2557,6 +2600,8 @@ def _(
             test_conc_r2,
             test_conc_mae,
             test_conc_rmse,
+            val_fig,
+            test_fig,
         )
 
     # Store device info for display
@@ -2583,6 +2628,23 @@ def _(
     trials,
 ):
     import optuna   # type: ignore
+    import io
+    import base64
+    from PIL import Image
+
+    def fig_to_base64_str(fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        img_bytes = buf.read()
+        buf.close()
+        return base64.b64encode(img_bytes).decode('ascii')  # JSON-safe string
+
+    def fig_from_base64_str(b64_str):
+        img_bytes = base64.b64decode(b64_str.encode('ascii'))
+        return Image.open(
+            io.BytesIO(img_bytes)
+        )  # can pass to PIL.Image.open or write to disk
 
     def objective(training_data, trial, model_type='transformer'):
         """
@@ -2598,6 +2660,8 @@ def _(
                 test_conc_r2,
                 test_conc_mae,
                 test_conc_rmse,
+                val_fig,
+                test_fig,
             ) = train_model(training_data, trial, model_type)
 
             # Store all metrics in trial for later analysis
@@ -2610,6 +2674,8 @@ def _(
             trial.set_user_attr('test_conc_mae', test_conc_mae)
             trial.set_user_attr('test_conc_rmse', test_conc_rmse)
             trial.set_user_attr('model_type', model_type)
+            trial.set_user_attr('val_fig', fig_to_base64_str(val_fig))
+            trial.set_user_attr('test_fig', fig_to_base64_str(test_fig))
 
             # Calculate classification error (1 - accuracy)
             val_classification_error = 1.0 - val_accuracy
@@ -2699,7 +2765,7 @@ def _(
                     callback,
                 ],
             )
-    return optuna, study
+    return fig_from_base64_str, optuna, study
 
 
 @app.cell(hide_code=True)
@@ -2785,7 +2851,7 @@ def _(optuna, study):
 
 
 @app.cell(hide_code=True)
-def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
+def _(MODEL_TYPE, study):
     # Use the actual MODEL_TYPE instead of guessing from parameters
     model_type_display = MODEL_TYPE.upper()
 
@@ -2834,8 +2900,22 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     {chr(10).join([f"- **{key}:** {value}" for key, value in study.best_trial.params.items()])}
     """
 
+    print(study.best_trial.user_attrs.keys())
+    return model_params_md, model_type_display
+
+
+@app.cell(hide_code=True)
+def _(
+    fig_from_base64_str,
+    held_back_metabolites,
+    mo,
+    model_params_md,
+    model_type_display,
+    optuna,
+    study,
+):
     mo.md(
-        f"""
+        rf"""
     ## Hyperparameter Optimization Results
 
     **Model Type:** {model_type_display}
@@ -2876,6 +2956,9 @@ def _(MODEL_TYPE, held_back_metabolites, mo, optuna, study):
     - Test: Spectra containing held-back metabolite ({held_back_metabolites})
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
+
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['val_fig']))}
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['test_fig']))}
     """
     )
     return
