@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.5"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -230,7 +230,8 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
     base_molecular_weight = 258.07   # g/mol
     dss_molecular_weight = 224.36   # g/mol
 
-    imported = pd.read_csv(f'{out_dir}/na-eppendorfs.csv')
+    # imported = pd.read_csv(f'{out_dir}/na-eppendorfs.csv')
+    imported = pd.read_csv(f'{out_dir}/na_eppendorfs_again.csv')
     # imported = imported.to_dict(orient='split', index=False)
 
     acid_vol = [
@@ -238,7 +239,7 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
         for x, y in zip(imported['acid'], imported['weight'])
     ]
 
-    acid_vol[0] = 0.0006
+    acid_vol[0] = 0.001
     acid_vol[-1] = 0.0
 
     base_vol = [
@@ -247,7 +248,7 @@ def _(corrected_pka, mo, np, pkasolver, simulate_ph_graph):
     ]
 
     base_vol[0] = 0.0
-    base_vol[-1] = 0.0006
+    base_vol[-1] = 0.001
 
     total_vol = [round(x + y, 6) for x, y in zip(acid_vol, base_vol)]
 
@@ -414,11 +415,11 @@ def _(
         vol * stocks['base']['molarity'] for vol in base_vol
     ]  # Use base molarity here
     expected_moles_acid = [
-        ratio * 0.0006 * stocks['acid']['molarity']
+        ratio * 0.001 * stocks['acid']['molarity']
         for ratio in expected_acid_ratios
     ]
     expected_moles_base = [
-        (1 - ratio) * 0.0006 * stocks['base']['molarity']
+        (1 - ratio) * 0.001 * stocks['base']['molarity']
         for ratio in expected_acid_ratios
     ]
 
@@ -466,11 +467,11 @@ def _(
     ratios_perfect = simulate_ph_graph(corrected_pka, graph_molarity, charge=0)
 
     moles_acid_perfect = [
-        ratio * 0.006 * graph_molarity
+        ratio * 0.001 * graph_molarity
         for ratio in [x['acid ratio'] for x in ratios_perfect]
     ]
     moles_base_perfect = [
-        ratio * 0.006 * graph_molarity
+        ratio * 0.001 * graph_molarity
         for ratio in [x['base ratio'] for x in ratios_perfect]
     ]
 
@@ -822,7 +823,7 @@ def _(base_vol, peak_values, phs, plt):
     plt.figure(figsize=(15, 5))
 
     plt.subplot(1, 3, 1)
-    plt.plot([x / 0.0006 * 100 for x in base_vol], avg_ppm)
+    plt.plot([x / 0.001 * 100 for x in base_vol], avg_ppm)
 
     plt.ylabel('Average PPM')
     plt.xlabel('Sodium Citrate Percentage')
@@ -894,7 +895,7 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
 
     plt.subplot(1, 3, 1)
     plt.plot(
-        [x / 0.0006 * 100 for x in base_vol],
+        [x / 0.001 * 100 for x in base_vol],
         fracs,
     )
     plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
@@ -1095,7 +1096,7 @@ def _(base_vol, citrate_ppms, fracs, np, phs, plt):
     # First subplot
     plt.subplot(1, 3, 1)
     plt.plot(
-        [x / 0.0006 * 100 for x in base_vol],
+        [x / 0.001 * 100 for x in base_vol],
         citrate_couplings,
     )
     plt.title('J Coupling vs. Sodium Citrate Percentage', fontsize=14)
@@ -1201,7 +1202,7 @@ def _(
     # First subplot
     plt.subplot(1, 3, 1)
     plt.plot(
-        [x / 0.0006 * 100 for x in base_vol],
+        [x / 0.001 * 100 for x in base_vol],
         citrate_differences,
     )
     plt.title('Peak Differences vs. Sodium Citrate Percentage', fontsize=14)
@@ -2656,7 +2657,6 @@ def _(all_experiments, integrated_predictions, np):
         print(f'RMSE of integrated predictions: {rmse}')
 
         return (mse, rmse)
-
     return (find_prediction_errors,)
 
 
@@ -2806,7 +2806,6 @@ def _():
     import torch.nn as nn
     import torch.optim as optim
     import torch.nn.functional as F
-
     return F, nn, optim
 
 
@@ -3150,7 +3149,6 @@ def _(F, math, nn, torch):
             first4 = F.softmax(logits[:, :4], dim=1)
             last3 = F.softmax(logits[:, 4:], dim=1)
             return torch.cat([first4, last3], dim=1)
-
     return (TinyTransformer,)
 
 
@@ -3281,5 +3279,5 @@ def _(
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

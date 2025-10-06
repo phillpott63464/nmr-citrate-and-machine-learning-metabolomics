@@ -85,13 +85,13 @@ def _():
     """Configuration parameters for the entire analysis pipeline"""
 
     # Experiment parameters
-    count = 100  # Number of samples per metabolite combination
-    trials = 100  # Number of hyperparameter optimization trialss
+    count = 1000  # Number of samples per metabolite combination
+    trials = 1  # Number of hyperparameter optimization trialss
     combo_number = 30  # Number of random metabolite combinations to generate
     notebook_name = 'randomisation_hold_back'  # Cache directory identifier
 
     # Model configuration
-    MODEL_TYPE = 'mlp'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
+    MODEL_TYPE = 'transformer'            # Model architecture: 'mlp', 'transformer', or 'ensemble'
     downsample = (
         2**10
     )            # Target resolution for ML model (None = no downsampling)
@@ -2625,7 +2625,7 @@ def _(
                     axtext,
                     transform=ax.transAxes,
                     verticalalignment='top',
-                    bbox=dict(boxstyle='round', alpha=0.8)
+                    bbox=dict(boxstyle='round', facecolor='none', alpha=0.8)
                 )
 
             else:
@@ -2723,11 +2723,14 @@ def _(
         buf.close()
         return base64.b64encode(img_bytes).decode('ascii')  # JSON-safe string
 
-    def fig_from_base64_str(b64_str):
+    def fig_from_base64_str(b64_str, file_path=None):
         img_bytes = base64.b64decode(b64_str.encode('ascii'))
-        return Image.open(
-            io.BytesIO(img_bytes)
-        )  # can pass to PIL.Image.open or write to disk
+        image = Image.open(io.BytesIO(img_bytes))
+
+        if file_path:
+            image.save(file_path)  # Save the image to the specified file path
+
+        return image  # Return the image object
 
     def objective(training_data, trial, model_type='transformer'):
         """
@@ -2946,7 +2949,6 @@ def _(MODEL_TYPE, study):
     - **Number of Attention Heads:** {study.best_trial.params.get('nhead', 'N/A')}
     - **Number of Encoder Layers:** {study.best_trial.params.get('num_layers', 'N/A')}
     - **Feedforward Dimension:** {study.best_trial.params.get('dim_feedforward', 'N/A')}
-    - **Stride Ratio:** {study.best_trial.params.get('stride_ratio', 'N/A'):.3f}
 
     **Model Architecture:**
 
@@ -3040,10 +3042,37 @@ def _(
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
 
-    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['val_fig']))}
-    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['test_fig']))}
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['val_fig'], 'figs/multi_validation_fig.png'))}
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['test_fig'], 'figs/multi_test_fig.png'))}
     """
     )
+    return
+
+
+@app.cell
+def _(plt, training_data):
+    print(training_data['train_dataset'][0])
+
+    temp_data_data = training_data['train_dataset'][7][0]
+
+    plt.figure(figsize=(10,5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(temp_data_data)
+    plt.xlabel('Data points / no unit')
+    plt.ylabel('Intensity')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(temp_data_data[600:750])
+    plt.plot(temp_data_data[1080:1200])
+    plt.legend(['Pure reference', 'Complex mixture'], loc='upper left')
+    plt.xlabel('Data points / no unit')
+    plt.ylabel('Intensity')
+    plt.tight_layout()
+
+    plt.savefig('figs/comparative_model.svg')
+
+    plt.show()
     return
 
 

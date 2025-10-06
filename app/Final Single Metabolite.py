@@ -2583,7 +2583,7 @@ def _(
                     axtext,
                     transform=ax.transAxes,
                     verticalalignment='top',
-                    bbox=dict(boxstyle='round', alpha=0.8)
+                    bbox=dict(boxstyle='round', facecolor='none', alpha=0.8)
                 )
 
             else:
@@ -2681,11 +2681,14 @@ def _(
         buf.close()
         return base64.b64encode(img_bytes).decode('ascii')  # JSON-safe string
 
-    def fig_from_base64_str(b64_str):
+    def fig_from_base64_str(b64_str, file_path=None):
         img_bytes = base64.b64decode(b64_str.encode('ascii'))
-        return Image.open(
-            io.BytesIO(img_bytes)
-        )  # can pass to PIL.Image.open or write to disk
+        image = Image.open(io.BytesIO(img_bytes))
+    
+        if file_path:
+            image.save(file_path)  # Save the image to the specified file path
+    
+        return image  # Return the image object
 
     def objective(training_data, trial, model_type='transformer'):
         """
@@ -2998,8 +3001,8 @@ def _(
 
     **Total Trials Completed:** {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}
 
-    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['val_fig']))}
-    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['test_fig']))}
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['val_fig'], 'figs/single_validation_fig.png'))}
+    {mo.as_html(fig_from_base64_str(study.best_trial.user_attrs['test_fig'], 'figs/single_test_fig.png'))}
     """
     )
     return
