@@ -1,21 +1,18 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.5"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        rf"""Code block to profile Morgan's code from where I was converting numpy to jax."""
-    )
+    mo.md(rf"""Code block to profile Morgan's code from where I was converting numpy to jax.""")
     return
 
 
@@ -147,5 +144,5 @@ def _(createTrainingData, plt, substanceSpectrumIds):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

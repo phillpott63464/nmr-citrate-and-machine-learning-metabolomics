@@ -1438,6 +1438,34 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
 
 @app.cell
+def _(bruker_fft, data_dir, experiment_number, experiments, plt):
+    def _():
+        experiment = experiments[16]
+        ppmscale, data = bruker_fft(
+            data_dir=data_dir,
+            experiment=experiment,
+            experiment_number=experiment_number,
+        )
+        plt.plot(
+            ppmscale[19900:21500], data[19900:21500]
+        )  # Adjust the range as needed
+        # ax.plot(data)
+        plt.title(f'Citric Acid Spectra', fontsize=14)
+        plt.xlabel(
+            'Chemical Shift / PPM', fontsize=12
+        )  # Replace with actual x-axis label if needed
+        plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
+
+        plt.tight_layout()  # Adjust layout to prevent overlap
+        plt.savefig('figs/SINGLENMR.svg')
+        plt.show()
+
+    _()
+    
+    return
+
+
+@app.cell
 def _(mo, singlefftfig):
     mo.md(
         rf"""

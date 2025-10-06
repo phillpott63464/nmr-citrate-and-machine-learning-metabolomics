@@ -2684,10 +2684,10 @@ def _(
     def fig_from_base64_str(b64_str, file_path=None):
         img_bytes = base64.b64decode(b64_str.encode('ascii'))
         image = Image.open(io.BytesIO(img_bytes))
-    
+
         if file_path:
             image.save(file_path)  # Save the image to the specified file path
-    
+
         return image  # Return the image object
 
     def objective(training_data, trial, model_type='transformer'):
