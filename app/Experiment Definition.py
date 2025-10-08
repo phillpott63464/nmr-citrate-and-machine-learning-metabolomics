@@ -1,7 +1,7 @@
 import marimo
 
-__generated_with = '0.15.2'
-app = marimo.App(width='medium')
+__generated_with = "0.15.5"
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -10,7 +10,6 @@ def _():
     from phfork import AcidAq, IonAq, System
     import phfork
     import numpy as np
-
     return mo, np, phfork
 
 
@@ -57,9 +56,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""# Experimental Method for Citric Acid Speciation Chemical Shift"""
-    )
+    mo.md(r"""# Experimental Method for Citric Acid Speciation Chemical Shift""")
     return
 
 
@@ -171,7 +168,6 @@ def _(phfork):
             )
 
         return ratios
-
     return (simulate_ph_graph,)
 
 
@@ -196,7 +192,6 @@ def _(simulate_ph_graph):
             error += (known['ph'] - closest_entry['pH']) ** 2
 
         return error
-
     return (evaluate_pka_error,)
 
 
@@ -314,7 +309,6 @@ def _(A_CONST, np):
             delta_pka = log_gamma_new - log_gamma_old
             corrected.append(pka + delta_pka)
         return corrected
-
     return correct_pkas, ionic_strength_from_conc
 
 
@@ -829,5 +823,5 @@ def _(metal_eppendorfs_csv, metal_experiments, metal_stock_output_csv):
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

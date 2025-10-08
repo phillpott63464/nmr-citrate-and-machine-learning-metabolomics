@@ -779,7 +779,6 @@ def _(np):
         experiment_number,
         experiments,
         extract_peak_values,
-        extract_phc,
         extract_sr,
         get_experiment_directories,
         os,
@@ -800,6 +799,12 @@ def _(chemicalshift_ph_fig, mo):
     {mo.as_html(chemicalshift_ph_fig)}
     """
     )
+    return
+
+
+@app.cell
+def _(peak_values):
+    print(len(peak_values[0]))
     return
 
 
@@ -1330,7 +1335,7 @@ def _(mo, nmrgluefig):
 
 
 @app.cell
-def _(data_dir, experiment_number, experiments, extract_phc, plt):
+def _(data_dir, experiment_number, experiments, np, phs, plt):
     def log(msg):
         with open('log.log', 'a') as f:
             if isinstance(msg, list):
@@ -1348,28 +1353,33 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         """
         import nmrglue as ng
 
-        phc = extract_phc(
-            data_dir=data_dir,
-            experiment_number=experiment_number,
-            experiment=experiment,
-        )
+        # phc = extract_phc(
+        #     data_dir=data_dir,
+        #     experiment_number=experiment_number,
+        #     experiment=experiment,
+        # )
+
+        # print('phases', phc)
 
         data, dic = read_bruker(data_dir, experiment, experiment_number)
         # data = read_fid(data_dir=data_dir, experiment=experiment, experiment_number=experiment_number)
 
-        # Process the spectrum
-        data = ng.proc_base.zf_size(
-            data, 2**15
-        )    # Zero fill to 32768 points
-        data = ng.proc_base.fft(data)                 # Fourier transform
+        # # Process the spectrum
+        # data = ng.proc_base.zf_size(
+        #     data, 2**15
+        # )    # Zero fill to 32768 points
+        # data = ng.proc_base.fft(data)  
+        # # data=np.flip(data)
+        #                # Fourier transform
         # data = ng.proc_base.ps(
-        #     data, p0=phc['PHC0'], p1=phc['PHC1']
+        #      data, p0=phc['PHC0'], p1=-phc['PHC1']
         # )  # Phase correction
-        data = ng.proc_autophase.autops(
-            data, 'peak_minima', p0=phc['PHC0'], p1=phc['PHC1']
-        )   # Automatic phase correction
-        data = ng.proc_base.di(data)                  # Discard the imaginaries
-        data = ng.proc_base.rev(data)                 # Reverse the data=
+        # # data=np.flip(data)
+        # # data = ng.proc_autophase.autops(
+        # #     data, 'peak_minima', p0=phc['PHC0'], p1=phc['PHC1']
+        # # )   # Automatic phase correction
+        # data = ng.proc_base.di(data)                  # Discard the imaginaries
+        # data = ng.proc_base.rev(data)                 # Reverse the data=
 
         udic = ng.bruker.guess_udic(dic, data)
         uc = ng.fileiobase.uc_from_udic(udic)
@@ -1380,11 +1390,12 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
     def read_bruker(data_dir, experiment, experiment_number):
         import nmrglue as ng
 
-        dic, data = ng.bruker.read(
-            f'{data_dir}/{experiment}/{experiment_number}'
-        )
-        # Remove the digital filter
-        data = ng.bruker.remove_digital_filter(dic, data)
+        dic, data = ng.bruker.read_pdata(f'{data_dir}/{experiment}/{experiment_number}/pdata/1')
+        # dic, data = ng.bruker.read(
+        #     f'{data_dir}/{experiment}/{experiment_number}'
+        # )
+        # # Remove the digital filter
+        # data = ng.bruker.remove_digital_filter(dic, data)
 
         return data, dic
 
@@ -1399,7 +1410,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
         rows = round(math.sqrt(n))
         cols = round(math.ceil(n / rows))
 
-        for idx, experiment in enumerate(experiments):
+        for (idx, experiment), ph in zip(enumerate(experiments), phs):
             ppmscale, data = bruker_fft(
                 data_dir=data_dir,
                 experiment=experiment,
@@ -1414,18 +1425,35 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
             ):   # The first one doesn't flip properly for some reason
                 data *= -1
 
+            ppm_range = [2.5, 3.1]
+        
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(
-                ppmscale[19900:21500], data[19900:21500]
+                ppmscale, data
             )  # Adjust the range as needed
-            # ax.plot(data)
-            ax.set_title(f'NMR Experiment {idx + 1}', fontsize=14)
+            ax.set_title(f'pH: {ph}', fontsize=14)
             ax.set_xlabel(
                 'Chemical Shift / PPM', fontsize=12
             )  # Replace with actual x-axis label if needed
-            ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-            ax.tick_params(axis='both', which='major', labelsize=10)
+            ax.set_ylabel('', fontsize=12)
 
+            plt.xlim(ppm_range)
+
+            ppmscale = np.array(ppmscale)
+            data = np.array(data)
+            indices = np.where((ppmscale >= ppm_range[0]) & (ppmscale <= ppm_range[1]))
+            y_lim = data[indices]
+
+            plt.ylim(np.min(y_lim), np.max(y_lim))
+        
+            plt.gca().spines['top'].set_visible(False)
+            plt.gca().spines['left'].set_visible(False)
+            plt.gca().spines['right'].set_visible(False)
+
+            plt.gca().invert_xaxis()
+        
+            plt.yticks([])
+    
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.suptitle(
             'NMR Experiments Overview', fontsize=16, y=1.02
@@ -1438,7 +1466,7 @@ def _(data_dir, experiment_number, experiments, extract_phc, plt):
 
 
 @app.cell
-def _(bruker_fft, data_dir, experiment_number, experiments, plt):
+def _(bruker_fft, data_dir, experiment_number, experiments, np, plt):
     def _():
         experiment = experiments[16]
         ppmscale, data = bruker_fft(
@@ -1447,21 +1475,37 @@ def _(bruker_fft, data_dir, experiment_number, experiments, plt):
             experiment_number=experiment_number,
         )
         plt.plot(
-            ppmscale[19900:21500], data[19900:21500]
+            ppmscale, data
         )  # Adjust the range as needed
         # ax.plot(data)
         plt.title(f'Citric Acid Spectra', fontsize=14)
         plt.xlabel(
             'Chemical Shift / PPM', fontsize=12
         )  # Replace with actual x-axis label if needed
-        plt.ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
 
+        ppm_range = [2.3, 3.1]
+    
+        plt.xlim(ppm_range)
+    
+        ppmscale = np.array(ppmscale)
+        data = np.array(data)
+        indices = np.where((ppmscale >= ppm_range[0]) & (ppmscale <= ppm_range[1]))
+        y_lim = data[indices]
+    
+        plt.ylim(np.min(y_lim), np.max(y_lim))
+    
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['left'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+    
+        plt.gca().invert_xaxis()
+    
+        plt.yticks([])
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.savefig('figs/SINGLENMR.svg')
         plt.show()
 
     _()
-    
     return
 
 
@@ -1845,8 +1889,13 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(chelationfig, mo):
-    mo.md(rf"""{mo.as_html(chelationfig)}""")
+def _(calcium_chelation_fig, magnesium_chelation_fig, mo):
+    mo.md(
+        rf"""
+    {mo.as_html(magnesium_chelation_fig)}
+    {mo.as_html(calcium_chelation_fig)}
+    """
+    )
     return
 
 
@@ -1857,52 +1906,65 @@ def _(
     data_dir,
     experiment_number,
     math,
+    np,
     plt,
 ):
-    def _():
+    def plot_chelation_experiments(chelation_experiments, data_dir, experiment_number, title, experiment_filter, ppm_range):
         # Create a new figure
         ngfig = plt.figure(figsize=(20, 15))
 
+        # Filter experiments based on the given filter
+        filtered_experiments = [exp for idx, exp in enumerate(chelation_experiments) if experiment_filter(idx)]
+
         # Calculate the number of rows and columns for subplots
-        n = len(chelation_experiments)
+        n = len(filtered_experiments)
         rows = round(math.sqrt(n))
         cols = round(math.ceil(n / rows))
 
-        for idx, experiment in enumerate(chelation_experiments):
+        for idx, experiment in enumerate(filtered_experiments):
             ppmscale, data = bruker_fft(
                 data_dir=data_dir,
                 experiment=experiment,
                 experiment_number=experiment_number,
             )
 
-            ax = ngfig.add_subplot(rows, cols, idx + 1)
-            ax.plot(
-                ppmscale[20500:21300], data[20500:21300]
-            )  # Adjust the range as needed
-            # ax.plot(data)
-            if idx in range(0, 12):
-                ax.set_title(
-                    f'Magnesium Chelation Experiment {idx + 1}', fontsize=14
-                )
-            else:
-                ax.set_title(
-                    f'Calcium Chelation Experiment {idx - 11}', fontsize=14
-                )
-            ax.set_xlabel(
-                'Data Points', fontsize=12
-            )  # Replace with actual x-axis label if needed
-            ax.set_ylabel('Magnitude', fontsize=12)     # Magnitude of NMR data
-            ax.tick_params(axis='both', which='major', labelsize=10)
+            # ppm_range = [2.3, 2.8]
 
-        plt.tight_layout()  # Adjust layout to prevent overlap
-        plt.suptitle(
-            'Chelation Experiments Overview', fontsize=16, y=1.02
-        )  # Main title for the figure
-        plt.savefig('figs/NMR.svg')
+            ax = ngfig.add_subplot(rows, cols, idx + 1)
+            ax.plot(ppmscale, data)
+
+            ax.set_title(f'{title} Experiment {idx + 1}', fontsize=14)
+            ax.set_xlabel('Chemical Shift / PPM', fontsize=12)
+            ax.set_ylabel('', fontsize=12)
+
+            plt.xlim(ppm_range)
+
+            ppmscale = np.array(ppmscale)
+            data = np.array(data)
+            indices = np.where((ppmscale >= ppm_range[0]) & (ppmscale <= ppm_range[1]))
+            y_lim = data[indices]
+
+            plt.ylim(np.min(y_lim), np.max(y_lim))
+        
+            plt.gca().spines['top'].set_visible(False)
+            plt.gca().spines['left'].set_visible(False)
+            plt.gca().spines['right'].set_visible(False)
+
+            plt.gca().invert_xaxis()
+            plt.yticks([])
+
+        plt.tight_layout()
+        plt.suptitle(f'{title} Overview', fontsize=16, y=1.02)
+        plt.savefig(f'figs/{title.lower().replace(" ", "_")}.svg')
         return plt.gca()
 
-    chelationfig = _()
-    return (chelationfig,)
+    # Plot Magnesium Experiments
+    magnesium_chelation_fig = plot_chelation_experiments(chelation_experiments, data_dir, experiment_number, 'Magnesium Chelation', lambda idx: idx < 12, ppm_range=[2.5, 2.8])
+
+    # Plot Calcium Experiments
+    calcium_chelation_fig = plot_chelation_experiments(chelation_experiments, data_dir, experiment_number, 'Calcium Chelation', lambda idx: idx >= 12, ppm_range=[2.4, 2.8])
+
+    return calcium_chelation_fig, magnesium_chelation_fig
 
 
 @app.cell
@@ -1966,7 +2028,7 @@ def _(chelation_fig, mo):
 
 
 @app.cell
-def _(chelation_peak_values, metal_real_experiments, plt):
+def _(chelation_peak_values, metal_real_experiments):
     chelation_peak_values_no_intensities = [
         [float(x[0]) for x in y] for y in chelation_peak_values
     ]   # Chemical shift of each peak in citrate [experiments, 4(ppm)]
@@ -1997,7 +2059,23 @@ def _(chelation_peak_values, metal_real_experiments, plt):
         for exp in metal_real_experiments
         if exp.get('Sample number') > 36
     ]
+    return (
+        calcium_peaks,
+        calcium_percentages,
+        chelation_peak_values_no_intensities,
+        magnesium_peaks,
+        magnesium_percentages,
+    )
 
+
+@app.cell
+def _(
+    calcium_peaks,
+    calcium_percentages,
+    magnesium_peaks,
+    magnesium_percentages,
+    plt,
+):
     plt.figure(figsize=(10, 8))
 
     plt.subplot(2, 2, 1)
@@ -2007,8 +2085,10 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     )
 
     plt.title('Magnesium Molarity vs Citrate Chemical Shift ', fontsize=14)
-    plt.xlabel('Magnesium Molarity', fontsize=12)
+    plt.xlabel('Magnesium Molarity / M', fontsize=12)
     plt.ylabel('Chemical Shift / ppm', fontsize=12)
+    plt.xticks(rotation=45)
+    # plt.xscale('log')
 
     plt.subplot(2, 2, 2)
     plt.plot(
@@ -2017,7 +2097,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     )
 
     plt.title('Calcium Molarity vs Citrate Chemical Shift ', fontsize=14)
-    plt.xlabel('Calcium Molarity', fontsize=12)
+    plt.xlabel('Calcium Molarity / M', fontsize=12)
     plt.ylabel('Chemical Shift / ppm', fontsize=12)
 
     # plt.gca().invert_xaxis()
@@ -2028,12 +2108,7 @@ def _(chelation_peak_values, metal_real_experiments, plt):
     plt.savefig('figs/chelation.svg', bbox_inches='tight')
 
     chelation_fig = plt.gca()
-    return (
-        calcium_peaks,
-        chelation_fig,
-        chelation_peak_values_no_intensities,
-        magnesium_peaks,
-    )
+    return (chelation_fig,)
 
 
 @app.cell

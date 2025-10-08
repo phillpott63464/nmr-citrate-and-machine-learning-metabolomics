@@ -3050,28 +3050,40 @@ def _(
 
 
 @app.cell
-def _(plt, training_data):
+def _(colors, plt, training_data):
     print(training_data['train_dataset'][0])
 
     temp_data_data = training_data['train_dataset'][7][0]
 
-    plt.figure(figsize=(10,5))
+    start1, end1 = 600, 750
+    # start2, end2 = 1628, 1750
+    start2, end2 = 1080, 1240
 
+    # Assume `temp_data_data` is already defined
+    plt.figure(figsize=(10, 5))
+
+    # First subplot (full dataset)
     plt.subplot(1, 2, 1)
     plt.plot(temp_data_data)
+
+    # Highlight the regions for the right subplot
+    plt.axvspan(start1, end1, color=colors[1], alpha=0.3, label='Highlighted region 1')
+    plt.axvspan(start2, end2, color=colors[2], alpha=0.3, label='Highlighted region 2')
+
     plt.xlabel('Data points / no unit')
     plt.ylabel('Intensity')
+    plt.legend()
 
+    # Second subplot (zoomed in)
     plt.subplot(1, 2, 2)
-    plt.plot(temp_data_data[600:750])
-    plt.plot(temp_data_data[1080:1200])
-    plt.legend(['Pure reference', 'Complex mixture'], loc='upper left')
+    plt.plot(temp_data_data[start1:end1], label='Pure reference')
+    plt.plot(temp_data_data[start2:end2], label='Complex mixture')
+    plt.legend(loc='upper left')
     plt.xlabel('Data points / no unit')
     plt.ylabel('Intensity')
+
     plt.tight_layout()
-
     plt.savefig('figs/comparative_model.svg')
-
     plt.show()
     return
 
