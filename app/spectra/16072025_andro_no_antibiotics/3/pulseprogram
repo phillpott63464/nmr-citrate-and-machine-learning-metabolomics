@@ -1,0 +1,109 @@
+# 1 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k"
+;zgprcpmg_mjh.gw
+;1D sequence with presaturation and CPMG filter
+
+"d11=30m"
+"d12=20u"
+"d13=3u"
+"d20=1m"
+
+"p7= 3*p1/13"
+"p8= 9*p1/13"
+"p9= 19*p1/13"
+"d16=250u"
+"d5=280u"
+"d22=(d20+p1+p1)*l1"
+# 1 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/Avance.incl" 1
+;Avance3.incl
+;   for AV III
+;
+;avance-version (13/06/17)
+;
+;$CLASS=HighRes Incl
+;$COMMENT=
+
+
+# 169 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/Avance.incl"
+;$Id: Avance3.incl,v 1.10.2.2 2013/08/30 09:43:33 ber Exp $
+# 16 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k" 2
+
+# 1 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/Grad.incl" 1
+;Grad2.incl  -  include file for Gradient Spectroscopy
+;   for TCU3
+;
+;avance-version (07/01/17)
+;
+;$CLASS=HighRes Incl
+;$COMMENT=
+
+# 27 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/Grad.incl"
+define list<gradient> EA=<EA>
+
+
+# 31 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/Grad.incl"
+;$Id: Grad2.incl,v 1.14 2012/01/31 17:49:21 ber Exp $
+# 17 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k" 2
+
+
+# 1 "mc_line 20 file /opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k dc-measurement inserted automatically"
+
+    dccorr
+# 20 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k"
+# 20 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k"
+1 ze
+2 d1
+  d12 pl9:f1
+  p18:f1 ph18
+  d12 pl1:f1
+  p1:f1 ph1
+;******CPMG*******
+3 d20*0.5
+  p1*2.0 ph2
+  d20*0.5
+  lo to 3 times l1
+;****WATERGATE****
+20u setnmr3|0 setnmr0|34|32|33 ctrlgrad 0
+  p16:gp1
+  d16
+  (p7 ph6):f1
+  d19*2
+  (p8 ph6):f1
+  d19*2
+  (p9 ph6):f1
+  d19*2
+  (p9 ph7):f1
+  d19*2
+  (p8 ph7):f1
+  d19*2
+  (p7 ph7):f1
+  10u
+  p16:gp1
+  d16
+  10u setnmr3^0 setnmr0^34^32^33 ctrlgrad 7
+;*****ACQUIRE*****
+  go=2 ph31
+  d11 wr #0
+  d29
+exit
+
+ph18=0
+
+ph1=0 2 2 0 1 3 3 1
+ph2=1 3 1 3 0 2 0 2
+# 61 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k"
+ph6 = 1
+ph7 = 3
+
+ph31= 0 2 2 0 3 1 1 3
+
+; add 4 then subtract 4
+;ph31=0 2 2 0 1 3 3 1
+# 71 "/opt/topspin3.6.1/exp/stan/nmr/lists/pp/user/zgprwgcpmg_mjh.k"
+;pl1: f1 channel - power level for hard pulses
+;pl9: f1 channel - power level for presaturation
+;p1 :  90 degree transmitter high power pulse
+;p18: presaturation pulse
+;d1: additional relaxation delay [0.1-1s]
+;d12: delay for power switching                      [20 usec]
+;d13: short delay (e.g. to compensate delay line)    [3 usec]
+;d19: binomial water suppression

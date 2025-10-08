@@ -1,0 +1,52 @@
+
+Current Data Parameters
+NAME     16072025_andro_no_antibiotics              
+EXPNO                 3              
+PROCNO                1              
+
+F2 - Acquisition Parameters
+Date_          20250716              
+Time              11.33 h            
+INSTRUM           spect              
+PROBHD   Z124831_0001 (              
+PULPROG  zgprwgcpmg_mjh.k              
+TD                16384              
+SOLVENT    H2O+D2O+salt              
+NS                  128              
+DS                   16              
+SWH            8012.820 Hz           
+FIDRES         0.978127 Hz           
+AQ            1.0223616 sec          
+RG                  128              
+DW               62.400 usec         
+DE                10.00 usec         
+TE                298.0 K            
+D1           0.00100000 sec          
+D11          0.03000000 sec          
+D12          0.00002000 sec          
+D16          0.00025000 sec          
+D19          0.00012480 sec          
+D20          0.00100000 sec          
+D29          0.00100000 sec          
+L1                  150              
+SFO1        600.0528196 MHz          
+NUC1                 1H              
+P1                 8.97 usec         
+P7                 2.07 usec         
+P8                 6.21 usec         
+P9                13.11 usec         
+P18           100000.00 usec         
+PLW1         8.62339973 W            
+PLW9         0.00002775 W            
+GPNAM[1]     SMSQ10.100              
+GPZ1              40.00 %            
+P16             1000.00 usec         
+
+F2 - Processing parameters
+SI                32768              
+SF          600.0499448 MHz          
+WDW                  EM              
+SSB      0              
+LB                 2.00 Hz           
+GB       0              
+PC                 1.00              

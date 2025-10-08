@@ -12,19 +12,20 @@ def _(os):
     return (mo,)
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     import matplotlib.pyplot as plt
     from cycler import cycler
 
     colors = [
+        'white',
         '#DE8CDE',  # lilac
         '#00C2A8',  # teal
         '#FFB84D',  # warm amber
         '#57ABFF',  # bright blue
         '#FF8A8A',  # coral red
         '#8CE99A',  # mint green
-        '#A9A9AD',  # light grey
+        # '#A9A9AD',  # light grey
     ]
 
     linestyles = [
@@ -682,7 +683,7 @@ def _(np):
         return peak_values
 
     @type_check(experiment=str, experiment_number=str, data_dir=str)
-    def extract_phc(experiment, experiment_number, data_dir):
+    def extract_phc(data_dir, experiment, experiment_number):
         """Extract Phase Correction values from the procs file."""
 
         dir_path = f'{data_dir}/{experiment}/{experiment_number}'
@@ -743,6 +744,10 @@ def _(np):
     experiment_dir_speciation = (
         '20250811_cit_nacit_titr'  # The experiment name
     )
+
+    # experiment_dir_speciation = (
+    #     '20250916_cit_nacit_titr_rep'
+    # )
     experiment_count = 24   # The number of experiments in format _i
     experiment_number = (
         '3'  # The folder in the experiment that contains the acqusition data
@@ -779,6 +784,7 @@ def _(np):
         experiment_number,
         experiments,
         extract_peak_values,
+        extract_phc,
         extract_sr,
         get_experiment_directories,
         os,
@@ -1425,8 +1431,8 @@ def _(data_dir, experiment_number, experiments, np, phs, plt):
             ):   # The first one doesn't flip properly for some reason
                 data *= -1
 
-            ppm_range = [2.5, 3.1]
-        
+            ppm_range = [2.3, 3.1]
+
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(
                 ppmscale, data
@@ -1445,15 +1451,15 @@ def _(data_dir, experiment_number, experiments, np, phs, plt):
             y_lim = data[indices]
 
             plt.ylim(np.min(y_lim), np.max(y_lim))
-        
+
             plt.gca().spines['top'].set_visible(False)
             plt.gca().spines['left'].set_visible(False)
             plt.gca().spines['right'].set_visible(False)
 
             plt.gca().invert_xaxis()
-        
+
             plt.yticks([])
-    
+
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.suptitle(
             'NMR Experiments Overview', fontsize=16, y=1.02
@@ -1468,7 +1474,7 @@ def _(data_dir, experiment_number, experiments, np, phs, plt):
 @app.cell
 def _(bruker_fft, data_dir, experiment_number, experiments, np, plt):
     def _():
-        experiment = experiments[16]
+        experiment = experiments[0]
         ppmscale, data = bruker_fft(
             data_dir=data_dir,
             experiment=experiment,
@@ -1484,22 +1490,22 @@ def _(bruker_fft, data_dir, experiment_number, experiments, np, plt):
         )  # Replace with actual x-axis label if needed
 
         ppm_range = [2.3, 3.1]
-    
+
         plt.xlim(ppm_range)
-    
+
         ppmscale = np.array(ppmscale)
         data = np.array(data)
         indices = np.where((ppmscale >= ppm_range[0]) & (ppmscale <= ppm_range[1]))
         y_lim = data[indices]
-    
+
         plt.ylim(np.min(y_lim), np.max(y_lim))
-    
+
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['left'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
-    
+
         plt.gca().invert_xaxis()
-    
+
         plt.yticks([])
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.savefig('figs/SINGLENMR.svg')
@@ -1928,8 +1934,6 @@ def _(
                 experiment_number=experiment_number,
             )
 
-            # ppm_range = [2.3, 2.8]
-
             ax = ngfig.add_subplot(rows, cols, idx + 1)
             ax.plot(ppmscale, data)
 
@@ -1945,7 +1949,7 @@ def _(
             y_lim = data[indices]
 
             plt.ylim(np.min(y_lim), np.max(y_lim))
-        
+
             plt.gca().spines['top'].set_visible(False)
             plt.gca().spines['left'].set_visible(False)
             plt.gca().spines['right'].set_visible(False)
@@ -1963,7 +1967,6 @@ def _(
 
     # Plot Calcium Experiments
     calcium_chelation_fig = plot_chelation_experiments(chelation_experiments, data_dir, experiment_number, 'Calcium Chelation', lambda idx: idx >= 12, ppm_range=[2.4, 2.8])
-
     return calcium_chelation_fig, magnesium_chelation_fig
 
 
@@ -2129,6 +2132,64 @@ def _(calcium_peaks, magnesium_peaks):
         ((pea[0] + pea[1]) / 2) - ((pea[2] + pea[3]) / 2)
         for pea in calcium_peaks
     ]
+    return
+
+
+@app.cell
+def _(bruker_fft, colors, extract_phc, np, plt):
+    """Liv's data"""
+
+    def _(data_dir, experiment, experiment_number):
+            # plt.figure(figsize=(15, 5))
+
+        ppmscale, data = bruker_fft(
+            data_dir=data_dir,
+            experiment=experiment,
+            experiment_number=experiment_number,
+        )
+
+        phases =  extract_phc(data_dir, experiment, experiment_number)
+
+        # ppm_range = [2.5, 3.1]
+        ppm_ranges = [[-0.1, 6], [2.3, 3.1]]
+
+        plt.figure(figsize=(12, 6))
+        for idx, ppm_range in enumerate(ppm_ranges):
+            plt.subplot(1, 2, idx+1)
+            plt.plot(
+                ppmscale, data
+            )  # Adjust the range as needed
+            # ax.set_title(f'pH: {ph}', fontsize=14)
+            plt.xlabel(
+                'Chemical Shift / PPM', fontsize=12
+            )  # Replace with actual x-axis label if needed
+            plt.ylabel('', fontsize=12)
+
+            plt.xlim(ppm_range)
+
+            ppmscale = np.array(ppmscale)
+            data = np.array(data)
+            indices = np.where((ppmscale >= ppm_range[0]) & (ppmscale <= ppm_range[1]))
+            y_lim = data[indices]
+
+            plt.ylim(np.min(y_lim), np.max(y_lim))
+
+            if idx == 0:
+                plt.axvspan(ppm_ranges[1][0], ppm_ranges[1][1], color=colors[1], alpha=0.3, label='Highlighted region 1')
+
+            plt.gca().spines['top'].set_visible(False)
+            plt.gca().spines['left'].set_visible(False)
+            plt.gca().spines['right'].set_visible(False)
+
+            plt.gca().invert_xaxis()
+
+            plt.yticks([])
+
+        plt.savefig('figs/liv-sample.svg')
+
+        plt.show()
+
+    _('spectra', '16072025_andro_no_antibiotics', '3')
     return
 
 
@@ -2901,7 +2962,7 @@ def _(all_experiments, citricacid, integrated_deltas, np):
 
     print(len(train_peaks))
     print(len(train_vals))
-    return device, test_peaks, test_vals, torch, train_peaks, train_vals
+    return device, test_peaks, test_vals, torch
 
 
 @app.cell
@@ -2912,21 +2973,11 @@ def _():
     return F, nn, optim
 
 
-@app.cell
-def _(
-    F,
-    TinyTransformer,
-    device,
-    nn,
-    np,
-    optim,
-    torch,
-    train_peaks,
-    train_vals,
-):
+app._unparsable_cell(
+    r"""
     ### Try a neural network?
 
-    # incorrect code to block this from running temporarily
+    incorrect code to block this from running temporarily
 
     class ConstrainedModel(nn.Module):
         def __init__(self):
@@ -2991,7 +3042,9 @@ def _(
             break
 
     print(f'{full_count} epochs with {best_loss} loss')
-    return criterion, model
+    """,
+    name="_"
+)
 
 
 @app.cell

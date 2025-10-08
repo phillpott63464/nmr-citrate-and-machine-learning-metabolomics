@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PeakList>
+  <PeakList1D>
+    <PeakList1DHeader creator="ukc" date="2025-09-16T21:02:31.954+01:00" expNo="99997" name="20250916_cit_nacit_titr_rep_14" owner="" procNo="1" source="/opt/DATA/icon/2025/sp">
+      <PeakPickDetails>F1=10.000000ppm, F2=0.500000ppm, MI=0.10cm, MAXI=10000.00cm, PC=2.000
+      </PeakPickDetails>
+    </PeakList1DHeader>
+    <Peak1D F1="4.782333" intensity="1.055825e-01" type="0"/>
+    <Peak1D F1="4.779233" intensity="1.111931e-01" type="0"/>
+    <Peak1D F1="4.743028" intensity="1.952889e-01" type="0"/>
+    <Peak1D F1="4.723316" intensity="3.372959e-01" type="0"/>
+    <Peak1D F1="4.708632" intensity="8.213643e-01" type="0"/>
+    <Peak1D F1="4.708062" intensity="8.317278e-01" type="0"/>
+    <Peak1D F1="4.704361" intensity="1.588840e+00" type="0"/>
+    <Peak1D F1="4.697899" intensity="1.500000e+01" type="0"/>
+    <Peak1D F1="4.692066" intensity="1.617930e+00" type="0"/>
+    <Peak1D F1="4.688491" intensity="8.781079e-01" type="0"/>
+    <Peak1D F1="4.685980" intensity="7.419766e-01" type="0"/>
+    <Peak1D F1="4.681163" intensity="5.402843e-01" type="0"/>
+    <Peak1D F1="4.676860" intensity="4.127855e-01" type="0"/>
+    <Peak1D F1="4.667723" intensity="2.858661e-01" type="0"/>
+    <Peak1D F1="4.662782" intensity="2.535160e-01" type="0"/>
+    <Peak1D F1="4.653694" intensity="2.021985e-01" type="0"/>
+    <Peak1D F1="4.649577" intensity="1.848744e-01" type="0"/>
+    <Peak1D F1="4.645815" intensity="1.693370e-01" type="0"/>
+    <Peak1D F1="4.640384" intensity="1.573397e-01" type="0"/>
+    <Peak1D F1="4.637925" intensity="1.451565e-01" type="0"/>
+    <Peak1D F1="4.628071" intensity="1.324145e-01" type="0"/>
+  </PeakList1D>
+</PeakList>

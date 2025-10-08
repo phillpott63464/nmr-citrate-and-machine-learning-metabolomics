@@ -1,0 +1,40 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/lr/16072025_andro_no_antibiotics/4/pdata/1/auditp.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-07-16 11:37:32.020 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-07-16 11:34:51.741 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 32K
+       E9 48 73 C7 45 24 72 F7 D4 CD BD BA ED 93 40 E9>)
+(   2,<2025-07-16 11:37:32.253 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 32K
+       E9 48 73 C7 45 24 72 F7 D4 CD BD BA ED 93 40 E9>)
+(   3,<2025-07-28 09:49:58.105 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <Start of raw data processing
+       efp LB = 2 FT_mod = 6 PKNL = 1 PHC0 = 325.9983 PHC1 = 3.15 SI = 32K 
+       data hash MD5: 32K
+       91 F1 4F EA BB 3F 2D 48 A1 C7 33 E6 29 D8 30 EE>)
+(   4,<2025-07-28 09:49:59.778 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <apk0 
+       data hash MD5: 32K
+       B5 65 92 1F 15 96 90 1F 64 19 10 F4 F9 88 9A 77>)
+(   5,<2025-07-28 09:50:25.720 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <pk fgphup PHC0 = 0.9835785 PHC1 = -1.7 
+       data hash MD5: 32K
+       13 F6 1F D5 4E D8 5A E0 89 F3 86 96 3D 76 30 BD>)
+(   6,<2025-07-28 09:50:39.798 +0100>,<ukc>,<CZC8417J16>,<proc1d>,<TopSpin 3.6.1>,
+      <bcm 0 0 32768 2.166139e+04 5.625985e-02 0.000000e+00 0.000000e+00 0.000000e+00 
+       data hash MD5: 32K
+       26 62 27 A6 49 F7 69 87 1B B9 3C 66 1B C2 89 78>)
+##END=
+
+$$ hash MD5
+$$ 96 68 E9 E2 33 04 17 34 DA 41 C1 CE 58 69 30 1E

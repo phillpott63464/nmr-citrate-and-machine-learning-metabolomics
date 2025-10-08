@@ -1,0 +1,23 @@
+##TITLE= Audit trail, TopSpin 3.6.1
+##JCAMPDX= 5.01
+##ORIGIN= Bruker BioSpin GmbH
+##OWNER= ukc
+$$ /opt/DATA/icon/2025/lr/16072025_andro_no_antibiotics/3/audita.txt
+##AUDIT TRAIL=  $$ (NUMBER, WHEN, WHO, WHERE, PROCESS, VERSION, WHAT)
+(   1,<2025-07-16 11:33:08.420 +0100>,<ukc>,<CZC8417J16>,<go4>,<TopSpin 3.6.1>,
+      <created by zg
+	started at 2025-07-16 11:30:00.965 +0100,
+	POWCHK enabled, PULCHK disabled,
+       configuration hash MD5:
+       CF 3A 56 5D 1B 45 68 3A 2B 4A 9E CA 9B 35 5C 70
+       data hash MD5: 16K
+       AC 1C 1C 8E 4C 8E 0D 71 FC CD 97 36 95 B3 57 B5>)
+(   2,<2025-07-16 11:33:08.443 +0100>,<ukc>,<CZC8417J16>,<audit>,<TopSpin 3.6.1>,
+      <user comment:
+       ICON-NMR User ID: ukc
+       data hash MD5: 16K
+       AC 1C 1C 8E 4C 8E 0D 71 FC CD 97 36 95 B3 57 B5>)
+##END=
+
+$$ hash MD5
+$$ 0F 56 BA C9 D2 75 D3 9E B7 B0 A5 C4 C4 D2 11 F2
