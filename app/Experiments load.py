@@ -772,10 +772,43 @@ def _(np):
 
     peak_values = adjust_peak_values(peak_values, ppm_shift)
 
+    use_repeated_speciation = True
+
+    def _():
+        def get_nmrium_peaks(filename):
+            import json
+            import zipfile
+            with zipfile.ZipFile(f"spectra/{filename}.nmrium", "r") as zf:
+                for name in zf.namelist():
+                    if name.endswith(".nmrium"):
+                        data = json.loads(zf.read(name).decode("utf-8"))
+
+            # --- 2. Access the peaks ---
+            peaks = []
+            for spectrum in data.get("data", {}).get("spectra", []):
+                if "peaks" in spectrum and "values" in spectrum["peaks"]:
+                    peaks.extend(spectrum["peaks"]["values"])
+
+            cleaned_peaks = []
+            for peak in peaks:
+                if peak['x'] == 0:
+                    continue
+                cleaned_peaks.append([peak['originalX'], peak['y']])
+
+            cleaned_peaks = sorted(cleaned_peaks, key=lambda x: x[0], reverse=True)
+
+            return cleaned_peaks
+
+        if use_repeated_speciation:
+            for i in range(0, 23):
+                peak_values[i] = get_nmrium_peaks(i+1)
+
+    _()
+
     # # Uncomment to print results
     # print(sr_values)
     # print(ppm_shift)
-    # print(peak_values[0])
+    print(peak_values[0])
     return (
         adjust_peak_values,
         calculate_ppm_shift,
@@ -895,7 +928,7 @@ def _(chemicalshift_fig, mo):
 
 
 @app.cell
-def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
+def _(corrected_pka, graph_molarity, peak_values, phfork, phs, plt):
     citricacid = phfork.AcidAq(
         pKa=corrected_pka, charge=0, conc=graph_molarity
     )
@@ -904,18 +937,18 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
 
     plt.figure(figsize=(15, 5))
 
-    plt.subplot(1, 3, 1)
-    plt.plot(
-        [x / 0.001 * 100 for x in base_vol],
-        fracs,
-    )
-    plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
+    # plt.subplot(1, 3, 1)
+    # plt.plot(
+    #     [x / 0.001 * 100 for x in base_vol],
+    #     fracs,
+    # )
+    # plt.legend(['H3A', 'H2A-', 'HA2-', 'A3-'])
 
-    plt.ylabel('Speciation Ratio')
-    plt.xlabel('Sodium Citrate Percentage')
-    plt.title('Sodium Citrate Percentage and Trisodium Citrate Speciation')
+    # plt.ylabel('Speciation Ratio')
+    # plt.xlabel('Sodium Citrate Percentage')
+    # plt.title('Sodium Citrate Percentage and Trisodium Citrate Speciation')
 
-    plt.subplot(1, 3, 2)
+    plt.subplot(1, 2, 1)
     plt.plot(
         phs,
         fracs,
@@ -926,9 +959,11 @@ def _(avg_ppm, base_vol, corrected_pka, graph_molarity, phfork, phs, plt):
     plt.xlabel('pH')
     plt.title('pH and Trisodium Citrate Speciation')
 
-    plt.subplot(1, 3, 3)
+    first_peaks = [x[0][0] for x in peak_values]
+
+    plt.subplot(1, 2, 2)
     plt.plot(
-        avg_ppm,
+        first_peaks,
         fracs,
     )
     plt.gca().invert_xaxis()
@@ -2704,8 +2739,9 @@ def _(all_experiments, colors, integrated_predictions, np, plt):
         values = [list(x) for x in zip(*values)]
         fs = [list(x) for x in zip(*integrated_predictions)]
 
-        keys = [*all_experiments[0].keys()]
-        keys.pop()   # Remove peaks key
+        # keys = [*all_experiments[0].keys()]
+        keys = ['FCitH3', 'FCitH2-', 'FCitH-2', 'FCit-3', 'FMgCit', 'FCaCit', 'FCit']
+        # keys.pop()   # Remove peaks key
 
         i = 1
         y = 1
@@ -3432,6 +3468,31 @@ def _(
             return predictions
 
     spectrapredictions = _()
+    return
+
+
+@app.cell
+def _(metal_real_experiments, plt):
+    """hill plot"""
+
+    def _():
+        x = [x['salt moles'] for x in metal_real_experiments[:12]]
+        print(len(x))
+
+        plt.plot(x)
+        plt.show()
+
+    _()
+    return
+
+
+@app.cell
+def _(magnesium_peaks, metal_real_experiments):
+    print(repr(
+        [
+            [x['salt stock molarity / M']] + y
+            for x, y in zip(metal_real_experiments[-12:], magnesium_peaks)
+        ]))
     return
 
 
