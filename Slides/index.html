@@ -88,21 +88,97 @@
       <div class="slides"><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
-<div class="" style="" drag="100 100">
+<div class="" style="" drag="100 80">
 
-#### Speciation and Chelation Effects in Citric Acid NMR and Machine Learning Approaches to Complex Mixture Analysis
+## Speciation and Chelation Effects in Citric Acid NMR 
+## and Machine Learning Approaches to Complex Mixture Analysis
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 80%; height: 20%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+#### by Hannah Phillpott
 </div>
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
 <div class="" style="" drag="100 10">
 
-#### Citric Acid NMR
+## Proton NMR and Metabolomics
 </div>
 
-<div class="" style="" drag="100 90">
+Looks at the structure and chemical environments of protons in metabolites
+
+Non-selective
+
+Minimal substance prep
+
+Does not destroy the sample
+
+Quantitative (with a reference)
+
+Reproducible across time, spectrometers, and samples
+
+Less sensitive, but often not an issue in metabolomics
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Citric Acid in Proton NMR
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+Problems with citric acid:
+
+NMR standards are done with pure isolated compounds at pH 7
+
+Metabolomics samples have varying pH; Citric acid is a triprotic acid
+
+Metabolomics samples have salts; Citric acid is a chelator
+</div>
+
+<div class="" style="position: absolute; left: 50%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/Pasted image 20251008102304.png" alt="" style="width: 400px; object-fit: fill">
+
+</div>
+
+Notes:
+![[Media/Slides 2025-10-08 10.03.48.excalidraw]]
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Citric Acid Proton NMR
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
 <img src="Media/SINGLENMR.svg" alt="" style="object-fit: scale-down">
+
+</div>
+
+<div class="" style="position: absolute; left: 50%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/Pasted image 20251008103151.png" alt="" style="width: 380px; object-fit: fill">
+
+</div>
+
+Notes:
+![[Media/Slides 2025-10-08 10.28.19.excalidraw]]
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Real metabolomics sample
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/liv-sample.svg" alt="" style="width: 800px; object-fit: fill">
 
 </div>
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
@@ -110,104 +186,79 @@
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start" align="top">
 
-#### Speciation
+## Citric Acid Speciation 
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 40%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-<img src="Media/graph 1.png" alt="" style="width: 500px; object-fit: fill">
+<img src="Media/speciationfig.svg" alt="" style="width: 550px; object-fit: fill">
 
 </div>
 
-<div class="" style="position: absolute; left: 50%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 0%; top: 60%; height: 30%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-<img src="Media/Pasted image 20250911140334.png" alt="" style="width: 450px; object-fit: fill">
+<img src="Media/Pasted image 20250911140334.png" alt="" style="width: 500px; object-fit: fill">
 
+</div>
 
-# [2] Elbagerma et al. 2015
+<div class="" style="position: absolute; left: 0%; top: 90%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+#### Elbagerma et al. 2015
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 50%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+#### In house
 </div>
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Chelation
+## Chelation
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 20%; height: 80%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end" align="bottom">
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 80%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
 <img src="Media/root-000 2.png" alt="" style="width: 500px; object-fit: fill">
 
-
-# [3] Silwood et al. 2002
-</div>
-</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
-<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
-
-<div class="" style="position: absolute; left: 0%; top: 0%; height: 30%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
-
-#### Chemical Shift Fitting Models
 </div>
 
-<div class="" style="position: absolute; left: 50%; top: 35%; height: 30%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 50%; top: 10%; height: 80%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-Speciation:
+<img src="Media/Pasted image 20251008135129.png" alt="" style="width: 400px; object-fit: fill">
 
-`$\delta_{obs,peak}=f_0\delta_0$`
-`$+f_1\delta_1+f_2\delta_2+f_3\delta_3$`
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 35%; height: 30%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 0%; top: 90%; height: 10%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-Chelation:
-
-`$\delta_{obs,peak}=f_{0}\delta_{L}+f_{1}\delta_{ML}$`
+## Silwood et al. 2002
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 70%; height: 30%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
-
-Integrated:
-
-`$\delta_{obs,peak}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$`
-</div>
+Notes:
+![[Media/Slides 2025-10-08 13.48.59.excalidraw]]
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Chelation Fitting Model
-</div>
-
-`$\delta_{obs,peak}=(1-f_{ML})\delta_L+f_{ML}\delta_{ML}$`
-
-`$f_{ML} = [ML]/[L]_t$`
-
-`$ML = \frac{-a\;+\;k_f\,\bigl([M]_t + [L]_t\bigr)\;+\;1}{2\,k_f}$`
-
-`$a=\sqrt{{k_f}^{2}\,\bigl([M]_t - [L]_t\bigr)^{2} + 2\,k_f\,\bigl([M]_t + [L]_t\bigr) + 1}$`
-</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
-<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
-
-<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
-
-#### Speciation Spectra
+## Speciation Spectra
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
 <img src="Media/NMRspeciation.svg" alt="" style="width: 700px; object-fit: fill">
 
-<!-- speciation spectra -->
 </div>
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Result of Speciation against Chemical Shift
+## Result of Speciation against Chemical Shift
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 20%; height: 80%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
 <img src="Media/chemicalshift_fig.svg" alt="" style="width: 1100px; object-fit: fill">
 
@@ -217,12 +268,12 @@ Integrated:
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Chelation Spectra
+## Calcium Chelation Spectra
 </div>
 
-<div class="" style="position: absolute; left: 0%; top: 20%; height: 80%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-<img src="Media/NMR.svg" alt="" style="width: 800px; object-fit: fill">
+<img src="Media/calcium_chelation.svg" alt="" style="width: 800px; object-fit: fill">
 
 </div>
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
@@ -230,7 +281,20 @@ Integrated:
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Result of Chelation against Chemical Shift
+## Magnesium Chelation Spectra
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/magnesium_chelation.svg" alt="" style="width: 800px; object-fit: fill">
+
+</div>
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Result of Chelation against Chemical Shift
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
@@ -243,12 +307,75 @@ Integrated:
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Integrated Model Fitting Predictions
+## Chelation Binding Plot Fitting
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 30%; height: 10%; width: 10%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+#### Magnesium
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 70%; height: 10%; width: 10%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+#### Calcium
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 12%; height: 40%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/binding-0.001738163880435133.svg" alt="" style="width: 540px; object-fit: fill">
+
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 60%; height: 40%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/binding-0.005000942855609513.svg" alt="" style="width: 540px; object-fit: fill">
+
+</div>
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Chemical Shift Non-Linear Fitting Models
+</div>
+
+## Speciation:
+
+## `$\delta_{obs,peak}=f_{CitH3}\delta_{CitH3}+f_{CitH2-}\delta_{CitH2-}+f_{CitH-2}\delta_{CitH-2}+f_{Cit-3}\delta_{Cit-3}$`
+
+## Chelation:
+
+## `$\delta_{obs,peak}=f_{Cit}\delta_{Cit}+f_{MCit}\delta_{MCit}$`
+
+## Integrated:
+
+## `$\delta_{obs,peak}=f_L(f_{CitH3}\delta_{CitH3}+f_{CitH2-}\delta_{CitH2-}+f_{CitH-2}\delta_{CitH-2}+f_{Cit-3}\delta_{Cit-3})+f_{MgCit}\delta_{MgCit}+f_{CaCit}\delta_{CaCit}$`
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Chelation Fitting Model
+</div>
+
+## `$\delta_{obs,peak}=(1-f_{MCit})\delta_L+f_{MCit}\delta_{MCit}$`
+
+## `$f_{MCit} = [MCit]/[Cit]_t$`
+
+## `$[MCit] = \frac{-a\;+\;k_f\,\bigl([M]_t + [Cit]_t\bigr)\;+\;1}{2\,k_f}$`
+
+## `$a=\sqrt{{k_f}^{2}\,\bigl([M]_t - [Cit]_t\bigr)^{2} + 2\,k_f\,\bigl([M]_t + [Cit]_t\bigr) + 1}$`
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Integrated Model Fitting Predictions
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-`$\delta_{obs,peak}=f_6(f_{0}\delta_{0}+f_{1}\delta_{1}+f_{2}\delta_{2}+f_{3}\delta_{3})+f_{4}\delta_{4}+f_{5}\delta_{5}$`
+`$\delta_{obs,peak}=f_L(f_{CitH3}\delta_{CitH3}+f_{CitH2-}\delta_{CitH2-}+f_{CitH-2}\delta_{CitH-2}+f_{Cit-3}\delta_{Cit-3})+f_{MgCit}\delta_{MgCit}+f_{CaCit}\delta_{CaCit}$`
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 20%; height: 80%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
@@ -261,12 +388,39 @@ Integrated:
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Machine Learning Neural Networks in Classification and Concentration Identification of Complex Mixtures
+## Machine Learning Neural Networks in Classification and Concentration Identification of Complex Mixtures
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-<img src="Media/Pasted image 20251006153400.png" alt="" style="width: 400px; object-fit: fill">
+## Why machine learning?
+
+#### Studying of samples is manual
+####	- Takes a long time
+####	- Subjective
+</div>
+
+<div class="" style="position: absolute; left: 50%; top: 10%; height: 90%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Considerations around machine learning
+
+#### - Requires very high quantities of data
+#### - Use synthetic data from NMRglue and CASMDB dataset
+#### - Very computationally expensive
+</div>
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Multi Layer Perceptrons
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 30%; height: 70%; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+
+<img src="Media/Pasted image 20251008120337.png" alt="" style="width: 400px; object-fit: fill">
+
 
 </div>
 
@@ -286,20 +440,7 @@ Media/Slides 2025-10-06 15.02.11.excalidraw
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Comparative Model Input Structure
-</div>
-
-<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
-
-<img src="Media/comparative_model.svg" alt="" style="object-fit: scale-down">
-
-</div>
-</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
-<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
-
-<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
-
-#### Single Metabolite Results
+## Single Metabolite Results
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
@@ -312,7 +453,20 @@ Media/Slides 2025-10-06 15.02.11.excalidraw
 
 <div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-#### Comparative Model
+## Comparative Model Input Structure
+</div>
+
+<div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+<img src="Media/comparative_model.svg" alt="" style="object-fit: scale-down">
+
+</div>
+</div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
+<div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
+
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 10%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
+
+## Comparative Model
 </div>
 
 <div class="" style="position: absolute; left: 0%; top: 10%; height: 90%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
@@ -323,17 +477,16 @@ Media/Slides 2025-10-06 15.02.11.excalidraw
 </div></script></section><section  data-markdown><script type="text/template"><!-- .slide: class="drop" -->
 <div class="" style="position: absolute; left: 0px; top: 0px; height: 700px; width: 960px; min-height: 700px; display: flex; flex-direction: column; align-items: center; justify-content: center" absolute="true">
 
-#### References
+<div class="" style="position: absolute; left: 0%; top: 0%; height: 20%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-# [1] National Center for Biotechnology Information (2025). PubChem Compound Summary for CID 31348, Citrate. Retrieved September 11, 2025 from https://pubchem.ncbi.nlm.nih.gov/compound/Citrate.
+## Thank you for listening!
+</div>
 
-# [2] Elbagerma, Mohamed & Alajtal, A. & Edwards, H. & Azimi, Gholamhassan & Verma, Keshav Deo. (2015). RAMAN SPECTROSCOPIC AND POTENTIOMETRIC STUDIES OF ACIDITY LEVEL AND DISSOCIATION OF CITRIC ACID IN AQUEOUS SOLUTION. Journal of Applied Chemical Science International. 2. 1-11. https://www.researchgate.net/publication/270958347
+<div class="" style="position: absolute; left: 0%; top: 20%; height: 80%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center" >
 
-# [3] Silwood, C.J., Grootveld, M. & Lynch, E. 1H NMR investigations of the molecular nature of low-molecular-mass calcium ions in biofluids. _J Biol Inorg Chem_ **7**, 46–57 (2002). https://doi.org/10.1007/s007750100264
+<img src="Media/qr-code.png" alt="" style="width: 500px; object-fit: fill">
 
-#### Github
-
-https://github.com/phillpott63464/nmr-citrate-and-machine-learning-metabolomics
+</div>
 </div></script></section></div>
     </div>
 

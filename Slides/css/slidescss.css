@@ -1,14 +1,22 @@
 .slide h4 {
-	color: #DE8CDE;
+	color: white;
+}
+
+.slide h2 {
+	color: white;
 }
 
 .slide p {
-	color: #DE8CDE;
+	color: white;
 }
 
 .slide h1 {
-	color: #DE8CDE;
+	color: white;
 	font-size: xx-small;
+}
+
+.slide li {
+	color: white;
 }
 
 .slide {
